@@ -3,7 +3,7 @@
  * Zero external dependencies, Shadow DOM, responsive, interactive tooltips, DA/EN i18n.
  */
 (() => {
-  const VER = "0.3.5";
+  const VER = "0.3.6";
   const MONTHS = ["Jan", "Feb", "Mar", "Apr", "Maj", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Dec"];
   const DAYS_IN_MONTH = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
   const isLeapYear = (y) => (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0;
@@ -527,7 +527,7 @@
         const cx = pad.l + xStep * (i + 0.5);
         const y = yPos(b.val);
         const bw = Math.min(54, xStep * 0.52);
-        bars += `<rect x="${cx - bw / 2}" y="${y}" width="${bw}" height="${Math.max(2, pad.t + ch - y)}" rx="7" fill="${b.col}" fill-opacity="0.88" data-tip="${b.lbl}: ${fmtDec(b.val)} kWh/dag (${b.sub})"/>`;
+        bars += `<rect x="${cx - bw / 2}" y="${y}" width="${bw}" height="${Math.max(2, pad.t + ch - y)}" rx="7" fill="${b.col}" fill-opacity="0.88" data-tip="${esc(`${b.lbl}: ${fmtDec(b.val)} kWh/dag (${b.sub})`)}"/>`;
         bars += `<text x="${cx}" y="${y - 8}" text-anchor="middle" class="val val-lg">${fmtDec(b.val)} kWh/d</text>`;
         bars += `<text x="${cx}" y="${H - 22}" text-anchor="middle" class="ax">${esc(b.lbl)}</text>`;
         bars += `<text x="${cx}" y="${H - 6}" text-anchor="middle" class="ax-sub">${esc(b.sub)}</text>`;
@@ -575,7 +575,7 @@
         const y = yK(v);
         const bw = Math.min(20, xStep * 0.64);
         const dt = dailyTemp[`${ymPrefix}-${String(d).padStart(2, "0")}`];
-        bars += `<rect x="${cx - bw / 2}" y="${y}" width="${bw}" height="${Math.max(2, pad.t + ch - y)}" rx="3.5" fill="url(#gDay)" data-tip="${d}.: ${v} kWh${typeof dt === 'number' ? ` · ${t.outdoor} ${fmtDec(dt)} °C` : ''}"/>`;
+        bars += `<rect x="${cx - bw / 2}" y="${y}" width="${bw}" height="${Math.max(2, pad.t + ch - y)}" rx="3.5" fill="url(#gDay)" data-tip="${esc(`${d}.: ${v} kWh${typeof dt === 'number' ? ` · ${t.outdoor} ${fmtDec(dt)} °C` : ''}`)}"/>`;
         if (idx % labelStep === 0 || idx === clean.length - 1 && (clean.length - 1) % labelStep === 0) {
           bars += `<text x="${cx}" y="${H - 8}" text-anchor="middle" class="ax">${d}.</text>`;
         }
@@ -1281,7 +1281,7 @@
           const portalEl = this.shadowRoot.getElementById("portalUrlInput");
           const chosen = UTILITIES.find((u) => u.id === (this._selectedUtilId || activeUtilId));
           const url = portalEl?.value?.trim() || chosen?.url || activePortalUrl;
-          if (url) window.open(url, "_blank", "noopener");
+          if (/^https?:\/\//i.test(url)) window.open(url, "_blank", "noopener,noreferrer");
         });
       }
       const readWizPayload = (startSync, completeSetup) => {

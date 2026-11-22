@@ -2,6 +2,12 @@
 
 Alle væsentlige ændringer i **Dansk Fjernvarme** (tidligere *Fjernvarme (KMD Easy Energy)*) dokumenteres her.
 
+## [0.3.7] - 2026-11-22
+
+### Rettet
+- **KMD / Min Forsyning 2 med flere kundeforhold:** En konto kan have el som første (standard) kundeforhold og fjernvarme+vand som et senere. Integrationen tog tidligere `Customers[0]` og `meters[0]`, så kortet kunne vise elmålerens flade kWh-serie (E17, GSRN/EAN 5713…) i stedet for **Varme**. Fra v0.3.7 gennemgås alle kundeforhold, og der vælges automatisk varmemåleren (ikke El, ikke Vand). Hvis der er flere varmemålere, vælges den under integrationens indstillinger efter første synkronisering — el vælges aldrig tavst.
+- **Indsigter:** Måneder uden data eller med 0 kWh springes over. kWh/HDD vises kun for år med nok data og reelt rumvarmeforbrug (ikke 0,00). Kortet påstår ikke længere, at forbruget "følger temperaturen tæt", når R² er lav, og skjuler HDD-året, når det ikke kan beregnes.
+
 ## [0.3.6] - 2026-11-22
 
 ### HACS-kvalitet & sikkerhed

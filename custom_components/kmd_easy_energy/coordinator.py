@@ -50,6 +50,8 @@ from .const import (
     CONF_EF_USERNAME,
     CONF_CUSTOMER_ID,
     CONF_CUSTOMER_NUMBER,
+    CONF_KMD_SUPPLY,
+    CONF_MEASUREMENT_POINT_ID,
     CONF_OUTDOOR_TEMP_ENTITY,
     CONF_LOCATION_NAME,
     CONF_MITID_USERNAME,
@@ -91,6 +93,13 @@ from .outdoor_temp import (
     source_by_month,
     source_signature,
     usable_sensor_days,
+)
+from .kmd_supply import (
+    MSG_MULTIPLE_HEAT,
+    MSG_NO_HEAT,
+    KMDSupplySelectionError,
+    classify_kmd_meter,
+    select_heat_meter,
 )
 from .insights import (
     compact_hourly_point,
@@ -187,16 +196,17 @@ def _compute_weather_and_insights(
         yr_totals[y] = {"kwh": 0.0, "hdd": 0.0, "months": 0}
         for idx, mk in enumerate(M_KEYS, 1):
             val = mmap.get(mk)
-            if isinstance(val, (int, float)):
-                ym = f"{y}-{idx:02d}"
-                if ym in monthly_avg_t and ym != cur_ym:
-                    kwh = float(val)
-                    pairs.append((monthly_avg_t[ym], kwh))
-                    if idx in (7, 8):
-                        summer_vals.append(kwh)
-                    yr_totals[y]["kwh"] += kwh
-                    yr_totals[y]["hdd"] += mon_hdd.get(ym, 0.0)
-                    yr_totals[y]["months"] += 1
+            if not isinstance(val, (int, float)) or isinstance(val, bool) or float(val) <= 0:
+                continue
+            ym = f"{y}-{idx:02d}"
+            if ym in monthly_avg_t and ym != cur_ym:
+                kwh = float(val)
+                pairs.append((monthly_avg_t[ym], kwh))
+                if idx in (7, 8):
+                    summer_vals.append(kwh)
+                yr_totals[y]["kwh"] += kwh
+                yr_totals[y]["hdd"] += mon_hdd.get(ym, 0.0)
+                yr_totals[y]["months"] += 1
 
     r2: float | None = None
     if len(pairs) > 5:
@@ -208,15 +218,25 @@ def _compute_weather_and_insights(
             r = sum((x - mx) * (y - my) for x, y in pairs) / denom
             r2 = round(r * r * 100, 1)
 
-    baseload = round(sum(summer_vals) / len(summer_vals), 1) if summer_vals else 124.0
+    # No invented default: a guessed 124 kWh/month would fabricate kWh/HDD
+    # when summer months are missing or zero.
+    baseload = round(sum(summer_vals) / len(summer_vals), 1) if summer_vals else None
     kwh_per_hdd: dict[str, float] = {}
     for y, st in sorted(yr_totals.items()):
-        if st["hdd"] > 0 and st["months"] >= 6:
-            space = max(0.0, st["kwh"] - baseload * st["months"])
-            kwh_per_hdd[y] = round(space / st["hdd"], 2)
+        if st["hdd"] <= 0 or st["months"] < 6:
+            continue
+        if baseload is None:
+            continue
+        space = st["kwh"] - baseload * st["months"]
+        # Skip years where "space heating" is not positive (missing data or
+        # a baseload that already exceeds the year's consumption).
+        if space <= 0:
+            continue
+        kwh_per_hdd[y] = round(space / st["hdd"], 2)
 
     insights = {
         "temp_r2_pct": r2,
+        "temp_r2_reliable": bool(r2 is not None and r2 >= 25),
         "baseload_kwh_mo": baseload,
         "kwh_per_hdd": kwh_per_hdd,
     }
@@ -1001,13 +1021,51 @@ class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             raise RuntimeError("Intet KMD-login i denne synkronisering")
         first_sync = not (state.get("hourly_kwh") or [])
         try:
-            meters = await self.client.get_active_meters()
-            if not meters:
+            accounts = await self.client.discover_accounts()
+            preferred_key = (
+                self.entry.options.get(CONF_KMD_SUPPLY)
+                or self.entry.data.get(CONF_KMD_SUPPLY)
+            )
+            preferred_mp = (
+                self.entry.options.get(CONF_MEASUREMENT_POINT_ID)
+                or self.entry.data.get(CONF_MEASUREMENT_POINT_ID)
+            )
+            preferred_cid = (
+                self.entry.options.get(CONF_CUSTOMER_ID)
+                or self.entry.data.get(CONF_CUSTOMER_ID)
+            )
+            choice = select_heat_meter(
+                accounts,
+                preferred_key=str(preferred_key).strip() if preferred_key else None,
+                preferred_customer_id=str(preferred_cid).strip() if preferred_cid else None,
+                preferred_measurement_point_id=str(preferred_mp).strip() if preferred_mp else None,
+            )
+            state["kmd_supplies"] = choice["supplies"]
+            _LOGGER.info(
+                "KMD supply selection status=%s customers=%s meters=%s kinds=%s selection=%s",
+                choice["status"],
+                choice["supplies"].get("customer_count"),
+                choice["supplies"].get("meter_count"),
+                choice["supplies"].get("kinds"),
+                choice["supplies"].get("selection"),
+            )
+            if choice["status"] == "no_heat":
                 state["meters"] = []
                 state["available_units"] = []
-                return state
+                raise KMDSupplySelectionError(MSG_NO_HEAT, choice["supplies"])
+            if choice["status"] == "multiple":
+                state["meters"] = []
+                state["available_units"] = []
+                raise KMDSupplySelectionError(MSG_MULTIPLE_HEAT, choice["supplies"])
 
-            mp = meters[0]
+            account = choice["account"] or {}
+            mp = choice["meter"] or {}
+            cid, cnum = account.get("customer_id"), account.get("customer_number")
+            self.client.set_customer(
+                str(cid) if cid else None,
+                str(cnum) if cnum else None,
+            )
+            meters = list(account.get("meters") or [mp])
             units = mp.get("Units") or []
             available_units = [
                 {
@@ -1020,7 +1078,12 @@ class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 for u in units
                 if isinstance(u, dict)
             ]
-            _LOGGER.info("KMD meter[0] Units discovered: %s", available_units)
+            _LOGGER.info(
+                "KMD heat meter units (kundeforhold %s, kind=%s): %s",
+                account.get("customer_index"),
+                classify_kmd_meter(mp),
+                available_units,
+            )
 
             kwh_unit = KMDClient.find_unit(units, "kWh") or (units[0] if units else None)
             m3_unit = KMDClient.find_unit(units, "m3") or KMDClient.find_unit(units, "m³")
@@ -1301,6 +1364,12 @@ class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self.client = self._make_client(access_token, customer_id, customer_number)
         try:
             state = await self._async_fetch_from_kmd(state)
+        except KMDSupplySelectionError as err:
+            state["kmd_supplies"] = err.supplies
+            state.update(self._base_meta())
+            await self._async_save_cache(state)
+            self.async_set_updated_data(state)
+            raise
         finally:
             self.client = None
         self.last_sync = dt_util.utcnow()

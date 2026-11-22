@@ -3,7 +3,7 @@
  * Zero external dependencies, Shadow DOM, responsive, interactive tooltips, DA/EN i18n.
  */
 (() => {
-  const VER = "0.3.6";
+  const VER = "0.3.7";
   const MONTHS = ["Jan", "Feb", "Mar", "Apr", "Maj", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Dec"];
   const DAYS_IN_MONTH = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
   const isLeapYear = (y) => (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0;
@@ -1229,10 +1229,15 @@
               <div class="p-leg"><span class="fresh-pill${isToday ? " today" : ""}">${isToday ? "🟢 " : ""}${esc(freshText)}</span></div>
             </div>
             <div class="insights">
-              <div class="ins">
-                <div class="ins-title">🌡️ ${esc(ins.temp_r2_pct ?? "–")}% styret af udetemperaturen</div>
-                Månedligt forbrug følger ${esc(locName)}-temperaturen tæt (R² = ${esc(ins.temp_r2_pct ?? "–")}%). Grundlast til varmt brugsvand + tomgang er kun <b>~${fmtDec(ins.baseload_kwh_mo ?? 0, 0)} kWh/md</b> (~${fmtDec(baseDayKwh, 1)} kWh/dag om sommeren).
-              </div>
+              ${ins.temp_r2_pct != null || ins.baseload_kwh_mo != null ? `<div class="ins">
+                <div class="ins-title">🌡️ ${ins.temp_r2_reliable ? `${esc(ins.temp_r2_pct)}% styret af udetemperaturen` : (ins.temp_r2_pct != null ? `Kun ${esc(ins.temp_r2_pct)}% samvariation med udetemperaturen` : "Udetemperatur-sammenhæng")}</div>
+                ${ins.temp_r2_reliable
+                  ? `Månedligt forbrug følger ${esc(locName)}-temperaturen tæt (R² = ${esc(ins.temp_r2_pct)}%).`
+                  : (ins.temp_r2_pct != null
+                    ? `Månedligt forbrug følger ikke udetemperaturen tydeligt (R² = ${esc(ins.temp_r2_pct)}%). Tjek at kortet viser fjernvarme og ikke el, og at måneder uden data er sprunget over.`
+                    : `Ikke nok komplette måneder til at beregne sammenhængen med udetemperaturen.`)}
+                ${ins.baseload_kwh_mo != null ? ` Grundlast til varmt brugsvand + tomgang er <b>~${fmtDec(ins.baseload_kwh_mo, 0)} kWh/md</b> (~${fmtDec(baseDayKwh, 1)} kWh/dag om sommeren).` : ""}
+              </div>` : ""}
               ${has("hourly") ? `<div class="ins" data-section="ins-hourly">
                 <div class="ins-title">🚿 Døgnrytme (${esc(hr.days_averaged || Object.keys(dy.days || {}).length)}-dages MTD)</div>
                 Højeste spidstime er kl. <b>${String(peakHourIdx).padStart(2, "0")}:00</b> med <b>${fmtDec(peakHourVal, 2)} kWh/t</b>${esc(peakInsightSub)}, mens bundniveauet ligger på ~${fmtDec(minHourVal, 2)} kWh/t.
@@ -1241,13 +1246,13 @@
                 <div class="ins-title">⚡ Returtemperatur &amp; Afkøling</div>
                 Aktuelt års-snit er <b>${rtCur > 0 ? `${fmtDec(rtCur)} °C` : "–"}</b>${rtCur > 0 ? (rtDist < 0 ? ` (🟢 i bonus-zone under <b>${bonusT} °C</b>)` : ` (<b>${fmtDec(rtDist, 1)} °C</b> fra bonus under <b>${bonusT} °C</b>, gebyr over <b>${penaltyT} °C</b>)`) : ` (bonus under <b>${bonusT} °C</b>, gebyr over <b>${penaltyT} °C</b>)`}.
               </div>` : ""}
-              <div class="ins">
+              ${hddEntries.length ? `<div class="ins">
                 <div class="ins-title">📈 Effektivitet pr. graddag (kWh / HDD17)</div>
                 ${esc(hddSummary)}
                 <div class="hdd-row">
                   ${hddEntries.map(([y, v]) => `<span class="hdd-pill">${esc(y)}: ${fmtDec(v, 2)}</span>`).join("")}
                 </div>
-              </div>
+              </div>` : ""}
             </div>
             <div class="tip" id="tip">${esc(t.tip_hint)}</div>
           </div>`}

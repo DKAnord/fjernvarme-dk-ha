@@ -9,6 +9,18 @@ Log ind med **MitID direkte i Home Assistant** i ren Python (OIDC PKCE + NemLog-
 
 ---
 
+## 📸 Screenshots & Demo
+
+<p align="center">
+  <img src="docs/screenshots/kmd-fjernvarme-demo.gif" alt="KMD Fjernvarme HA Demo (MitID QR, sync og grafer)" width="780" />
+</p>
+
+| Desktop-overblik (inkl. weekend-påmindelse) | MitID QR & Notifikations-dropdown | Mobil-grafer & Spidstime |
+| :---: | :---: | :---: |
+| <img src="docs/screenshots/kmd-fjernvarme-desktop-overview.png" alt="Desktop overblik" width="320" /> | <img src="docs/screenshots/kmd-fjernvarme-setup-mitid.png" alt="MitID QR opsætning" width="280" /> | <img src="docs/screenshots/kmd-fjernvarme-mobile-charts.png" alt="Mobil grafer" width="160" /> |
+
+---
+
 ## ✨ Funktioner
 
 - **🔐 100% indbygget MitID-login i Home Assistant:** Understøtter både **4-cifret engangskode** (vises direkte på dashboardet + valgfri push-notifikation) og **roterende QR-kode**. Dit MitID Bruger-ID gemmes kun lokalt i Home Assistants krypterede ConfigEntry.

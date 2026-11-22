@@ -98,6 +98,7 @@ from .insights import (
     daily_hdd_from_temps,
     daily_kwh_from_history,
     detect_abnormal_consumption,
+    estimate_variable_costs,
     forecast_annual,
     kwh_per_hdd,
     last_local_day,
@@ -731,6 +732,17 @@ class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         )
 
         today = copenhagen_today()
+        state["cost_estimate"] = estimate_variable_costs(
+            price_dkk_per_kwh=tariff.price_dkk_per_kwh,
+            bonus_temp=tariff.bonus_temp,
+            penalty_temp=tariff.penalty_temp,
+            motivation_rate=tariff.motivation_dkk_per_kwh_per_k,
+            current_return_temp=return_temp,
+            daily=state.get("daily"),
+            monthly_cur_year=(state.get("monthly") or {}).get(str(today.year)),
+            return_temp_monthly=(state.get("return_temp") or {}).get(f"monthly_{today.year}"),
+            today=today,
+        )
         daily_kwh = daily_kwh_from_history(
             state.get("daily_kwh_history"),
             (state.get("daily") or {}).get("days"),

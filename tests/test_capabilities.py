@@ -73,9 +73,16 @@ def test_sensors_only_created_when_backend_can_fill_them() -> None:
     entry = SimpleNamespace(entry_id="e1", title="T")
     kmd = {type(s).__name__ for s in sensors_for(_coord("kmd"), entry)}
     ef = {type(s).__name__ for s in sensors_for(_coord("eforsyning"), entry)}
-    assert len(kmd) == 13
+    assert len(kmd) == 17
     assert "KMDBalanceSensor" in kmd and "KMDBalanceSensor" not in ef
-    assert {"KMDVolumeSensor", "KMDReturnTempSensor", "KMDEnergySensor", "KMDLastSyncSensor"} <= ef
+    assert {
+        "KMDVolumeSensor",
+        "KMDReturnTempSensor",
+        "KMDEnergySensor",
+        "KMDLastSyncSensor",
+        "KMDEffectivePriceSensor",
+        "KMDYearCostSensor",
+    } <= ef
 
 
 def test_binary_sensors_follow_capabilities() -> None:

@@ -22,7 +22,7 @@ def test_card_uses_event_and_service() -> None:
     assert "start_mitid_sync" in js
     assert "mitid_otp_code" not in js
     assert "mitid_qr_svg" not in js
-    assert 'VER = "0.3.3"' in js
+    assert 'VER = "0.3.4"' in js
     assert "data-kmd-card-version" in js
     # Must not guess button.<utility_id>_sync as the only path
     assert "button.${activeUtilId" not in js
@@ -72,3 +72,11 @@ def test_card_session_sync_contract() -> None:
     assert "sync_reminder" in js
     assert "last_sync" in js
     assert '"kmd_easy_energy", "refresh"' not in js
+
+
+def test_card_cost_estimate_and_utilities_fallback() -> None:
+    js = CARD.read_text()
+    assert 'data-section="cost-estimate"' in js
+    assert 'id: "aalborg-forsyning"' in js and 'status: "confirmed"' in js
+    assert 'id: "fjernvarme-fyn"' in js
+    assert 'id: "hillerod-forsyning"' in js

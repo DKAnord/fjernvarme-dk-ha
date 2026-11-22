@@ -1,0 +1,160 @@
+"""Cross-provider variable cost estimates and percent-based motivation tariffs."""
+
+from __future__ import annotations
+
+import json
+from datetime import date
+from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import MagicMock
+
+from kmd_easy_energy.const import (
+    CONF_BONUS_TEMP,
+    CONF_MOTIVATION_DKK_PER_KWH_PER_K,
+    CONF_PENALTY_TEMP,
+    CONF_PRICE_DKK_PER_KWH,
+    CONF_UTILITY_ID,
+)
+from kmd_easy_energy.insights import estimate_variable_costs
+from kmd_easy_energy.sensor import (
+    KMDEffectivePriceSensor,
+    KMDLatestDayCostSensor,
+    KMDMonthCostSensor,
+    KMDYearCostSensor,
+)
+from kmd_easy_energy.tariff import resolve_tariff
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+def test_percent_motivation_tariff_scales_with_price_and_respects_override() -> None:
+    utilities = [
+        {
+            "id": "aalborg-forsyning",
+            "tariffs": [
+                {
+                    "year": 2026,
+                    "price_dkk_per_kwh": 0.956,
+                    "motivation_pct_per_k": 2.0,
+                    "bonus_temp": 35.0,
+                    "penalty_temp": 35.0,
+                }
+            ],
+        }
+    ]
+    entry = SimpleNamespace(
+        data={CONF_UTILITY_ID: "aalborg-forsyning"},
+        options={CONF_PRICE_DKK_PER_KWH: 1.0},
+    )
+    resolved = resolve_tariff(entry, today=date(2026, 11, 22), utilities=utilities)
+    assert resolved.price_dkk_per_kwh == 1.0
+    assert resolved.motivation_pct_per_k == 2.0
+    # 2% of 1.00 DKK/kWh = 0.02 DKK/kWh/°C
+    assert resolved.motivation_dkk_per_kwh_per_k == 0.02
+    assert resolved.bonus_temp == 35.0 and resolved.penalty_temp == 35.0
+
+    # Explicit DKK/kWh/°C option overrides percent default.
+    entry_override = SimpleNamespace(
+        data={CONF_UTILITY_ID: "aalborg-forsyning"},
+        options={CONF_PRICE_DKK_PER_KWH: 1.0, CONF_MOTIVATION_DKK_PER_KWH_PER_K: 0.015},
+    )
+    resolved_override = resolve_tariff(
+        entry_override, today=date(2026, 11, 22), utilities=utilities
+    )
+    assert resolved_override.motivation_dkk_per_kwh_per_k == 0.015
+
+
+def test_estimate_variable_costs_returns_empty_without_price() -> None:
+    assert (
+        estimate_variable_costs(
+            price_dkk_per_kwh=None,
+            bonus_temp=30.0,
+            penalty_temp=40.0,
+            motivation_rate=0.01,
+            current_return_temp=28.0,
+            daily={"days": {"21": 50.0}, "month": "Nov"},
+            monthly_cur_year={"Nov": 500.0},
+            return_temp_monthly={"Nov": 28.0},
+            today=date(2026, 11, 22),
+        )
+        == {}
+    )
+
+
+def test_estimate_variable_costs_aalborg_percent_and_kredslob_neutral_zone() -> None:
+    # Aalborg-style: base 1.0 DKK/kWh, 2%/°C (0.02), expected return 35 °C
+    aal = estimate_variable_costs(
+        price_dkk_per_kwh=1.0,
+        bonus_temp=35.0,
+        penalty_temp=35.0,
+        motivation_rate=0.02,
+        current_return_temp=30.0,  # 5° better -> -10% -> 0.90 DKK/kWh
+        daily={"days": {"20": 50.0, "21": 20.0}, "latest_complete": False, "month": "Nov"},
+        monthly_cur_year={"Okt": 1000.0, "Nov": 500.0},
+        return_temp_monthly={"Okt": 35.0, "Nov": 30.0},
+        today=date(2026, 11, 22),
+    )
+    assert aal["effective_price_dkk_per_kwh"] == 0.9
+    assert aal["adjustment_pct"] == -10.0
+    assert aal["latest_day_dkk"] == 45  # 50 kWh (complete day 20) * 0.90
+    assert aal["latest_day_label"] == "20. Nov"
+    assert aal["monthly_dkk"] == {"Okt": 1000, "Nov": 450}
+    assert aal["current_month_dkk"] == 450
+    assert aal["ytd_dkk"] == 1450
+    assert aal["excludes_fixed_fees"] is True
+
+    # Kredsløb-style: neutral zone 30..40 °C -> 0 adjustment at 34 °C
+    kredslob = estimate_variable_costs(
+        price_dkk_per_kwh=0.668,
+        bonus_temp=30.0,
+        penalty_temp=40.0,
+        motivation_rate=0.01,
+        current_return_temp=34.0,
+        daily={"days": {"21": 100.0}, "latest_complete": True, "month": "Nov", "total": 1000.0},
+        monthly_cur_year={"Nov": 1000.0},
+        return_temp_monthly={"Nov": 34.0},
+        today=date(2026, 11, 22),
+    )
+    assert kredslob["effective_price_dkk_per_kwh"] == 0.668
+    assert kredslob["adjustment_pct"] == 0.0
+    assert kredslob["latest_day_dkk"] == 67
+    assert kredslob["ytd_dkk"] == 668
+
+
+def test_cost_estimate_sensors_and_translations() -> None:
+    coord = MagicMock()
+    coord.data = {
+        "cost_estimate": {
+            "year": 2026,
+            "base_price_dkk_per_kwh": 0.668,
+            "effective_price_dkk_per_kwh": 0.648,
+            "adjustment_dkk_per_kwh": -0.02,
+            "adjustment_pct": -3.0,
+            "current_return_temp": 28.0,
+            "latest_day_dkk": 32,
+            "latest_day_kwh": 50.0,
+            "latest_day_label": "21. Nov",
+            "current_month_dkk": 648,
+            "current_month_kwh": 1000.0,
+            "ytd_dkk": 7200,
+            "monthly_dkk": {"Nov": 648},
+            "excludes_fixed_fees": True,
+        }
+    }
+    entry = SimpleNamespace(entry_id="e1", title="Test")
+    eff = KMDEffectivePriceSensor(coord, entry)
+    day = KMDLatestDayCostSensor(coord, entry)
+    mon = KMDMonthCostSensor(coord, entry)
+    yr = KMDYearCostSensor(coord, entry)
+
+    assert eff.native_value == 0.648 and eff.extra_state_attributes["adjustment_pct"] == -3.0
+    assert day.native_value == 32.0 and day.extra_state_attributes["day"] == "21. Nov"
+    assert mon.native_value == 648.0 and mon.extra_state_attributes["kwh"] == 1000.0
+    assert yr.native_value == 7200.0 and yr.extra_state_attributes["monthly_dkk"] == {"Nov": 648}
+
+    for rel in ("strings.json", "translations/en.json", "translations/da.json"):
+        sensors_tr = json.loads(
+            (ROOT / "custom_components" / "kmd_easy_energy" / rel).read_text()
+        )["entity"]["sensor"]
+        for key in ("effective_energy_price", "latest_day_cost", "month_cost", "year_cost"):
+            assert key in sensors_tr and sensors_tr[key]["name"]

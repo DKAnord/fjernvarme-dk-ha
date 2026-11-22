@@ -39,6 +39,10 @@ SENSOR_CAPABILITY: dict[str, str] = {
     "KMDMotivationStatusSensor": CAP_TEMPERATURES,
     "KMDMotivationAdjustmentSensor": CAP_TEMPERATURES,
     "KMDEnergyPriceSensor": CAP_COST,
+    "KMDEffectivePriceSensor": CAP_COST,
+    "KMDLatestDayCostSensor": CAP_COST,
+    "KMDMonthCostSensor": CAP_COST,
+    "KMDYearCostSensor": CAP_COST,
 }
 
 
@@ -53,6 +57,10 @@ def sensors_for(coordinator: KMDEasyEnergyCoordinator, entry: ConfigEntry) -> li
         KMDBalanceSensor,
         KMDHDDSensor,
         KMDEnergyPriceSensor,
+        KMDEffectivePriceSensor,
+        KMDLatestDayCostSensor,
+        KMDMonthCostSensor,
+        KMDYearCostSensor,
         KMDMotivationStatusSensor,
         KMDMotivationAdjustmentSensor,
         KMDKwhPerHddSensor,
@@ -111,6 +119,8 @@ class KMDBaseSensor(CoordinatorEntity[KMDEasyEnergyCoordinator], SensorEntity):
             "temp_source",
             "wattson",
             "wattson_hours",
+            "cost_estimate",
+            "monthly_dkk",
         }
     )
 
@@ -218,6 +228,7 @@ class KMDOverviewSensor(KMDBaseSensor):
             "insights": data.get("insights") or {},
             "forecast": data.get("forecast") or {},
             "billing": data.get("billing") or {},
+            "cost_estimate": data.get("cost_estimate") or {},
             "available_units": data.get("available_units") or [],
             **_sync_attrs(self.coordinator),
         }
@@ -373,6 +384,126 @@ class KMDEnergyPriceSensor(KMDBaseSensor):
             "source": tariff.get("source"),
             "source_note": tariff.get("source_note"),
             "volume_price_dkk_per_m3": tariff.get("price_dkk_per_m3"),
+            "motivation_pct_per_k": tariff.get("motivation_pct_per_k"),
+        }
+
+
+class KMDEffectivePriceSensor(KMDBaseSensor):
+    """Effective variable heat price in DKK/kWh after motivation adjustment."""
+
+    _attr_translation_key = "effective_energy_price"
+    _attr_native_unit_of_measurement = "DKK/kWh"
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_suggested_display_precision = 4
+    _attr_icon = "mdi:cash"
+
+    @property
+    def unique_id(self) -> str:
+        return f"{self._entry.entry_id}_effective_energy_price"
+
+    @property
+    def native_value(self) -> float | None:
+        est = (self.coordinator.data or {}).get("cost_estimate") or {}
+        val = est.get("effective_price_dkk_per_kwh")
+        return float(val) if val is not None else None
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        est = (self.coordinator.data or {}).get("cost_estimate") or {}
+        return {
+            "base_price_dkk_per_kwh": est.get("base_price_dkk_per_kwh"),
+            "adjustment_dkk_per_kwh": est.get("adjustment_dkk_per_kwh"),
+            "adjustment_pct": est.get("adjustment_pct"),
+            "current_return_temp": est.get("current_return_temp"),
+        }
+
+
+class KMDLatestDayCostSensor(KMDBaseSensor):
+    """Estimated variable heating cost for the latest complete day (excl. fixed fees)."""
+
+    _attr_translation_key = "latest_day_cost"
+    _attr_native_unit_of_measurement = "DKK"
+    _attr_device_class = SensorDeviceClass.MONETARY
+    _attr_suggested_display_precision = 0
+    _attr_icon = "mdi:radiator"
+
+    @property
+    def unique_id(self) -> str:
+        return f"{self._entry.entry_id}_latest_day_cost"
+
+    @property
+    def native_value(self) -> float | None:
+        est = (self.coordinator.data or {}).get("cost_estimate") or {}
+        val = est.get("latest_day_dkk")
+        return float(val) if val is not None else None
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        est = (self.coordinator.data or {}).get("cost_estimate") or {}
+        return {
+            "kwh": est.get("latest_day_kwh"),
+            "day": est.get("latest_day_label"),
+            "effective_price_dkk_per_kwh": est.get("effective_price_dkk_per_kwh"),
+            "excludes_fixed_fees": est.get("excludes_fixed_fees", True),
+        }
+
+
+class KMDMonthCostSensor(KMDBaseSensor):
+    """Estimated variable heating cost for the current month (excl. fixed fees)."""
+
+    _attr_translation_key = "month_cost"
+    _attr_native_unit_of_measurement = "DKK"
+    _attr_device_class = SensorDeviceClass.MONETARY
+    _attr_suggested_display_precision = 0
+    _attr_icon = "mdi:radiator"
+
+    @property
+    def unique_id(self) -> str:
+        return f"{self._entry.entry_id}_month_cost"
+
+    @property
+    def native_value(self) -> float | None:
+        est = (self.coordinator.data or {}).get("cost_estimate") or {}
+        val = est.get("current_month_dkk")
+        return float(val) if val is not None else None
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        est = (self.coordinator.data or {}).get("cost_estimate") or {}
+        return {
+            "kwh": est.get("current_month_kwh"),
+            "effective_price_dkk_per_kwh": est.get("effective_price_dkk_per_kwh"),
+            "excludes_fixed_fees": est.get("excludes_fixed_fees", True),
+        }
+
+
+class KMDYearCostSensor(KMDBaseSensor):
+    """Estimated variable heating cost year-to-date (excl. fixed fees)."""
+
+    _attr_translation_key = "year_cost"
+    _attr_native_unit_of_measurement = "DKK"
+    _attr_device_class = SensorDeviceClass.MONETARY
+    _attr_state_class = SensorStateClass.TOTAL
+    _attr_suggested_display_precision = 0
+    _attr_icon = "mdi:radiator"
+
+    @property
+    def unique_id(self) -> str:
+        return f"{self._entry.entry_id}_year_cost"
+
+    @property
+    def native_value(self) -> float | None:
+        est = (self.coordinator.data or {}).get("cost_estimate") or {}
+        val = est.get("ytd_dkk")
+        return float(val) if val is not None else None
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        est = (self.coordinator.data or {}).get("cost_estimate") or {}
+        return {
+            "year": est.get("year"),
+            "monthly_dkk": est.get("monthly_dkk") or {},
+            "excludes_fixed_fees": est.get("excludes_fixed_fees", True),
         }
 
 

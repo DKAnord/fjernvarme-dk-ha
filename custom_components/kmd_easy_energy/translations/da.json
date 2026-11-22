@@ -170,6 +170,18 @@
       "energy_price": {
         "name": "Varmepris"
       },
+      "effective_energy_price": {
+        "name": "Effektiv varmepris"
+      },
+      "latest_day_cost": {
+        "name": "Estimeret udgift (seneste døgn)"
+      },
+      "month_cost": {
+        "name": "Estimeret udgift (denne måned)"
+      },
+      "year_cost": {
+        "name": "Estimeret udgift (i år)"
+      },
       "motivation_status": {
         "name": "Motivationstarif",
         "state": {

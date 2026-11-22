@@ -69,6 +69,11 @@ async def async_ensure_lovelace_card_resource(
     Storage-mode Lovelace (the default) is updated automatically. YAML mode
     cannot be changed here; a warning is logged if the URL is missing or stale.
     """
+    if version is None:
+        if hasattr(hass, "async_add_executor_job"):
+            version = await hass.async_add_executor_job(integration_version)
+        else:
+            version = integration_version()
     target = card_resource_url(version)
     try:
         from homeassistant.components.lovelace import LOVELACE_DATA

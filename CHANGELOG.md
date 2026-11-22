@@ -2,6 +2,12 @@
 
 Alle væsentlige ændringer i **Dansk Fjernvarme** (tidligere *Fjernvarme (KMD Easy Energy)*) dokumenteres her.
 
+## [0.3.6] - 2026-11-22
+
+### HACS-kvalitet & sikkerhed
+- **Ikke-blokerende versionsopslag:** `async_ensure_lovelace_card_resource` læser nu `manifest.json` via `hass.async_add_executor_job`, så Home Assistants event loop ikke blokeres ved opstart.
+- **Sikkerhedshærdning i dashboard-kortet:** URL-scheme-tjek (`https?://`) før `window.open` på portal-knappen samt `esc()` på de sidste SVG `data-tip`-attributter.
+
 ## [0.3.5] - 2026-11-22
 
 ### Navneskifte & HACS Marketplace-forberedelse (ikke breaking)

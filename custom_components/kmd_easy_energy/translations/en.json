@@ -131,7 +131,7 @@
           "auto_sync": "Automatic daily sync (E|Forsyning / Watts On)",
           "auto_sync_hour": "Automatic sync time (hour 0–23)",
           "wattson_energy_unit": "Watts On: energy unit (auto = meter metadata/heuristic)",
-          "wattson_endpoint": "Watts On: advanced endpoint template (empty = automatic, e.g. heating/api/consumptions/<device_id>)"
+          "wattson_endpoint": "Watts On: advanced endpoint template (empty = automatic, e.g. heating/api/consumptions/DEVICE_ID)"
         },
         "description": "Outdoor temperature (graddage/HDD17, kWh per degree day, temperature lines): an optional Home Assistant outdoor sensor is used first (local, from the recorder's long-term statistics). Days without sensor statistics use Open-Meteo (external weather service) at your Home Assistant home location, or at the coordinates below if you fill them in.",
         "data_description": {

@@ -131,7 +131,7 @@
           "auto_sync": "Automatisk daglig synkronisering (E|Forsyning / Watts On)",
           "auto_sync_hour": "Tidspunkt for automatisk synkronisering (time 0–23)",
           "wattson_energy_unit": "Watts On: energienhed (auto = målerens oplysning/skøn)",
-          "wattson_endpoint": "Watts On: avanceret endpoint-skabelon (tom = automatisk, f.eks. heating/api/consumptions/<device_id>)"
+          "wattson_endpoint": "Watts On: avanceret endpoint-skabelon (tom = automatisk, f.eks. heating/api/consumptions/DEVICE_ID)"
         },
         "description": "Udetemperatur (graddage/HDD17, kWh pr. graddag og temperaturkurver): En valgfri udetemperatursensor i Home Assistant bruges først (lokalt, fra recorderens langtidsstatistik). Dage uden statistik fra sensoren hentes fra Open-Meteo (ekstern vejrtjeneste) for din Home Assistant-hjemmelokation — eller for koordinaterne herunder, hvis du udfylder dem.",
         "data_description": {

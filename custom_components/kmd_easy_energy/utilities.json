@@ -53,13 +53,13 @@
       "name": "Energi Ikast",
       "city": "Ikast",
       "portal_url": "https://energi-ikast.dk/",
-      "status": "pending_test",
-      "tier": "verified_portal",
+      "status": "confirmed",
+      "tier": "confirmed",
       "auth_method": "MitID",
       "backend": "kmd",
       "latitude": 56.139,
       "longitude": 9.158,
-      "notes": "Min Forsyning 2 (minforsyning-2.kmd.dk, plant 464). Uses the shared MF2 OIDC client, not Kredsløb's plugin client. Live login not yet confirmed."
+      "notes": "Min Forsyning 2 (minforsyning-2.kmd.dk, plant 464). Uses the shared MF2 OIDC client, not Kredsløb's plugin client. Confirmed live in issue #19 by @BenzDK."
     },
     {
       "id": "struer-energi",

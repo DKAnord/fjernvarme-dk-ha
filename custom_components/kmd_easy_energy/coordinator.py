@@ -25,10 +25,20 @@ from homeassistant.util import dt as dt_util
 
 from .api.eforsyning_client import EforsyningClient, EforsyningLoginError
 from .api.kmd_client import KMDClient
+from .api.wattson_client import (
+    WattsOnAuthError,
+    WattsOnClient,
+    WattsOnError,
+    WattsOnNotFound,
+    WattsOnRateLimited,
+    parse_heat_items,
+)
 from .api.kmd_mitid_auth import KMDMitIDAuthenticator
 from .const import (
+    AUTO_SYNC_BACKENDS,
     BACKEND_EFORSYNING,
     BACKEND_KMD,
+    BACKEND_WATTSON,
     BACKENDS,
     CONF_AUTO_SYNC,
     CONF_AUTO_SYNC_HOUR,
@@ -40,8 +50,7 @@ from .const import (
     CONF_EF_USERNAME,
     CONF_CUSTOMER_ID,
     CONF_CUSTOMER_NUMBER,
-    CONF_LATITUDE,
-    CONF_LONGITUDE,
+    CONF_OUTDOOR_TEMP_ENTITY,
     CONF_LOCATION_NAME,
     CONF_MITID_USERNAME,
     CONF_NOTIFY_SERVICE,
@@ -51,6 +60,12 @@ from .const import (
     CONF_UTILITY,
     CONF_UTILITY_ID,
     CONF_UTILITY_STATUS,
+    CONF_WATTS_DEVICE_ID,
+    CONF_WATTS_ENDPOINT,
+    CONF_WATTS_ENERGY_UNIT,
+    CONF_WATTS_REFRESH_EXPIRES_AT,
+    CONF_WATTS_REFRESH_TOKEN,
+    CONF_WATTS_USER_ID,
     DEFAULT_AUTO_SYNC,
     DEFAULT_AUTO_SYNC_HOUR,
     DEFAULT_SYNC_REMINDER,
@@ -62,8 +77,21 @@ from .const import (
     SYNC_BACKFILL_MONTHS,
     UPDATE_INTERVAL,
 )
-from .capabilities import backend_capabilities, effective_capabilities
+from .capabilities import effective_capabilities, entity_capabilities
 from .eforsyning_mapping import apply_eforsyning_data
+from .wattson_mapping import apply_wattson_data
+from .outdoor_temp import (
+    SENSOR_ERROR,
+    Location,
+    async_sensor_daily_means,
+    combine_parts,
+    merge_daily,
+    part_summary,
+    resolve_location,
+    source_by_month,
+    source_signature,
+    usable_sensor_days,
+)
 from .insights import (
     compact_hourly_point,
     copenhagen_today,
@@ -93,6 +121,16 @@ from .util import (
 _LOGGER = logging.getLogger(__name__)
 
 HDD_BASE = 17.0  # °C – common Danish district heating base
+WEATHER_ARCHIVE_START = dt_mod.date(2022, 1, 1)
+
+
+def _open_meteo_daily(payload: dict[str, Any]) -> dict[str, float]:
+    daily = (payload or {}).get("daily") or {}
+    out: dict[str, float] = {}
+    for d, t in zip(daily.get("time") or [], daily.get("temperature_2m_mean") or []):
+        if t is not None:
+            out[str(d)] = round(float(t), 1)
+    return out
 
 M_KEYS = ["Jan", "Feb", "Mar", "Apr", "Maj", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Dec"]
 M_FULL = [
@@ -280,6 +318,22 @@ class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     def is_eforsyning(self) -> bool:
         return self.backend == BACKEND_EFORSYNING
 
+    @property
+    def is_wattson(self) -> bool:
+        return self.backend == BACKEND_WATTSON
+
+    @property
+    def uses_mitid(self) -> bool:
+        """Only KMD Easy Energy logs in with MitID; the others sync on their own."""
+        return self.backend not in AUTO_SYNC_BACKENDS
+
+    @property
+    def data_source(self) -> str:
+        return {
+            BACKEND_EFORSYNING: "E|Forsyning",
+            BACKEND_WATTSON: "Watts On",
+        }.get(self.backend, "KMD Easy Energy")
+
     def _opt(self, key: str, default: Any = None) -> Any:
         value = self.entry.options.get(key)
         if value is None:
@@ -294,12 +348,23 @@ class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     @property
     def auto_sync_enabled(self) -> bool:
         """Automatic daily sync — only for backends that need no MitID."""
-        return self.is_eforsyning and bool(self._opt(CONF_AUTO_SYNC, DEFAULT_AUTO_SYNC))
+        return (not self.uses_mitid) and bool(self._opt(CONF_AUTO_SYNC, DEFAULT_AUTO_SYNC))
+
+    @property
+    def detected_capabilities(self) -> list[str] | None:
+        """Data kinds a Watts On sync actually found (None before the first sync)."""
+        data = getattr(self, "data", None)
+        meta = data.get("wattson") if isinstance(data, dict) else None
+        return list(meta.get("detected") or []) if isinstance(meta, dict) else None
 
     @property
     def backend_capabilities(self) -> frozenset[str]:
-        """Static capabilities of this backend (decides which entities exist)."""
-        return backend_capabilities(self.backend)
+        """Capabilities that decide which entities exist.
+
+        Static for KMD and E|Forsyning; for Watts On, optional capabilities
+        (hourly/temperatures/volume) are only included once detected.
+        """
+        return entity_capabilities(self.backend, self.detected_capabilities)
 
     def capabilities(self, state: dict[str, Any] | None = None) -> list[str]:
         """Backend capabilities that the cached data can actually fill."""
@@ -447,7 +512,8 @@ class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             self.hass, SIGNAL_MITID_CHALLENGE, self.mitid_challenge_payload()
         )
 
-    async def _fetch_open_meteo_7d(self, lat: float, lon: float) -> float | None:
+    async def _fetch_open_meteo_recent(self, lat: float, lon: float) -> dict[str, float]:
+        """Open-Meteo daily means for the last 7 days + today (forecast API)."""
         session = async_get_clientsession(self.hass)
         url = (
             "https://api.open-meteo.com/v1/forecast"
@@ -458,28 +524,28 @@ class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         async with session.get(url) as resp:
             resp.raise_for_status()
             data = await resp.json()
-        means = (data.get("daily") or {}).get("temperature_2m_mean") or []
-        hdd = [max(0.0, HDD_BASE - t) for t in means if t is not None]
-        return round(sum(hdd), 1) if hdd else None
+        return _open_meteo_daily(data)
 
-    async def _fetch_open_meteo_archive(self, lat: float, lon: float) -> dict[str, float]:
+    async def _fetch_open_meteo_archive(
+        self,
+        lat: float,
+        lon: float,
+        start: dt_mod.date | None = None,
+        end: dt_mod.date | None = None,
+    ) -> dict[str, float]:
         session = async_get_clientsession(self.hass)
-        end_dt = (copenhagen_today() - dt_mod.timedelta(days=1)).isoformat()
+        start_d = (start or WEATHER_ARCHIVE_START).isoformat()
+        end_d = (end or (copenhagen_today() - dt_mod.timedelta(days=1))).isoformat()
         url = (
             "https://archive-api.open-meteo.com/v1/archive"
             f"?latitude={lat}&longitude={lon}"
-            f"&start_date=2022-01-01&end_date={end_dt}"
+            f"&start_date={start_d}&end_date={end_d}"
             "&daily=temperature_2m_mean&timezone=Europe%2FCopenhagen"
         )
         async with session.get(url) as resp:
             resp.raise_for_status()
             meteo = await resp.json()
-        daily = meteo.get("daily") or {}
-        out: dict[str, float] = {}
-        for d, t in zip(daily.get("time") or [], daily.get("temperature_2m_mean") or []):
-            if t is not None:
-                out[str(d)] = round(float(t), 1)
-        return out
+        return _open_meteo_daily(meteo)
 
     def _base_meta(self) -> dict[str, Any]:
         location = (
@@ -519,9 +585,14 @@ class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 or 40.0
             ),
             "backend": self.backend,
-            "data_source": "E|Forsyning" if self.is_eforsyning else "KMD Easy Energy",
+            "data_source": self.data_source,
             "auto_sync": self.auto_sync_enabled,
             "auto_sync_hour": self.auto_sync_hour if self.auto_sync_enabled else None,
+            # Watts On: when the stored login (refresh token) expires if no sync
+            # renews it (as reported by the token endpoint; None if unknown).
+            "login_expires_at": self.entry.data.get(CONF_WATTS_REFRESH_EXPIRES_AT)
+            if self.is_wattson
+            else None,
             "has_mitid_username": bool(mitid_user),
             "mitid_username_masked": masked_user,
             "notify_service": notify_svc,
@@ -703,6 +774,9 @@ class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         state["abnormal_consumption"] = detect_abnormal_consumption(
             daily_kwh, daily_hdd, target
         )
+        outdoor = self._outdoor_temp_summary(state)
+        state["outdoor_temp"] = outdoor
+        state["temp_source"] = outdoor.get("source")
         state["backend_capabilities"] = sorted(self.backend_capabilities)
         state["capabilities"] = self.capabilities(state)
 
@@ -725,39 +799,148 @@ class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._enrich_derived(state)
         return state
 
+    @property
+    def outdoor_temp_entity(self) -> str | None:
+        value = str(self.entry.options.get(CONF_OUTDOOR_TEMP_ENTITY) or "").strip()
+        return value or None
+
+    @property
+    def weather_location(self) -> Location | None:
+        """Open-Meteo location: options override -> HA home -> utility coordinates."""
+        return resolve_location(self.entry.options, self.entry.data, self.hass.config)
+
+    @property
+    def weather_signature(self) -> str:
+        return source_signature(self.weather_location, self.outdoor_temp_entity)
+
+    async def _async_sensor_days(
+        self, start: dt_mod.date, end: dt_mod.date, today: dt_mod.date | None = None
+    ) -> tuple[dict[str, float], str | None]:
+        """Usable daily means from the optional HA sensor's long-term statistics."""
+        entity_id = self.outdoor_temp_entity
+        if not entity_id:
+            return {}, None
+        try:
+            means, status = await async_sensor_daily_means(self.hass, entity_id, start, end)
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.warning("Reading outdoor temperature statistics failed: %s", err)
+            return {}, SENSOR_ERROR
+        return usable_sensor_days(means, today), status
+
     async def _async_update_weather(self, state: dict[str, Any]) -> None:
-        """Optional Open-Meteo 7-day HDD + archive insights (backend-independent)."""
-        lat = (
-            self.entry.options.get(CONF_LATITUDE)
-            or self.entry.data.get(CONF_LATITUDE)
-            or self.hass.config.latitude
-        )
-        lon = (
-            self.entry.options.get(CONF_LONGITUDE)
-            or self.entry.data.get(CONF_LONGITUDE)
-            or self.hass.config.longitude
-        )
-        if lat is not None and lon is not None:
-            today = copenhagen_today().isoformat()
-            if state.get("weather_7d_fetched_on") == today and state.get("hdd_7d") is not None:
-                _LOGGER.debug("Skipping Open-Meteo 7d (already fetched %s)", today)
-            else:
+        """Daily outdoor temperatures: HA sensor statistics first, Open-Meteo per missing day.
+
+        HDD 7 d and the archive (monthly/daily temps, R², kWh/HDD) are each
+        refreshed at most once a day, or when the configured source changes.
+        """
+        location = self.weather_location
+        entity_id = self.outdoor_temp_entity
+        signature = source_signature(location, entity_id)
+        same_source = state.get("weather_source_sig") == signature
+        today = copenhagen_today()
+        today_s = today.isoformat()
+        info = dict(state.get("outdoor_temp_parts") or {}) if same_source else {}
+        sensor_status: str | None = state.get("outdoor_temp_sensor_status") if same_source else None
+
+        if same_source and state.get("weather_7d_fetched_on") == today_s and state.get("hdd_7d") is not None:
+            _LOGGER.debug("Skipping 7 d outdoor temperatures (already fetched %s)", today_s)
+        else:
+            window = [(today - dt_mod.timedelta(days=n)).isoformat() for n in range(7, -1, -1)]
+            sensor, status = await self._async_sensor_days(
+                today - dt_mod.timedelta(days=7), today, today
+            )
+            sensor_status = status or sensor_status
+            meteo: dict[str, float] = {}
+            if location and any(d not in sensor for d in window):
                 try:
-                    state["hdd_7d"] = await self._fetch_open_meteo_7d(float(lat), float(lon))
-                    state["weather_7d_fetched_on"] = today
+                    meteo = await self._fetch_open_meteo_recent(location.latitude, location.longitude)
                 except Exception as err:  # noqa: BLE001
                     _LOGGER.warning("Optional Open-Meteo 7d failed: %s", err)
-            if state.get("weather_archive_fetched_on") == today and state.get("weather"):
-                _LOGGER.debug("Skipping Open-Meteo archive (already fetched %s)", today)
-            else:
+            temps, by_day = merge_daily(window, sensor, meteo)
+            if temps:
+                state["hdd_7d"] = round(sum(max(0.0, HDD_BASE - t) for t in temps.values()), 1)
+                state["weather_7d_fetched_on"] = today_s
+                info["recent"] = part_summary(by_day, location)
+
+        if same_source and state.get("weather_archive_fetched_on") == today_s and state.get("weather"):
+            _LOGGER.debug("Skipping outdoor temperature archive (already fetched %s)", today_s)
+        else:
+            end = today - dt_mod.timedelta(days=1)
+            days: list[str] = []
+            cur = WEATHER_ARCHIVE_START
+            while cur <= end:
+                days.append(cur.isoformat())
+                cur += dt_mod.timedelta(days=1)
+            sensor, status = await self._async_sensor_days(WEATHER_ARCHIVE_START, end)
+            sensor_status = status or sensor_status
+            missing = [d for d in days if d not in sensor]
+            meteo = {}
+            meteo_failed = False
+            if location and missing:
                 try:
-                    daily_temp = await self._fetch_open_meteo_archive(float(lat), float(lon))
-                    computed = _compute_weather_and_insights(state, daily_temp)
-                    state["weather"] = computed["weather"]
-                    state["insights"] = computed["insights"]
-                    state["weather_archive_fetched_on"] = today
+                    meteo = await self._fetch_open_meteo_archive(
+                        location.latitude,
+                        location.longitude,
+                        dt_mod.date.fromisoformat(missing[0]),
+                        dt_mod.date.fromisoformat(missing[-1]),
+                    )
                 except Exception as err:  # noqa: BLE001
                     _LOGGER.warning("Optional Open-Meteo archive failed: %s", err)
+                    meteo_failed = True
+            if meteo_failed and same_source and state.get("weather"):
+                pass  # keep yesterday's complete history rather than a partial one
+            else:
+                daily_temp, by_day = merge_daily(days, sensor, meteo)
+                if daily_temp:
+                    computed = _compute_weather_and_insights(state, daily_temp)
+                    weather = dict(computed["weather"])
+                    months = source_by_month(by_day)
+                    weather["temp_source_by_month"] = {
+                        ym: src for ym, src in months.items() if ym in (weather.get("monthly_temp") or {})
+                    }
+                    state["weather"] = weather
+                    state["insights"] = computed["insights"]
+                    state["weather_archive_fetched_on"] = today_s
+                    info["archive"] = part_summary(by_day, location)
+
+        state["weather_source_sig"] = signature
+        state["outdoor_temp_parts"] = info
+        state["outdoor_temp_sensor_status"] = sensor_status if entity_id else None
+
+    def _outdoor_temp_summary(self, state: dict[str, Any]) -> dict[str, Any]:
+        """Non-recorded attribute: which source the temperatures come from (no coordinates)."""
+        entity_id = self.outdoor_temp_entity
+        location = self.weather_location
+        parts = state.get("outdoor_temp_parts") or {}
+        summary = combine_parts(parts)
+        label = None
+        if entity_id:
+            st = self.hass.states.get(entity_id) if getattr(self.hass, "states", None) else None
+            name = getattr(st, "name", None) if st is not None else None
+            label = name if isinstance(name, str) and name else entity_id
+        summary.update(
+            {
+                "entity_id": entity_id,
+                "sensor_name": label,
+                "sensor_status": state.get("outdoor_temp_sensor_status") if entity_id else None,
+                "configured_location": location.kind if location else None,
+                "pending": bool(state.get("weather_source_sig"))
+                and state.get("weather_source_sig") != source_signature(location, entity_id),
+            }
+        )
+        return summary
+
+    async def async_refresh_weather(self) -> None:
+        """Re-read outdoor temperatures after an options change (no utility call)."""
+        if self._sync_task and not self._sync_task.done():
+            return
+        state = await self._async_load_cache()
+        if not cache_has_sensor_data(state):
+            return
+        await self._async_update_weather(state)
+        self._enrich_derived(state)
+        await self._async_save_cache(state)
+        self.async_set_updated_data(state)
 
     async def _async_fill_gap_since_last_sync(
         self,
@@ -1158,6 +1341,10 @@ class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         finally:
             client.discard_credentials()
         apply_eforsyning_data(state, fetched, today)
+        await self._async_finish_backend_sync(state, today)
+
+    async def _async_finish_backend_sync(self, state: dict[str, Any], today: dt_mod.date) -> None:
+        """Shared tail of a non-MitID sync: derive, import statistics, save, publish."""
         state["updated"] = dt_util.now().isoformat(timespec="seconds")
         await self._async_update_weather(state)
         self._enrich_derived(state)
@@ -1177,32 +1364,145 @@ class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._reminder_sig = None
         self.async_set_updated_data(state)
 
-    async def _async_run_eforsyning_sync(self, automatic: bool = False) -> None:
+    # ------------------------------------------------------------------
+    # Watts On backend (Aalborg Forsyning; rotating Azure AD B2C refresh token)
+    # ------------------------------------------------------------------
+    async def _async_store_watts_token(self, token: str, expires_at: str | None) -> None:
+        """Persist a rotated refresh token at once (losing it ends the session)."""
+        data = {**self.entry.data, CONF_WATTS_REFRESH_TOKEN: token}
+        if expires_at:
+            data[CONF_WATTS_REFRESH_EXPIRES_AT] = expires_at
+        self.hass.config_entries.async_update_entry(self.entry, data=data)
+
+    def _make_wattson_client(self) -> WattsOnClient:
+        client = WattsOnClient(
+            async_get_clientsession(self.hass),
+            str(self.entry.data.get(CONF_WATTS_REFRESH_TOKEN) or ""),
+            on_refresh_token=self._async_store_watts_token,
+        )
+        client.user_id = self.entry.data.get(CONF_WATTS_USER_ID) or None
+        return client
+
+    async def async_sync_wattson(self) -> None:
+        """One Watts On sync: refresh token -> heat intervals -> map -> statistics.
+
+        A rejected refresh token raises KMDLoginError (shown calmly on the
+        card; no reauth/repair — the user picks "Genkonfigurer" and logs in
+        again in a browser). Other failures raise RuntimeError; the cache is
+        only written after a successful fetch.
+        """
+        if not self.entry.data.get(CONF_WATTS_REFRESH_TOKEN):
+            raise KMDLoginError("Watts On-login mangler — genkonfigurer integrationen")
+        state = await self._async_load_cache()
+        today = copenhagen_today()
+        meta_prev = state.get("wattson") or {}
+        client = self._make_wattson_client()
+        device_id = str(self.entry.data.get(CONF_WATTS_DEVICE_ID) or "")
+        device_meta = dict(meta_prev.get("device") or {})
+        endpoint = str(self._opt(CONF_WATTS_ENDPOINT, "") or "").strip() or meta_prev.get("endpoint")
+        stored = state.get("wattson_hours") or {}
+        if stored:
+            newest = datetime.fromisoformat(max(stored))
+            start = dt_util.start_of_local_day(dt_util.as_local(newest) - timedelta(days=2))
+        else:
+            start = dt_util.start_of_local_day(dt_util.now().replace(month=1, day=1))
         try:
-            self._push_sync_ui("fetching_data", "Henter data fra E|Forsyning…")
-            await self.async_sync_eforsyning()
+            if not device_id or not device_meta:
+                devices = await client.async_devices()
+                heat = [d for d in devices if d.get("kind") == "heat"]
+                chosen = next((d for d in heat if d["id"] == device_id), None) or (
+                    heat[0] if heat else None
+                )
+                if chosen is None:
+                    kinds = sorted({str(d.get("kind") or d.get("type") or "?") for d in devices})
+                    raise RuntimeError(
+                        "Ingen varmemåler fundet i Watts On-kontoen (fandt: "
+                        + (", ".join(kinds) or "ingen")
+                        + ")"
+                    )
+                device_id = chosen["id"]
+                device_meta = {k: chosen.get(k) for k in ("kind", "type", "unit")}
+                if device_id != self.entry.data.get(CONF_WATTS_DEVICE_ID):
+                    self.hass.config_entries.async_update_entry(
+                        self.entry, data={**self.entry.data, CONF_WATTS_DEVICE_ID: device_id}
+                    )
+            used, items, probe = await client.async_heat_consumptions(
+                device_id, start, endpoint or None
+            )
+        except WattsOnAuthError as err:
+            # No reauth/repair (same calm policy as the other backends): the
+            # card shows the message; the user picks "Genkonfigurer".
+            raise KMDLoginError(
+                "Watts On-login er udløbet — vælg Genkonfigurer på integrationen og log ind igen"
+            ) from err
+        except WattsOnRateLimited as err:
+            raise RuntimeError("Watts On beder os vente (for mange forespørgsler)") from err
+        except WattsOnNotFound as err:
+            raise RuntimeError(
+                "Fandt ikke Watts On-adressen til varmedata — se README (beta)"
+            ) from err
+        except WattsOnError as err:
+            raise RuntimeError(str(err)[:160] or "Watts On-fejl") from err
+        finally:
+            client.discard()
+        parsed = parse_heat_items(
+            items,
+            unit_hint=device_meta.get("unit"),
+            unit_override=str(self._opt(CONF_WATTS_ENERGY_UNIT, "auto") or "auto"),
+        )
+        before = set(entity_capabilities(self.backend, meta_prev.get("detected")))
+        apply_wattson_data(
+            state,
+            parsed,
+            today,
+            {
+                "endpoint": used,
+                "probe": probe,
+                "device": device_meta,
+                "requests_last_sync": client.requests,
+                "fetched_from": start.isoformat(),
+            },
+        )
+        await self._async_finish_backend_sync(state, today)
+        after = entity_capabilities(self.backend, (state.get("wattson") or {}).get("detected"))
+        if set(after) - before:
+            # New data kinds detected: reload once so their entities are created.
+            self.hass.config_entries.async_schedule_reload(self.entry.entry_id)
+
+    async def _async_run_eforsyning_sync(self, automatic: bool = False) -> None:
+        await self._async_run_backend_sync(automatic)
+
+    async def _async_run_backend_sync(self, automatic: bool = False) -> None:
+        """Run one E|Forsyning / Watts On sync and reflect it calmly on the card."""
+        source = self.data_source
+        try:
+            self._push_sync_ui("fetching_data", f"Henter data fra {source}…")
+            if self.is_wattson:
+                await self.async_sync_wattson()
+            else:
+                await self.async_sync_eforsyning()
             self._push_sync_ui("idle", "")
         except Exception as err:  # noqa: BLE001
             _LOGGER.warning(
-                "E|Forsyning %s sync failed: %s", "automatic" if automatic else "manual", err
+                "%s %s sync failed: %s", source, "automatic" if automatic else "manual", err
             )
             self._push_sync_ui("error", f"Fejl: {str(err)[:160]}")
 
     async def async_start_sync(self, automatic: bool = False) -> None:
         """Backend-independent "Synkroniser" (card, button, ``sync`` service)."""
-        if not self.is_eforsyning:
+        if self.uses_mitid:
             await self.async_start_mitid_sync()
             return
         if self._sync_task and not self._sync_task.done():
             _LOGGER.info("Sync already running")
             return
         self._sync_task = self.hass.async_create_task(
-            self._async_run_eforsyning_sync(automatic)
+            self._async_run_backend_sync(automatic)
         )
 
     @callback
     def async_start_auto_sync(self) -> Callable[[], None]:
-        """Daily automatic sync for E|Forsyning (no-op for KMD/MitID).
+        """Daily automatic sync for E|Forsyning / Watts On (no-op for KMD/MitID).
 
         Runs at the configured hour (Europe/Copenhagen HA time) and once a few
         minutes after start-up when the last sync is older than a day.
@@ -1343,7 +1643,7 @@ class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         For the E|Forsyning backend (no MitID) this starts a normal sync, so
         the existing button entity and service keep working.
         """
-        if self.is_eforsyning:
+        if not self.uses_mitid:
             await self.async_start_sync()
             return
         if mitid_username is not None or notify_service is not None:

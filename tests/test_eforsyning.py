@@ -371,7 +371,8 @@ def test_utilities_json_backend_field_and_hjorring() -> None:
     assert hj["backend"] == "eforsyning"
     assert hj["eforsyning_supplier_id"] == "B30A6948-2461-4827-B8EB-5D93169CCB8B"
     assert hj["portal_url"] == "https://eforsyning.dk/hjvarme/"
-    assert all(u["backend"] == "kmd" for k, u in by_id.items() if k != "hjorring-varmeforsyning")
+    others = {"hjorring-varmeforsyning", "aalborg-forsyning"}  # aalborg: Watts On backend
+    assert all(u["backend"] == "kmd" for k, u in by_id.items() if k not in others)
 
 
 def _flow(utility: dict):

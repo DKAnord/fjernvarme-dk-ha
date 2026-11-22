@@ -56,6 +56,8 @@ TO_REDACT = {
     "LastName",
     "latitude",
     "longitude",
+    "utility_latitude",
+    "utility_longitude",
     "notify_service",
     # E|Forsyning credentials / identifiers
     "eforsyning_username",
@@ -65,6 +67,14 @@ TO_REDACT = {
     "MålerNr",
     "Adresse",
     "EjendomNr",
+    # Watts On credentials / identifiers
+    "wattson_refresh_token",
+    "wattson_redirect_url",
+    "wattson_user_id",
+    "wattson_device_id",
+    "id_token",
+    "code",
+    "code_verifier",
 }
 
 
@@ -74,6 +84,25 @@ def _series_len(value: Any) -> int:
     if isinstance(value, dict):
         return len(value)
     return 0
+
+
+_OUTDOOR_KEYS = (
+    "source",
+    "entity_id",
+    "sensor_status",
+    "configured_location",
+    "open_meteo_location",
+    "ha_sensor_days",
+    "open_meteo_days",
+    "sensor_since",
+    "pending",
+)
+
+
+def _outdoor_summary(value: Any) -> dict[str, Any] | None:
+    if not isinstance(value, dict):
+        return None
+    return {k: value.get(k) for k in _OUTDOOR_KEYS}
 
 
 def _summarize_coordinator(data: dict[str, Any] | None) -> dict[str, Any]:
@@ -93,6 +122,27 @@ def _summarize_coordinator(data: dict[str, Any] | None) -> dict[str, Any]:
             "readings_last_fetch": (data.get("eforsyning") or {}).get("readings_last_fetch"),
         }
         if data.get("eforsyning")
+        else None,
+        # Watts On: only shapes and outcomes (endpoint templates, HTTP results,
+        # JSON key names, unit, assumptions) — never values, ids or tokens.
+        "wattson": {
+            k: (data.get("wattson") or {}).get(k)
+            for k in (
+                "endpoint",
+                "probe",
+                "device",
+                "keys_seen",
+                "energy_unit",
+                "interval_hours",
+                "skipped",
+                "assumptions",
+                "detected",
+                "intervals_last_fetch",
+                "stored_intervals",
+                "requests_last_sync",
+            )
+        }
+        if data.get("wattson")
         else None,
         "location": data.get("location"),
         "last_sync": data.get("last_sync"),
@@ -115,6 +165,8 @@ def _summarize_coordinator(data: dict[str, Any] | None) -> dict[str, Any]:
             if isinstance(u, dict)
         ],
         "weather_archive_fetched_on": data.get("weather_archive_fetched_on"),
+        # Source only (sensor entity id, location *kind*, day counts) — never coordinates.
+        "outdoor_temp": _outdoor_summary(data.get("outdoor_temp")),
         "statistics_imported_on": data.get("statistics_imported_on"),
     }
 

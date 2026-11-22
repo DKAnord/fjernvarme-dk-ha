@@ -78,6 +78,26 @@ def apply_eforsyning_data(
 ) -> dict[str, Any]:
     """Merge one E|Forsyning fetch into ``state`` (in place) and return it."""
     rows = [r for r in (fetched.get("readings") or []) if isinstance(r, dict) and r.get("date")]
+    apply_daily_readings(state, rows, today)
+    state["eforsyning"] = {
+        "years": fetched.get("years") or [],
+        "year_marker": fetched.get("year_marker") or {},
+        "installation": fetched.get("installation") or {},
+        "readings_last_fetch": len(rows),
+    }
+    return state
+
+
+def apply_daily_readings(
+    state: dict[str, Any], rows: list[dict[str, Any]], today: date
+) -> dict[str, Any]:
+    """Merge normalised daily rows into ``state`` (shared by daily backends).
+
+    Each row: ``date`` (ISO, local day), optional ``kwh``, ``m3``,
+    ``temp_return``, ``temp_forward`` and ``days``/``date_from`` for
+    multi-day readings. Hourly keys are cleared; a backend with hourly data
+    sets them afterwards.
+    """
     cutoff = (today - timedelta(days=KEEP_DAYS)).isoformat()
     today_s = today.isoformat()
 
@@ -190,10 +210,4 @@ def apply_eforsyning_data(
     state["hourly"] = {}
     state["has_direct_temp"] = False
     state["data_granularity"] = "daily"
-    state["eforsyning"] = {
-        "years": fetched.get("years") or [],
-        "year_marker": fetched.get("year_marker") or {},
-        "installation": fetched.get("installation") or {},
-        "readings_last_fetch": len(rows),
-    }
     return state

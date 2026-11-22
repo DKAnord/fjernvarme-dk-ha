@@ -107,6 +107,10 @@ class KMDBaseSensor(CoordinatorEntity[KMDEasyEnergyCoordinator], SensorEntity):
             "daily_stat_m3",
             "latest_reading",
             "eforsyning",
+            "outdoor_temp",
+            "temp_source",
+            "wattson",
+            "wattson_hours",
         }
     )
 
@@ -118,6 +122,27 @@ class KMDBaseSensor(CoordinatorEntity[KMDEasyEnergyCoordinator], SensorEntity):
             "name": entry.title or "KMD Easy Energy",
             "manufacturer": "KMD",
         }
+
+
+_OUTDOOR_ATTR_KEYS = (
+    "source",
+    "entity_id",
+    "sensor_name",
+    "sensor_status",
+    "configured_location",
+    "open_meteo_location",
+    "sensor_since",
+    "ha_sensor_days",
+    "open_meteo_days",
+    "pending",
+)
+
+
+def _outdoor_attr(value: Any) -> dict[str, Any]:
+    """Outdoor temperature source for the card (location kind only, no coordinates)."""
+    if not isinstance(value, dict):
+        return {}
+    return {k: value.get(k) for k in _OUTDOOR_ATTR_KEYS}
 
 
 def _sync_attrs(coordinator: KMDEasyEnergyCoordinator) -> dict[str, Any]:
@@ -177,6 +202,7 @@ class KMDOverviewSensor(KMDBaseSensor):
             "data_source": data.get("data_source", "KMD Easy Energy"),
             "data_granularity": data.get("data_granularity", "hourly"),
             "auto_sync": bool(data.get("auto_sync", False)),
+            "login_expires_at": data.get("login_expires_at"),
             "capabilities": data.get("capabilities")
             or sorted(self.coordinator.capabilities(data)),
             "backend_capabilities": data.get("backend_capabilities")
@@ -187,6 +213,8 @@ class KMDOverviewSensor(KMDBaseSensor):
             "hourly": data.get("hourly") or {},
             "return_temp": data.get("return_temp") or {},
             "weather": data.get("weather") or {},
+            "temp_source": data.get("temp_source"),
+            "outdoor_temp": _outdoor_attr(data.get("outdoor_temp")),
             "insights": data.get("insights") or {},
             "forecast": data.get("forecast") or {},
             "billing": data.get("billing") or {},

@@ -94,6 +94,7 @@
     { id: "samn", name: "SAMN Forsyning", city: "Horsens / Odder", url: "https://www.samn.dk/", status: "pending_test" },
     { id: "go-energi", name: "go'energi", city: "Thy-Mors", url: "https://www.goenergi.dk/", status: "pending_test" },
     { id: "hjorring-varmeforsyning", name: "Hjørring Varmeforsyning", city: "Hjørring", url: "https://eforsyning.dk/hjvarme/", status: "pending_test", backend: "eforsyning" },
+    { id: "aalborg-forsyning", name: "Aalborg Forsyning", city: "Aalborg", url: "https://aalborgforsyning.dk/services/forbrug/watts-on/", status: "pending_test", backend: "wattson" },
   ];
 
   const I18N = {
@@ -135,6 +136,41 @@
     },
   };
 
+  // Outdoor temperature source line (integration attribute temp_source /
+  // outdoor_temp; location kind only, never coordinates). "" = nothing to show.
+  const fmtIsoDay = (iso) => {
+    const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso || ""));
+    return m ? `${Number(m[3])}. ${(MONTHS[Number(m[2]) - 1] || "").toLowerCase()} ${m[1]}` : "";
+  };
+  const outdoorTempText = (a, lang) => {
+    const ot = (a && typeof a.outdoor_temp === "object" && a.outdoor_temp) || {};
+    const src = (a && a.temp_source) || ot.source || "";
+    if (!src) return "";
+    const en = lang === "en";
+    const sensor = ot.sensor_name || ot.entity_id || (en ? "HA sensor" : "HA-sensor");
+    const loc = ot.open_meteo_location || ot.configured_location || "";
+    const meteo = {
+      home: en ? "Open-Meteo (HA home location)" : "Open-Meteo (HA-hjemmelokation)",
+      utility: en ? "Open-Meteo (utility location)" : "Open-Meteo (værkets placering)",
+      custom: en ? "Open-Meteo (custom location)" : "Open-Meteo (egen placering)",
+    };
+    const meteoBySrc = { open_meteo_home: meteo.home, open_meteo_utility: meteo.utility, open_meteo_custom: meteo.custom, open_meteo: "Open-Meteo" };
+    const lbl = en ? "Outdoor temp" : "Udetemp";
+    let txt;
+    if (src === "ha_sensor") txt = `${lbl}: ${sensor}`;
+    else if (src === "mixed") {
+      const since = fmtIsoDay(ot.sensor_since);
+      const before = meteo[loc] || "Open-Meteo";
+      txt = en
+        ? `${lbl}: ${sensor}${since ? ` from ${since}` : ""}; days without sensor statistics: ${before}`
+        : `${lbl}: ${sensor}${since ? ` fra ${since}` : ""}; dage uden sensorstatistik: ${before}`;
+    } else txt = `${lbl}: ${meteoBySrc[src] || "Open-Meteo"}`;
+    if (src !== "ha_sensor" && src !== "mixed" && ot.entity_id && ot.sensor_status && ot.sensor_status !== "ok") {
+      txt += en ? ` · ${sensor} has no long-term statistics yet` : ` · ${sensor} har endnu ingen langtidsstatistik`;
+    }
+    if (ot.pending) txt += en ? " · updates at next sync" : " · opdateres ved næste synkronisering";
+    return txt;
+  };
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const fmtInt = (n) => Number.isFinite(n) ? Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".") : "–";
   const fmtDec = (n, d = 1) => Number.isFinite(n) ? n.toFixed(d).replace(".", ",") : "–";
@@ -586,8 +622,11 @@
       const capList = Array.isArray(a.capabilities) ? a.capabilities : null;
       const has = (c) => (capList ? capList.includes(c) : true);
       const backend = a.backend || "kmd";
-      const hasMitid = capList ? capList.includes("mitid") : backend !== "eforsyning";
-      const dataSource = a.data_source || (backend === "eforsyning" ? "E|Forsyning" : "KMD Easy Energy");
+      const hasMitid = capList ? capList.includes("mitid") : backend === "kmd";
+      const dataSource = a.data_source || ({ eforsyning: "E|Forsyning", wattson: "Watts On" }[backend] || "KMD Easy Energy");
+      const loginHow = backend === "wattson"
+        ? "Login med din Watts On-konto (browser-login, din adgangskode gemmes ikke)"
+        : "Login med forbrugernummer og webpinkode";
       const yCur = Number(ann[String(curYr)] ?? st?.state ?? 0);
       const yPrev = Number(ann[String(prevYr)] ?? 0);
       const rtCur = Number(rtA[String(curYr)] ?? rtA["2026"] ?? 0);
@@ -645,7 +684,7 @@
       const utilStatus = a.utility_status || activeUtil.status;
       const statusBadge = utilStatus === "confirmed" ? t.confirmed : t.pending;
 
-      // The MitID wizard only lists KMD utilities (E|Forsyning is set up in HA's config flow).
+      // The MitID wizard only lists KMD utilities (E|Forsyning / Watts On are set up in HA's config flow).
       const kmdUtils = UTILITIES.filter((u) => (u.backend || "kmd") === "kmd");
       const confirmedOpts = kmdUtils.filter((u) => u.status === "confirmed")
         .map((u) => `<option value="${u.id}" ${u.id === activeUtilId ? "selected" : ""}>✅ ${esc(u.name)} (${esc(u.city)})</option>`).join("");
@@ -727,6 +766,10 @@
       const sourceNote = backend !== "kmd"
         ? `<div class="src-note">ℹ️ Data fra ${esc(dataSource)}${has("hourly") ? "" : " · daglige aflæsninger"}${esc(autoHour)} · eksperimentel</div>`
         : "";
+      // Subtle source line; only where outdoor temperatures are actually used.
+      const wxHasTemps = Object.keys(wx.monthly_temp || {}).length > 0 || Object.keys(wx.daily_temp || {}).length > 0;
+      const tempTxt = (has("monthly") || has("daily")) && wxHasTemps ? outdoorTempText(a, lang) : "";
+      const tempSourceNote = tempTxt ? `<div class="src-note temp-src" data-section="temp-source">🌡️ ${esc(tempTxt)}</div>` : "";
       const efOnboard = `
           <div class="onboard">
             <div class="ob-head">
@@ -738,7 +781,7 @@
                 ${!isInitialSetup ? `<button class="btn" id="closeSetupBtn">✕ Luk</button>` : ""}
               </div>
             </div>
-            <div class="ob-note">Data fra ${esc(dataSource)}. Login med forbrugernummer og webpinkode er sat op i Home Assistant (Indstillinger → Enheder &amp; tjenester) — der bruges ikke MitID. Tryk <b>🔄 Hent data nu</b> for første hentning${autoHour ? "; derefter hentes data automatisk hver dag" : ""}.</div>
+            <div class="ob-note">Data fra ${esc(dataSource)}. ${esc(loginHow)} er sat op i Home Assistant (Indstillinger → Enheder &amp; tjenester) — der bruges ikke MitID. Tryk <b>🔄 Hent data nu</b> for første hentning${autoHour ? "; derefter hentes data automatisk hver dag" : ""}.</div>
             ${(hasSyncMsg || this._startingSync) ? `<div class="ob-live ${hasSyncMsg && syncMsg.startsWith("Fejl") ? "red" : ""}">📡 ${esc(hasSyncMsg ? syncMsg : "Henter data…")}</div>` : ""}
             <div class="tb-actions">
               <button class="btn primary" id="efSyncBtn">🔄 Hent data nu</button>
@@ -1033,6 +1076,7 @@
           </div>
           ${syncNudge}
           ${sourceNote}
+          ${tempSourceNote}
           ${mitidLiveBox}
           ${(utilStatus !== "confirmed" && hasData) ? `
           <div class="fb-bar">
@@ -1296,7 +1340,7 @@
         // Prefer the domain service (looks up the entry by id / utility_id) so
         // entity_id slugs like "envafors_sk_forsyning" cannot miss the button.
         // KMD: every "Synkroniser" is one MitID login + fetch since last sync.
-        // Backends without MitID (E|Forsyning) use the generic "sync" service.
+        // Backends without MitID (E|Forsyning, Watts On) use the generic "sync" service.
         if (!hasMitid) {
           this._hass.callService("kmd_easy_energy", "sync", a.entry_id ? { entry_id: a.entry_id } : {});
           return;

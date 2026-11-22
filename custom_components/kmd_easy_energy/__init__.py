@@ -19,8 +19,6 @@ from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from .const import (
     CONF_ACCESS_TOKEN,
     CONF_BONUS_TEMP,
-    CONF_LATITUDE,
-    CONF_LONGITUDE,
     CONF_LOCATION_NAME,
     CONF_MITID_USERNAME,
     CONF_NOTIFY_SERVICE,
@@ -28,12 +26,15 @@ from .const import (
     CONF_PORTAL_URL,
     CONF_UTILITY,
     CONF_UTILITY_ID,
+    CONF_UTILITY_LATITUDE,
+    CONF_UTILITY_LONGITUDE,
     CONF_UTILITY_STATUS,
     DOMAIN,
     SIGNAL_MITID_CHALLENGE,
     WS_TYPE_MITID_SUBSCRIBE,
 )
 from .coordinator import KMDEasyEnergyCoordinator
+from .outdoor_temp import migrate_location
 from .util import store_for, unique_id_for, delete_legacy_www_cache, legacy_www_cache_paths
 
 _LOGGER = logging.getLogger(__name__)
@@ -135,8 +136,10 @@ async def _async_setup_services(hass: HomeAssistant) -> None:
             if meta.get("city"):
                 updates[CONF_LOCATION_NAME] = meta["city"]
             if meta.get("latitude") is not None:
-                updates[CONF_LATITUDE] = meta["latitude"]
-                updates[CONF_LONGITUDE] = meta["longitude"]
+                # Utility metadata / last-resort Open-Meteo location — not a
+                # user location override (that only lives in options).
+                updates[CONF_UTILITY_LATITUDE] = meta["latitude"]
+                updates[CONF_UTILITY_LONGITUDE] = meta["longitude"]
 
         if call.data.get("portal_url"):
             updates[CONF_PORTAL_URL] = str(call.data["portal_url"]).strip()
@@ -281,29 +284,55 @@ async def _async_entry_updated(hass: HomeAssistant, entry: ConfigEntry) -> None:
     coord: KMDEasyEnergyCoordinator | None = hass.data.get(DOMAIN, {}).get(entry.entry_id)
     if coord is None:
         return
-    if coord.is_eforsyning and coord.auto_sync_signature != coord.started_auto_sync_signature:
+    if not coord.uses_mitid and coord.auto_sync_signature != coord.started_auto_sync_signature:
         # Auto-sync on/off or hour changed: re-create the timer via reload.
         hass.config_entries.async_schedule_reload(entry.entry_id)
         return
     coord._reminder_sig = None
+    if coord.weather_signature != (coord.data or {}).get("weather_source_sig", coord.weather_signature):
+        # Outdoor temperature source changed (sensor / location): recompute the
+        # temperatures from the new source now instead of at the next sync.
+        try:
+            await coord.async_refresh_weather()
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.warning("Could not refresh outdoor temperatures: %s", err)
     await coord.async_request_refresh()
 
 
 async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """1.1 -> 1.2: drop the stored KMD access token (session-based sync).
+    """Migrate config entries (minor versions only; nothing user-visible breaks).
 
-    The entry keeps working with its cached data; the next sync performs a
-    fresh MitID login. Nothing else in the entry changes.
+    1.1 -> 1.2: drop the stored KMD access token (session-based sync).
+    1.2 -> 1.3: utility coordinates in entry.data become utility metadata
+    (``utility_latitude``/``utility_longitude``); the outdoor temperature
+    location now follows the HA home location unless options hold an explicit
+    override (see ``outdoor_temp.migrate_location``).
     """
     if entry.version > 1:
         return False
-    if entry.version == 1 and entry.minor_version < 2:
-        data = {k: v for k, v in entry.data.items() if k != CONF_ACCESS_TOKEN}
-        options = {k: v for k, v in entry.options.items() if k != CONF_ACCESS_TOKEN}
-        hass.config_entries.async_update_entry(
-            entry, data=data, options=options, version=1, minor_version=2
-        )
+    if entry.version != 1 or entry.minor_version >= 3:
+        return True
+    data = dict(entry.data)
+    options = dict(entry.options)
+    if entry.minor_version < 2:
+        data = {k: v for k, v in data.items() if k != CONF_ACCESS_TOKEN}
+        options = {k: v for k, v in options.items() if k != CONF_ACCESS_TOKEN}
         _LOGGER.info("Removed stored KMD access token from %s (session-based sync)", entry.title)
+    data, options, dropped = migrate_location(data, options, hass.config)
+    hass.config_entries.async_update_entry(
+        entry, data=data, options=options, version=1, minor_version=3
+    )
+    _LOGGER.info(
+        "Migrated %s to 1.3: outdoor temperature location %s",
+        entry.title,
+        "follows the HA home location (implicit coordinates removed)"
+        if dropped
+        else (
+            "keeps the explicit override from options"
+            if "latitude" in options
+            else "follows the HA home location"
+        ),
+    )
     return True
 
 

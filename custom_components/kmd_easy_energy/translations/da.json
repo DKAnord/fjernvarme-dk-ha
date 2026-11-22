@@ -60,6 +60,33 @@
           "eforsyning_password": "Webpinkode (tom = behold)",
           "eforsyning_supplier_id": "Forsyningid"
         }
+      },
+      "wattson": {
+        "title": "Watts On-login ({utility_name})",
+        "description": "⚠️ Eksperimentel: Watts On-understøttelsen (Aalborg Forsyning) er endnu ikke testet live — vi søger beta-testere. Uofficiel: bruger samme API som Watts On-appen og kan holde op med at virke, hvis Watts ændrer den.\n\nDin varmemåler skal allerede være tilføjet i Watts On-appen. Gør det på en **computer** (ikke telefonen med Watts-appen):\n\n1. **[Åbn Watts On-login]({auth_url})** og log ind med din Watts On-konto (samme e-mail og adgangskode som i appen). Home Assistant ser aldrig din adgangskode.\n2. Til sidst prøver browseren at åbne en adresse, der starter med `msauth://com.seasnve.watts/…`. Det kan den ikke — siden står stille eller viser en fejl. Det er forventet.\n3. Kopiér den adresse: **Chrome/Edge:** tryk F12 → fanen *Console* → linjen *Failed to launch 'msauth://…'* → kopiér hele linjen (eller F12 → *Network* → sidste anmodning → *Location*). **Firefox:** adressen står i adresselinjen/fejlsiden.\n4. Indsæt den her inden for ca. 10 minutter (koden virker kun én gang). Får du en fejl, laves der automatisk et nyt login-link.\n\nHome Assistant gemmer kun et *refresh token* (som andre integrationers adgangskoder). Det fornyes ved hver synkronisering, logges aldrig og fjernes i diagnostik.",
+        "data": {
+          "wattson_redirect_url": "Adressen der starter med msauth://",
+          "wattson_refresh_token": "Avanceret: refresh token (i stedet for adressen)"
+        },
+        "data_description": {
+          "wattson_redirect_url": "Hele adressen (eller hele konsol-linjen) — den indeholder code=…",
+          "wattson_refresh_token": "Kun hvis du allerede har et token, f.eks. fra tools/login.py i Novafos-V2. Lad feltet stå tomt ellers."
+        }
+      },
+      "wattson_device": {
+        "title": "Vælg varmemåler",
+        "description": "Watts On-kontoen har flere målere, eller vi kunne ikke genkende varmemåleren sikkert. Vælg den måler, der er din fjernvarme.",
+        "data": {
+          "wattson_device_id": "Måler"
+        }
+      },
+      "reconfigure_wattson": {
+        "title": "Log ind på Watts On igen ({utility_name})",
+        "description": "⚠️ Eksperimentel: Watts On-understøttelsen (Aalborg Forsyning) er endnu ikke testet live — vi søger beta-testere. Uofficiel: bruger samme API som Watts On-appen og kan holde op med at virke, hvis Watts ændrer den.\n\nDin varmemåler skal allerede være tilføjet i Watts On-appen. Gør det på en **computer** (ikke telefonen med Watts-appen):\n\n1. **[Åbn Watts On-login]({auth_url})** og log ind med din Watts On-konto (samme e-mail og adgangskode som i appen). Home Assistant ser aldrig din adgangskode.\n2. Til sidst prøver browseren at åbne en adresse, der starter med `msauth://com.seasnve.watts/…`. Det kan den ikke — siden står stille eller viser en fejl. Det er forventet.\n3. Kopiér den adresse: **Chrome/Edge:** tryk F12 → fanen *Console* → linjen *Failed to launch 'msauth://…'* → kopiér hele linjen (eller F12 → *Network* → sidste anmodning → *Location*). **Firefox:** adressen står i adresselinjen/fejlsiden.\n4. Indsæt den her inden for ca. 10 minutter (koden virker kun én gang). Får du en fejl, laves der automatisk et nyt login-link.\n\nHome Assistant gemmer kun et *refresh token* (som andre integrationers adgangskoder). Det fornyes ved hver synkronisering, logges aldrig og fjernes i diagnostik.",
+        "data": {
+          "wattson_redirect_url": "Adressen der starter med msauth://",
+          "wattson_refresh_token": "Avanceret: refresh token (i stedet for adressen)"
+        }
       }
     },
     "abort": {
@@ -71,7 +98,16 @@
       "cannot_connect": "Kunne ikke forbinde til E|Forsyning (tjek forsyningid og netværk).",
       "unknown": "Uventet fejl — se loggen.",
       "eforsyning_missing": "Udfyld både forbrugernummer og webpinkode.",
-      "eforsyning_supplier_required": "Forsyningid skal udfyldes for dette værk."
+      "eforsyning_supplier_required": "Forsyningid skal udfyldes for dette værk.",
+      "wattson_missing": "Indsæt adressen, der starter med msauth:// (eller et refresh token).",
+      "wattson_no_code": "Fandt ingen code= i det indsatte. Kopiér hele msauth://-adressen og prøv igen med det nye login-link.",
+      "wattson_state_mismatch": "Adressen hører til et ældre login-link. Brug det nye link ovenfor og prøv igen.",
+      "wattson_login_cancelled": "Login blev afbrudt eller afvist i Watts On. Prøv igen med det nye link.",
+      "wattson_code_rejected": "Watts On afviste koden (udløbet eller allerede brugt). Brug det nye link og indsæt adressen med det samme.",
+      "wattson_token_rejected": "Watts On afviste dette refresh token.",
+      "wattson_cannot_connect": "Kunne ikke forbinde til Watts On. Prøv igen senere.",
+      "wattson_no_heat_meter": "Watts On-kontoen har ingen varmemåler (kun vand/el). Tilføj din Aalborg Forsyning-varmemåler i Watts On-appen først.",
+      "wattson_wrong_account": "Det er en anden Watts On-konto end den, integrationen er sat op med."
     }
   },
   "options": {
@@ -84,17 +120,31 @@
           "notify_service": "Mobil push-service (valgfri, til MitID-kode)",
           "bonus_temp": "Bonusgrænse returtemperatur (°C)",
           "penalty_temp": "Gebyrgrænse returtemperatur (°C)",
-          "latitude": "Breddegrad (Open-Meteo vejr)",
-          "longitude": "Længdegrad (Open-Meteo vejr)",
+          "outdoor_temp_entity": "Udetemperatursensor (valgfri)",
+          "latitude": "Breddegrad – egen placering (valgfri, Open-Meteo)",
+          "longitude": "Længdegrad – egen placering (valgfri, Open-Meteo)",
           "price_dkk_per_kwh": "Varmepris (kr./kWh, 0 = brug offentliggjort standard)",
           "price_dkk_per_m3": "Volumenpris (kr./m³, valgfri, 0 = ikke sat)",
           "motivation_dkk_per_kwh_per_k": "Motivationstarif (kr./kWh/°C, 0 = offentliggjort standard)",
           "normal_hdd_year": "Normalår-graddage HDD17 (0 = skøn 3100)",
           "sync_reminder": "Blød påmindelse i weekenden (vises lør/søn, hvis der ikke er synkroniseret tors–lør)",
-          "auto_sync": "Automatisk daglig synkronisering (kun E|Forsyning)",
-          "auto_sync_hour": "Tidspunkt for automatisk synkronisering (time 0–23)"
+          "auto_sync": "Automatisk daglig synkronisering (E|Forsyning / Watts On)",
+          "auto_sync_hour": "Tidspunkt for automatisk synkronisering (time 0–23)",
+          "wattson_energy_unit": "Watts On: energienhed (auto = målerens oplysning/skøn)",
+          "wattson_endpoint": "Watts On: avanceret endpoint-skabelon (tom = automatisk, f.eks. heating/api/consumptions/DEVICE_ID)"
+        },
+        "description": "Udetemperatur (graddage/HDD17, kWh pr. graddag og temperaturkurver): En valgfri udetemperatursensor i Home Assistant bruges først (lokalt, fra recorderens langtidsstatistik). Dage uden statistik fra sensoren hentes fra Open-Meteo (ekstern vejrtjeneste) for din Home Assistant-hjemmelokation — eller for koordinaterne herunder, hvis du udfylder dem.",
+        "data_description": {
+          "outdoor_temp_entity": "Dit eget udetermometer (temperatursensor med langtidsstatistik, state_class measurement). Døgnmiddel læses lokalt fra recorderen. Dage fra før sensoren fandtes, hentes fra Open-Meteo. Lad feltet stå tomt for kun at bruge Open-Meteo.",
+          "latitude": "Lad feltet stå tomt for at bruge Home Assistants hjemmelokation (Indstillinger → System → Generelt). Udfyld kun, hvis Open-Meteo skal bruge et andet sted. Værkets placering bruges kun, hvis Home Assistant ikke har en hjemmelokation.",
+          "longitude": "Udfyldes sammen med breddegrad – eller lad begge stå tomme."
         }
       }
+    },
+    "error": {
+      "location_incomplete": "Udfyld både bredde- og længdegrad – eller lad begge stå tomme for at bruge Home Assistants hjemmelokation.",
+      "location_invalid": "Ugyldige koordinater (breddegrad −90…90, længdegrad −180…180).",
+      "outdoor_temp_entity_invalid": "Vælg en temperatursensor (sensor.…)."
     }
   },
   "entity": {

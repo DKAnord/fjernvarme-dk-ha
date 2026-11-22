@@ -85,6 +85,20 @@ assert.strictEqual(decodeURIComponent(card.shadowRoot.getElementById("mitidQrImg
 timers[0].fn();
 assert.strictEqual(decodeURIComponent(card.shadowRoot.getElementById("mitidQrImg").src.split("utf8,")[1]), f1, "back to frame 1");
 
+// Rotating updateCount: updates img.src in place WITHOUT rebuilding shadowRoot DOM
+const f3 = '<svg viewBox="0 0 3 3"><path d="M2,0H3V1H2z"/></svg>';
+const f4 = '<svg viewBox="0 0 3 3"><path d="M0,2H1V3H0z"/></svg>';
+const imgBeforeRotate = card.shadowRoot.getElementById("mitidQrImg");
+const prevTimer = timers[0];
+subCb({ entry_id: "e1", sync_state: "qr_ready", otp_code: null, qr_frames: [f3, f4] });
+const imgAfterRotate = card.shadowRoot.getElementById("mitidQrImg");
+assert.strictEqual(imgAfterRotate, imgBeforeRotate, "QR img updated in place without DOM rebuild");
+assert.strictEqual(decodeURIComponent(imgAfterRotate.src.split("utf8,")[1]), f3, "rotated frame 1");
+assert.strictEqual(timers.length, 1, "timer restarted cleanly");
+assert.notStrictEqual(timers[0], prevTimer, "new timer phase on uc rotation");
+timers[0].fn();
+assert.strictEqual(decodeURIComponent(imgAfterRotate.src.split("utf8,")[1]), f4, "rotated frame 2");
+
 // Verified: QR disappears, timer stops, no code required
 subCb({ entry_id: "e1", sync_state: "verified", otp_code: null, qr_frames: [] });
 assert.ok(!card.shadowRoot.innerHTML.includes('id="mitidQrImg"'));

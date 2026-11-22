@@ -215,11 +215,27 @@
         const utilId = st?.attributes?.utility_id || this._config?.utility_id;
         if (d.entry_id && entryId && d.entry_id !== entryId) return;
         if (!d.entry_id && d.utility_id && utilId && d.utility_id !== utilId) return;
-        this._mitidOtp = d.otp_code || "";
         const frames = Array.isArray(d.qr_frames) ? d.qr_frames.filter(Boolean) : [];
+        const existingImg = this.shadowRoot && this.shadowRoot.getElementById("mitidQrImg");
+        if (existingImg && !d.otp_code && frames.length > 0) {
+          // Rotate QR frames in place without rebuilding the Shadow DOM or
+          // desynchronizing the 1-second frame alternation timer.
+          this._mitidOtp = "";
+          this._mitidQrFrames = frames;
+          this._mitidQr = frames[0];
+          this._mitidQrIdx = 0;
+          this._prewarmQr(frames);
+          existingImg.src = this._qrDataUrl(frames[0]);
+          if (this._qrTimer) { clearInterval(this._qrTimer); this._qrTimer = null; }
+          this._syncQrAnimation();
+          return;
+        }
+        if (this._qrTimer) { clearInterval(this._qrTimer); this._qrTimer = null; }
+        this._mitidOtp = d.otp_code || "";
         this._mitidQrFrames = frames;
         this._mitidQr = frames[0] || "";
         this._mitidQrIdx = 0;
+        if (frames.length > 0) this._prewarmQr(frames);
         this._lastSig = null;
         this._render();
         this._syncQrAnimation();
@@ -255,6 +271,15 @@
 
     _qrDataUrl(svg) {
       return `data:image/svg+xml;utf8,${encodeURIComponent(svg || "")}`;
+    }
+
+    _prewarmQr(frames) {
+      if (typeof Image !== "function" || !Array.isArray(frames)) return;
+      this._qrPrewarm = frames.map((f) => {
+        const im = new Image();
+        im.src = this._qrDataUrl(f);
+        return im;
+      });
     }
 
     disconnectedCallback() {
@@ -1265,7 +1290,10 @@
           this._startingSync = true;
           this._hass.callService("kmd_easy_energy", "configure_utility", payload);
           this._render();
-          setTimeout(() => { this._startingSync = false; this._render(); }, 5000);
+          setTimeout(() => {
+            this._startingSync = false;
+            if (!this._mitidQr && !this._mitidOtp) this._render();
+          }, 5000);
         });
       }
       const completeNowBtn = this.shadowRoot.getElementById("completeNowBtn");

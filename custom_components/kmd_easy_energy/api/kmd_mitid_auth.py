@@ -40,18 +40,28 @@ DEFAULT_KREDSLOB = {
 
 
 def _qr_to_svg(qr_obj: qrcode.QRCode) -> str:
-    """Render a QR code as a compact SVG that scales crisply in the browser.
+    """Render a QR code as a crisp pixel-sized SVG with an opaque white background.
 
-    ``shape-rendering="crispEdges"`` avoids hairline gaps between the unit
-    squares when the card scales the SVG up, which can make the code hard to
-    scan from a tablet or PC screen.
+    ``shape-rendering="crispEdges"`` avoids hairline gaps between modules,
+    pixel dimensions avoid ``mm``-unit scaling quirks, and the white ``<rect>``
+    keeps the quiet zone readable even on dark-mode dashboards.
     """
     img = qr_obj.make_image(image_factory=qrcode.image.svg.SvgPathImage)
     buf = io.BytesIO()
     img.save(buf)
     svg = buf.getvalue().decode("utf-8")
+    size = (qr_obj.modules_count + 2 * qr_obj.border) * 10
+    svg = re.sub(r'width="[^"]*"', f'width="{size}"', svg, count=1)
+    svg = re.sub(r'height="[^"]*"', f'height="{size}"', svg, count=1)
     if "shape-rendering" not in svg:
         svg = svg.replace("<svg ", '<svg shape-rendering="crispEdges" ', 1)
+    if '<rect width="100%"' not in svg:
+        svg = re.sub(
+            r"(<svg\b[^>]*>)",
+            r'\1<rect width="100%" height="100%" fill="#ffffff"/>',
+            svg,
+            count=1,
+        )
     return svg
 
 

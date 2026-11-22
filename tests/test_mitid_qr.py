@@ -49,6 +49,7 @@ def test_poll_once_returns_both_animated_qr_frames() -> None:
     assert (d1["p"], d2["p"]) == (1, 2)
     assert d1["h"] + d2["h"] == binding
     assert d1["uc"] == d2["uc"] == 3
+    assert (q1.border, q2.border) == (4, 4)
 
 
 def test_poll_once_otp_and_verified_need_no_qr() -> None:
@@ -69,6 +70,8 @@ def test_qr_svg_scannable_size() -> None:
     # QR version stays small (<= 41 modules) so ~240 px on the card gives >= 5 px/module.
     assert qr.modules_count <= 41
     assert svg.count("<svg") == 1
+    assert '<rect width="100%" height="100%" fill="#ffffff"/>' in svg
+    assert 'mm"' not in svg
 
 
 def _ws_setup(coords: dict):

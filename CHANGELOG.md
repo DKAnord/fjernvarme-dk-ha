@@ -2,6 +2,11 @@
 
 Alle væsentlige ændringer i **Dansk Fjernvarme** (tidligere *Fjernvarme (KMD Easy Energy)*) dokumenteres her.
 
+## [1.0.1] - 2026-11-22
+
+### Rettet
+- **Indsigter efter skift fra El til Varme:** Månedssøjlerne blev opdateret, men R², grundlast, kWh/HDD og døgnrytme kunne blive liggende på den gamle elmålers tal. Vejrarkivet (og dermed indsigterne) blev kun beregnet én gang om dagen, og time-/dagshistorik for den forrige måler blev ikke nulstillet. Fra v1.0.1 genberegnes indsigterne ved hver synkronisering ud fra de aktuelle månedstal, og et skift af kundeforhold/måler rydder den cached forbrugshistorik (ikke udetemperaturen) og henter varmemålerens data forfra. Home Assistant Energy-statistik skrives derefter på ny (upsert) for den valgte måler.
+
 ## [1.0.0] - 2026-11-22
 
 Første stabile **1.0.0**-udgivelse (ude af beta) af **Dansk Fjernvarme** (`DKAnord/fjernvarme-dk-ha`, ikke-breaking teknisk domæne `kmd_easy_energy`).

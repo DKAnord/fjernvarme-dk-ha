@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 import logging
-import shutil
 from pathlib import Path
 from typing import Any
 
@@ -34,6 +33,7 @@ from .const import (
     WS_TYPE_MITID_SUBSCRIBE,
 )
 from .coordinator import KMDEasyEnergyCoordinator
+from .frontend_card import async_ensure_lovelace_card_resource, install_frontend_card
 from .outdoor_temp import migrate_location
 from .util import store_for, unique_id_for, delete_legacy_www_cache, legacy_www_cache_paths
 
@@ -265,20 +265,6 @@ def _async_register_websocket(hass: HomeAssistant) -> None:
     hass.data[_WS_REGISTERED] = True
 
 
-def _install_frontend_card(www_js_dir: Path) -> None:
-    """Copy bundled Lovelace card JS to <config>/www/js/ (run in executor)."""
-    src = Path(__file__).parent / "frontend" / "kmd-easy-energy-card.js"
-    if not src.exists():
-        return
-    www_js_dir.mkdir(parents=True, exist_ok=True)
-    dst = www_js_dir / "kmd-easy-energy-card.js"
-    try:
-        if not dst.exists() or src.read_bytes() != dst.read_bytes():
-            shutil.copy2(src, dst)
-    except Exception as err:  # noqa: BLE001
-        _LOGGER.warning("Could not install frontend card to %s: %s", dst, err)
-
-
 async def _async_entry_updated(hass: HomeAssistant, entry: ConfigEntry) -> None:
     """Apply option changes (reminder on/off, prices) from cache — no KMD call."""
     coord: KMDEasyEnergyCoordinator | None = hass.data.get(DOMAIN, {}).get(entry.entry_id)
@@ -339,8 +325,9 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up KMD Easy Energy from a config entry."""
     await hass.async_add_executor_job(
-        _install_frontend_card, Path(hass.config.path("www/js"))
+        install_frontend_card, Path(hass.config.path("www/js"))
     )
+    await async_ensure_lovelace_card_resource(hass)
     portal_url = (
         entry.options.get(CONF_PORTAL_URL)
         or entry.data.get(CONF_PORTAL_URL)

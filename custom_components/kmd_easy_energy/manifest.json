@@ -23,5 +23,5 @@
     "pycryptodome>=3.19.0",
     "qrcode>=7.4.2"
   ],
-  "version": "0.3.0"
+  "version": "0.3.1"
 }

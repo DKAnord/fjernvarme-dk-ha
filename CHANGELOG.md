@@ -2,6 +2,11 @@
 
 Alle væsentlige ændringer i **Fjernvarme (KMD Easy Energy) – HA Connector & Dashboard** dokumenteres her.
 
+## [0.3.1] - 2026-11-22
+
+### Rettet
+- Efter opdatering fra v0.2.x til v0.3.0 kunne MitID-QR-koden mangle på dashboard-kortet. Home Assistant cacher filer under `/local/` i 31 dage, så browseren eller Companion-appen kunne blive ved med at køre det gamle kort, som læste de fjernede attributter `mitid_qr_svg` / `mitid_otp_code`. Integrationen opretter eller opdaterer nu selv Lovelace-ressourcen til `/local/js/kmd-easy-energy-card.js?v=<version>`. I YAML-tilstand logges en advarsel, hvis URL'en mangler eller er uversioneret.
+
 ## [0.3.0] - 2026-11-22
 
 Første stabile **0.3.0**-udgivelse. Samler indholdet fra `v0.3.0-beta.1`–`v0.3.0-beta.4` plus en tydeligere førstegangsguide. Bygger videre på **v0.2.1** (CET-timehentning, spidstime-grafer, fjernet Aula-script).

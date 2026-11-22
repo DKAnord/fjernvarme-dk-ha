@@ -2,7 +2,7 @@
 
 Alle væsentlige ændringer i **Fjernvarme (KMD Easy Energy) – HA Connector & Dashboard** dokumenteres her.
 
-## [Unreleased]
+## [0.3.0-beta.3] (efter 0.3.0-beta.2)
 
 ### Tilføjet: E|Forsyning-backend (eksperimentel, ikke testet live — beta-testere søges)
 - Ny backend for værker på **E|Forsyning** (eforsyning.dk / DFF-EDB). Første værk: **Hjørring Varmeforsyning** (forsyningid `B30A6948-2461-4827-B8EB-5D93169CCB8B`, fundet på den offentlige side eforsyning.dk/hjvarme). *Andet E|Forsyning-værk* kan sættes op med værkets forsyningid.

@@ -66,6 +66,28 @@ def test_strings_have_no_token_or_reauth() -> None:
         assert "sync_reminder" in data["entity"]["binary_sensor"]
 
 
+def test_auth_step_points_to_dashboard_card() -> None:
+    """Config flow must say Submit only creates the entry; MitID is on the card.
+
+    Hassfest rejects HTML-like tags in translations (e.g. <device_id>), so the
+    description must not contain < or >.
+    """
+    en = json.loads((ROOT / "custom_components/kmd_easy_energy/strings.json").read_text())
+    da = json.loads((ROOT / "custom_components/kmd_easy_energy/translations/da.json").read_text())
+    en_tr = json.loads((ROOT / "custom_components/kmd_easy_energy/translations/en.json").read_text())
+    assert en["config"]["step"]["auth"]["description"] == en_tr["config"]["step"]["auth"]["description"]
+    en_desc = en["config"]["step"]["auth"]["description"]
+    da_desc = da["config"]["step"]["auth"]["description"]
+    assert "After Submit" in en_desc
+    assert "Gem & Start MitID-synkronisering" in en_desc
+    assert "No MitID login happens in this dialog" in en_desc
+    assert "Efter Submit" in da_desc
+    assert "Gem & Start MitID-synkronisering" in da_desc
+    assert "intet MitID-login i denne dialog" in da_desc
+    for desc in (en_desc, da_desc):
+        assert "<" not in desc and ">" not in desc
+
+
 def test_services_include_start_mitid_sync() -> None:
     text = (ROOT / "custom_components/kmd_easy_energy/services.yaml").read_text()
     assert "start_mitid_sync:" in text

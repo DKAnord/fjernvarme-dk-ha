@@ -2,111 +2,54 @@
 
 Alle væsentlige ændringer i **Fjernvarme (KMD Easy Energy) – HA Connector & Dashboard** dokumenteres her.
 
-## [0.3.0-beta.4] (efter 0.3.0-beta.3)
-
-### Rettet: MitID QR-stabilitet
-- **In-place QR-opdatering i kortet:** Når MitID roterer `updateCount` og sender nye QR-frames, opdateres billedet direkte uden at rive Shadow DOM'en ned eller desynkronisere 1-sekunds timeren; begge frames pre-warmes med `Image()`, og 5s setup-timeouten genrenderer ikke under aktiv QR/OTP.
-- **Ingen kunstig 1,2s forsinkelse efter MitID long-poll:** Coordinatoren looper straks efter long-poll-svar (kun `0,15s` pause ved svar under `0,2s`) og sender kun fuld state-opdatering ved første QR-visning.
-- **Bedre læsbarhed:** QR-SVG får eksplicit pixel-størrelse, hvid `<rect>`-baggrund (også i dark mode) og ISO-standard `border=4` quiet zone.
-
-### Ændret: Udetemperaturens kilde (HA-sensor, HA-hjemmelokation, værkets placering)
-- **Rettet:** Open-Meteo brugte reelt altid værkets koordinater, fordi de blev kopieret ind i config entry ved opsætningen. Home Assistants hjemmelokation blev derfor aldrig brugt. Nu gælder: **egen placering i indstillingerne → HA-hjemmelokation → værkets placering** (sidstnævnte kun, hvis HA ikke har en hjemmelokation, dvs. 0/0).
-- **Ny valgfri udetemperatursensor** (indstillinger; `sensor` med `device_class: temperature`). Døgnmiddel og graddage (HDD17) beregnes lokalt ud fra recorderens langtidsstatistik (timemiddel, °C) i stedet for Open-Meteo. Der skrives intet til databasen. Dage uden sensorstatistik, fx før sensoren fandtes, hentes fra Open-Meteo pr. dag. Dækker sensoren alt, kaldes Open-Meteo ikke.
-- Kilden vises diskret på kortet (*Udetemp: …*) og i de ikke-optagede attributter `temp_source` (`ha_sensor` / `open_meteo_home` / `open_meteo_utility` / `open_meteo_custom` / `mixed`) og `outdoor_temp` (sensor, dage pr. kilde, slags placering, `sensor_since`). Kilden gemmes også pr. måned i `weather.temp_source_by_month`. Koordinater vises aldrig. Diagnostics redigerer også `utility_latitude`/`utility_longitude`.
-- Ændrer man kilden i indstillingerne, genberegnes temperaturerne med det samme (ingen kontakt til værket). Ellers sker det højst én gang i døgnet ved synkronisering.
-- Bredde-/længdegrad i indstillingerne er nu tomme som standard (= HA-hjemmelokation) og skal udfyldes parvis. Nye fejltekster på dansk og engelsk.
-- **Migrering (config entry 1.2 → 1.3, ikke brudende):** værkets koordinater flyttes til `utility_latitude`/`utility_longitude`. Koordinater i indstillingerne beholdes som eksplicit valg, medmindre de blot var den gamle formulars forudfyldte værdi (værkets placering, HA-hjemmelokationen eller 56.15/10.10). Så fjernes de, og installationen følger HA-hjemmelokationen. Ældre versioner kan stadig læse en 1.3-entry; de falder så tilbage til HA-hjemmelokationen.
-
-### Tilføjet: Watts On-backend for Aalborg Forsyning (eksperimentel, uofficiel, ikke testet live — beta-tester søges)
-- Ny backend `wattson` for fjernvarme vist i **Watts On**-appen. Første værk: **Aalborg Forsyning** (`utilities.json`). Forsyning Helsingør er uændret (KMD), selv om den også findes i Watts On.
-- Login i browseren uden MitID: config flowet viser et login-link (PKCE), og man indsætter den sidste `msauth://`-adresse. Home Assistant ser aldrig Watts-adgangskoden. Kun et refresh token gemmes; roterede tokens gemmes med det samme, logges aldrig og redigeres i diagnostics. Genkonfigurer = log ind igen (ingen reauth/repair).
-- Varmemåler findes automatisk (eller vælges), varme-endpoint findes ved at prøve få kandidater (resultatet huskes og vises i diagnostics). Defensiv parsing: energi (kWh/MWh/GJ), m³ og frem-/returtemperatur kun når felterne genkendes; ellers skjules de. Timedata → Energy-statistik pr. time, timeprofil, døgn/måned/år.
-- Automatisk daglig synkronisering (standard), weekend-påmindelse slået fra som standard. Avancerede indstillinger: energienhed og endpoint-skabelon.
-- Volumen-/returtemperatur-sensorer oprettes først, når data er fundet (én genindlæsning).
-- Bygget med [TheRealBatBro/Home-Assistant-Novafos-V2](https://github.com/TheRealBatBro/Home-Assistant-Novafos-V2) (MIT) som inspiration: afledt fil markeret, MIT-tekst i NOTICE og `api/LICENSE-novafos-v2-MIT.txt`, kreditering i README.
-- E|Forsyning og Watts On deler nu den daglige mapping (`apply_daily_readings`) og synkroniseringslogik; KMD er uændret.
-
-## [0.3.0-beta.3] (efter 0.3.0-beta.2)
-
-### Tilføjet: E|Forsyning-backend (eksperimentel, ikke testet live — beta-testere søges)
-- Ny backend for værker på **E|Forsyning** (eforsyning.dk / DFF-EDB). Første værk: **Hjørring Varmeforsyning** (forsyningid `B30A6948-2461-4827-B8EB-5D93169CCB8B`, fundet på den offentlige side eforsyning.dk/hjvarme). *Andet E|Forsyning-værk* kan sættes op med værkets forsyningid.
-- `utilities.json` har nyt felt `backend` (`kmd` for alle eksisterende værker, `eforsyning` for nye).
-- Opsætning med **forbrugernummer + webpinkode** i stedet for MitID (gemmes i config entry, logges aldrig, redigeres i diagnostics). Valg af installation, hvis kontoen har flere. Reconfigure kan skifte login.
-- **Automatisk daglig synkronisering** for E|Forsyning (standard ca. kl. 06:17, kan ændres/slås fra). Weekend-påmindelsen er slået fra som standard for E|Forsyning. Ny tjeneste `kmd_easy_energy.sync` (uanset backend); knappen hedder *Synkroniser nu* for E|Forsyning.
-- Daglige aflæsninger mappes til samme data som KMD-backenden (dagligt, månedligt, år kun ved fuld dækning, m³, m³-vægtet returtemperatur). Energy-statistik importeres med én række pr. døgn. Der er ingen timedata, saldo eller budgetprognose fra E|Forsyning.
-- Protokollen er studeret fra og genimplementeret efter [kpoppel/homeassistant-eforsyning](https://github.com/kpoppel/homeassistant-eforsyning) (Apache-2.0). Afledt fil markeret, licenstekst medfølger, kreditering i README og NOTICE.
-
-### Tilføjet: Kapabilitetsstyret kort og entiteter (alle backends)
-- Coordinatoren udstiller `capabilities` (fx `hourly`, `daily`, `monthly`, `temperatures`, `volume`, `cost`, `billing`, `forecast`, `mitid`, `reminder`, `auto_sync`) = det backenden kan levere **og** der faktisk er data til, samt `backend_capabilities`.
-- Kortet skjuler grafer, KPI-felter og indsigter uden data (ingen tomme grafer eller "–"-felter) og viser kun MitID-UI, når backenden bruger MitID. Ældre integrationer uden attributten viser alt som før.
-- Sensorer og binære sensorer oprettes kun, når backenden kan udfylde dem (fx ingen saldo-sensor for E|Forsyning). Uændret for KMD-værker.
-
-## [0.3.0-beta.2] (efter 0.3.0-beta.1)
-
-### Brudende ændringer
-- Access tokens gemmes ikke, og der er ingen baggrundspolling: nye data kommer kun ved **Synkroniser** (MitID). Automatiseringer, der kaldte `kmd_easy_energy.refresh` for at hente nye data, skal i stedet bruge `start_mitid_sync` (kræver godkendelse i MitID-appen).
-- Attributten `token_expired` og reauth-flowet er fjernet. Live-kode/QR leveres via websocket, ikke bus-event (se nedenfor).
-
-### MitID: QR fra tablet/computer og tydeligere vejledning
-- Kort, README og tekster siger nu tydeligt, at skiftet til 4-cifret engangskode **kun** er nødvendigt, når opsætningen sker på **samme telefon** som MitID-appen. Opsætter man på en tablet eller computer, scanner man bare QR-koden på kortet med MitID-appen.
-- MitID's animerede QR består af to billeder (p=1/p=2), som appen skal se begge. Backend sender nu begge billeder, og kortet skifter mellem dem hvert sekund i browseren. Før skiftede billedet kun, når MitID's long-poll svarede, så appen kunne have svært ved at læse koden.
-- QR-koden vises større (op til 240 px med hvid kant) og med skarpe kanter (`crispEdges`), så den er lettere at scanne fra en skærm.
-- Live-kode/QR leveres nu via integrationens eget websocket-abonnement `kmd_easy_energy/mitid/subscribe` i stedet for et bus-event:
-  - Recorderen gemmer alle bus-events, så engangskode og QR endte tidligere i databasen. Eventet `kmd_easy_energy_mitid_challenge` indeholder nu kun status (`sync_state`, `sync_message`, `has_otp`, `has_qr`).
-  - Virker også for ikke-admin-brugere (typisk vægtablet). `subscribe_events` på et custom event kræver admin.
-  - En tablet, der åbner kortet midt i et login, får den aktuelle QR/kode med det samme.
-- HA-notifikationen oprettes via helperen i stedet for tjenestekaldet `persistent_notification.create` (der ville lægge koden i et `call_service`-event i recorderen). QR-notifikationen oprettes kun én gang pr. login, og QR/kode sendes kun til kortet, når den faktisk ændrer sig.
-- Notifikationen fjernes også ved fejl. Status `verified` (kode/QR godkendt) sendes én gang.
-- Den vendorede `BrowserClient` logger ikke længere selve engangskoden.
-
-### Session-baseret synkronisering (ingen baggrundspolling, intet gemt token)
-- **Hvert tryk på Synkroniser = ét MitID-login.** Data siden sidste synkronisering hentes (inkl. Energy-timestatistik), og KMD-adgangen kasseres straks. Access tokens gemmes ikke længere i config entry eller cache.
-- **Ingen automatisk polling mod KMD** (`update_interval` er `None`). Coordinatoren genindlæser kun den private cache. Efter genstart vises de senest hentede tal uden kontakt til KMD.
-- **Ingen reauth/reparation for udløbet token.** `ConfigEntryAuthFailed`, reauth-trinnene (`reauth_confirm`, `reauth_mitid`), advarslen om tokenalder og attributten `token_expired` er fjernet. Kun et login, der reelt fejler (fx HTTP 401/403 lige efter MitID), vises som fejl på kortet/sync-status.
-- Felterne til at indsætte token er fjernet fra config- og reconfigure-flowet. Tjenesten `update_token` er bevaret som avanceret engangs-synkronisering med et selvhentet token (gemmes ikke). `refresh` genindlæser nu kun cache.
-- **Ny sensor** `sensor.<værk>_last_synced` (*Sidst synkroniseret*, tidsstempel) og attributterne `last_sync`, `days_since_sync`, `sync_reminder`, `sync_reminder_message`, `sync_reminder_short` på overbliks-sensoren.
-- **Blød weekend-påmindelse:** Lørdag og søndag (Europe/Copenhagen) vises en lille, rolig info-linje (💧, neutral/blød blå, ingen rød fejl-styling) lige under Synkroniser-knappen: *"Det er X dage siden sidste synkronisering — tryk Synkroniser, når du har et øjeblik."*, hvis der ikke er synkroniseret torsdag, fredag eller lørdag samme uge (en synkronisering søndag fjerner den). Mandag–fredag aldrig. Ingen persistent notification, repair eller push. Ny `binary_sensor.<værk>_sync_reminder` til egne automatiseringer. Kan slås fra under indstillinger (standard: til).
-- **Historik:** Første synkronisering henter op til 12 måneders timehistorik. Senere synkroniseringer udfylder hullet fra sidste gemte time frem til indeværende måned og op til tre manglende måneder. Statistikken skrives pr. time (upsert), så flere synkroniseringer samme dag ikke giver dubletter.
-- **Migrering (config entry 1.1 → 1.2):** Et gemt token fjernes automatisk fra data og options. Indgangen virker videre med de cachede data. *Sidst synkroniseret* sættes ud fra cachens `updated`, indtil næste synkronisering.
-- Kortet: Synkroniser-knappen starter altid MitID-synkronisering. Banneret viser *Sidst synkroniseret*; weekend-påmindelsen vises som en rolig info-linje under knappen. "Token udløbet" er fjernet. Manuelt token hedder nu "Synkroniser én gang med token".
-
 ## [0.3.0] - 2026-11-22
 
-### Sikkerhed og privatliv
-- Forbrugscache skrives nu til Home Assistants private `.storage` (`kmd_easy_energy.<entry_id>`), ikke til den uautentificerede `www/`-mappe (`/local/varme/...`).
-- Eksisterende `www/varme/kmd_easy_energy_cache*.json` migreres automatisk og slettes bagefter. Filen `www/varme/data.json` bruges ikke længere som seed.
-- MitID-engangskode og QR-kode lægges ikke længere på sensorattributter (og dermed ikke i recorder). De vises via et midlertidigt `kmd_easy_energy_mitid_challenge`-event (fra næste version: websocket-abonnement, se ovenfor), en persistent_notification og (valgfrit) push, hvor koden kun står i beskeden — aldrig i titlen.
-- URL'er med `code=` / tokens redigeres i logs og logges på DEBUG.
-- `async_remove_entry` rydder privat storage og eventuelle efterladte `www/`-cachefiler.
+Første stabile **0.3.0**-udgivelse. Samler indholdet fra `v0.3.0-beta.1`–`v0.3.0-beta.4` plus en tydeligere førstegangsguide. Bygger videre på **v0.2.1** (CET-timehentning, spidstime-grafer, fjernet Aula-script).
 
-### Opførsel
-- HTTP 401/403 rejser `ConfigEntryAuthFailed` og starter reauth-flowet (`reauth_confirm` / `reauth_mitid`), hvor man kan indsætte et token eller starte MitID. Har integrationen cache, bliver sensorerne stående med sidste kendte værdier.
-- Hvis første opdatering fejler midlertidigt, men der findes cache, indlæses integrationen med cachen i stedet for at fejle opsætningen (`ConfigEntryNotReady` kun uden cache).
-- Open-Meteo-arkivet hentes højst én gang i døgnet (Europe/Copenhagen).
-- Config flow sætter `unique_id` pr. værk, så det samme værk ikke kan tilføjes to gange. Eksisterende entries migreres ved opstart.
-- Ny tjeneste `kmd_easy_energy.start_mitid_sync` (bruges af dashboard-kortet i stedet for at gætte `button.*_sync`).
-- Volumen-sensoren bruger `device_class: water` (cirkulerende fjernvarmevand i m³, ikke drikkevand), så den kan tilføjes på Energy-dashboardets volumen-spor.
-- `requests` er tilføjet som eksplicit krav i manifestet. Den døde `UPDATE_INTERVAL`-konstant bruges nu som 30-minutters coordinator-interval.
+### Førstegangsopsætning
+- README og config-flowet gør det tydeligt, at **Submit kun opretter integrationen**. MitID-login sker bagefter på dashboard-kortet med **🚀 Gem & Start MitID-synkronisering**.
+- Ser man en opsætningsdialog med "Login & Token" og et Access token-felt, kører man den gamle **v0.2.0** og skal opdatere i HACS.
 
-### Energy-dashboard, tarif og danske indsigtssensorer
-- Timeværdier (kWh og m³) importeres som eksterne statistikker (`kmd_easy_energy:energy_<entry>` / `:volume_<entry>`) via `async_add_external_statistics`, så Energy-dashboardet kan tilbagefylde rigtige timer i stedet for at bruge måned-til-dato-sensorerne. Historikken udvides gradvist med op til to tidligere måneder pr. døgn.
-- Valgfri varmepris i kr./kWh (og ev. kr./m³) i indstillingerne. For Kredsløb er standarden den offentliggjorte takst for indeværende kalenderår (2026: 0,6680 kr./kWh, 2027: 0,7175 kr./kWh, motivation 0,010 / 0,01075 kr./kWh/°C) fra [Kredsløbs prisside](https://www.kredslob.dk/privat/fjernvarme/fjernvarmepriser). Øvrige værker har ingen opfundet standard — brugeren indtaster selv. Der gættes ikke på en m³-pris.
-- Sensorer for motivationstarif (bonus/neutral/gebyr og kr./kWh-regulering), kWh pr. graddag, normalår-korrigeret årsforbrug og årsprognose. `binary_sensor` for gebyr-returtemperatur og unormalt forbrug (samme ugedag, HDD-justeret). Integrationen opretter **ingen** notifikationer eller automatiseringer for lækage-flaget.
-- Open-Meteo 7-dages HDD hentes højst én gang i døgnet (Europe/Copenhagen), ligesom arkivet.
+### Session-baseret synkronisering (KMD)
+- **Hvert tryk på Synkroniser er ét MitID-login.** Data siden sidste synkronisering hentes (inkl. Energy-timestatistik), og KMD-adgangen (gyldig ca. 1 time, ingen refresh token) kasseres straks og gemmes aldrig.
+- **Ingen baggrundspolling** mod KMD. Efter genstart vises de senest hentede tal fra den private cache uden kontakt til KMD.
+- **Ingen reauth/reparation for udløbet token.** Kun et login, der reelt fejler, vises som fejl på kortet.
+- **Blød weekend-påmindelse:** Lørdag og søndag vises en rolig info-linje under Synkroniser-knappen, hvis der ikke er synkroniseret torsdag, fredag eller lørdag samme uge. Ingen notification, repair eller push. `binary_sensor.<værk>_sync_reminder` kan bruges i egne automatiseringer og kan slås fra.
+- Ny sensor `sensor.<værk>_last_synced` (*Sidst synkroniseret*). Første synkronisering henter op til 12 måneders timehistorik; senere synkroniseringer udfylder hullet. Statistikken skrives pr. time (upsert).
+- **Migrering (config entry 1.1 → 1.2):** et ev. gemt token fjernes automatisk.
 
-### Integration og pakning
-- Entitetsnavne bruger `translation_key` med dansk og engelsk (volumen hedder tydeligt fjernvarmevand).
-- Ny diagnostics-platform, der redigerer tokens, MitID-brugernavn, kunde-/måler-id og adresser. Store serier er kun talt, ikke dumpet.
-- Vendoret MitID BrowserClient har LICENSE (MIT, © 2024 Hundter) og et root-`NOTICE`. Død `Helpers.py` er fjernet (Aula-flowet var allerede væk i 0.2.1).
-- Manifest: `integration_type: service` og `loggers`. `hacs.json`: `render_readme` og minimum HA **2024.12.0** (reauth-helpers). hassfest-action er pinned i stedet for `@master`.
-- Forberedte brand-ikoner og instruktion til en PR mod [home-assistant/brands](https://github.com/home-assistant/brands) ligger i `docs/home-assistant-brands/` — selve PR'en er et maintainer-valg.
+### MitID: QR fra tablet/computer og stabil scanning
+- Skift til 4-cifret engangskode er **kun** nødvendigt, når opsætningen sker på **samme telefon** som MitID-appen. På tablet eller computer scannes QR-koden på kortet.
+- Kortet viser begge MitID QR-frames (skifter hvert sekund), større QR med hvid baggrund og ISO quiet zone.
+- In-place QR-opdatering uden at rive Shadow DOM ned; ingen kunstig 1,2 s forsinkelse efter MitID long-poll.
+- OTP/QR leveres via websocket-abonnementet `kmd_easy_energy/mitid/subscribe` (virker også for ikke-admin, typisk vægtablet). Eventet `kmd_easy_energy_mitid_challenge` indeholder kun status. Koden lægges ikke på sensorattributter eller i recorderen.
 
-Versionen forbliver **0.3.0** (ikke 0.4.0): 0.3.0 er endnu ikke udgivet, så al den nye funktionalitet samles i ét uudgivet hop oven på 0.2.1.
+### Udetemperatur
+- Rækkefølge: valgfri HA-udetemperatursensor (døgnmiddel fra recorderens langtidsstatistik) → Open-Meteo ved HA-hjemmelokation → værkets placering.
+- **Rettet:** tidligere blev værkets koordinater kopieret ind ved opsætning, så HA-hjemmelokationen reelt aldrig blev brugt.
+- Kilden vises på kortet og i attributterne `temp_source` / `outdoor_temp` (ingen koordinater). **Migrering 1.2 → 1.3** (ikke brudende).
 
-Bygger videre på **v0.2.1** (CET-timehentning, spidstime-grafer, fjernet Aula-script).
+### E|Forsyning (eksperimentel, ikke testet live)
+- Ny backend for værker på **E|Forsyning** (eforsyning.dk / DFF-EDB). Første værk: **Hjørring Varmeforsyning**. Login med forbrugernummer + webpinkode (intet MitID). Automatisk daglig synkronisering. Daglige aflæsninger (ingen timedata, saldo eller budgetprognose).
+- Protokollen er studeret fra og genimplementeret efter [kpoppel/homeassistant-eforsyning](https://github.com/kpoppel/homeassistant-eforsyning) (Apache-2.0).
 
-### Bemærk (brudende for tilpassede dashboards)
-- Attributterne `mitid_otp_code` og `mitid_qr_svg` er fjernet. Brug det medfølgende kort 0.3.0, eller lyt til eventet `kmd_easy_energy_mitid_challenge`.
+### Watts On / Aalborg Forsyning (eksperimentel, uofficiel, ikke testet live)
+- Ny backend `wattson` for fjernvarme vist i **Watts On**-appen. Login i browseren uden MitID (indsæt den sidste `msauth://`-adresse). Kun et refresh token gemmes. Varme-endpoint og feltnavne er gættet; ukendt data skjules frem for at gættes.
+- Bygget med [TheRealBatBro/Home-Assistant-Novafos-V2](https://github.com/TheRealBatBro/Home-Assistant-Novafos-V2) (MIT) som inspiration.
+
+### Kapabilitetsstyret kort og entiteter
+- Coordinatoren udstiller `capabilities`. Kortet skjuler grafer, KPI-felter og indsigter uden data og viser kun MitID-UI, når backenden bruger MitID. Sensorer oprettes kun, når backenden kan udfylde dem.
+
+### Sikkerhed, Energy-dashboard og pakning
+- Forbrugscache skrives til Home Assistants private `.storage` (`kmd_easy_energy.<entry_id>`), ikke til den uautentificerede `www/`-mappe. Eksisterende `www/`-cache migreres og slettes.
+- Diagnostics-platform redigerer tokens, MitID-brugernavn, kunde-/måler-id, GPS-koordinater, push-service og adresser.
+- Timeværdier (kWh og m³) importeres som eksterne statistikker (`kmd_easy_energy:energy_<entry>` / `:volume_<entry>`) til Energy-dashboardet. Valgfri varmepris i kr./kWh (Kredsløb: offentlig takst for indeværende år). Sensorer for motivationstarif, kWh pr. graddag, årsprognose og unormalt forbrug. Integrationen sender **ingen** lækage-notifikationer af sig selv.
+- Entitetsnavne bruger `translation_key` (dansk og engelsk). Vendoret MitID BrowserClient har LICENSE (MIT, © 2024 Hundter) og et root-`NOTICE`. Minimum Home Assistant i `hacs.json` er **2024.12.0**. Forberedte brand-ikoner ligger i `docs/home-assistant-brands/`.
+
+### Brudende ændringer (for tilpassede dashboards og automatiseringer)
+- Attributterne `mitid_otp_code` og `mitid_qr_svg` er fjernet. Brug det medfølgende kort 0.3.0 eller websocket-abonnementet `kmd_easy_energy/mitid/subscribe`.
+- Access tokens gemmes ikke, og der er ingen baggrundspolling. Automatiseringer, der kaldte `kmd_easy_energy.refresh` for at hente nye data, skal i stedet bruge `start_mitid_sync` (kræver godkendelse i MitID-appen).
+- Attributten `token_expired` og reauth-flowet er fjernet.
 
 ## [0.2.1] - 2026-11-22
 

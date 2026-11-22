@@ -32,7 +32,7 @@
       },
       "eforsyning": {
         "title": "E|Forsyning-login ({utility_name})",
-        "description": "⚠️ Eksperimentel: E|Forsyning-understøttelsen er endnu ikke testet live — vi søger beta-testere.\n\nLog ind med **forbrugernummer** og **webpinkode** fra din varmeregning (samme som på {portal_url}). Der bruges ikke MitID. Oplysningerne gemmes i Home Assistant som andre integrationers adgangskoder, logges aldrig og fjernes i diagnostik.\n\n**Forsyningid** (kun for 'Andet E|Forsyning-værk'): Åbn dit værks side på eforsyning.dk (f.eks. https://eforsyning.dk/hjvarme), tryk F12 → Netværk, søg efter 'GetVaerkSettings' og kopiér værdien efter `forsyningid=` (en lang kode med bogstaver, tal og bindestreger).",
+        "description": "⚠️ Eksperimentel: E|Forsyning-understøttelsen er endnu ikke testet live — vi søger beta-testere.\n\nLog ind med **forbrugernummer** og **webpinkode** fra din varmeregning (samme som på {portal_url}). Der bruges ikke MitID. Oplysningerne gemmes i Home Assistant som andre integrationers adgangskoder, logges aldrig og fjernes i diagnostik.\n\n**Forsyningid** (kun for 'Andet E|Forsyning-værk'): Åbn dit værks side på eforsyning.dk (f.eks. {example_url}), tryk F12 → Netværk, søg efter 'GetVaerkSettings' og kopiér værdien efter `forsyningid=` (en lang kode med bogstaver, tal og bindestreger).",
         "data": {
           "eforsyning_username": "Forbrugernummer",
           "eforsyning_password": "Webpinkode",

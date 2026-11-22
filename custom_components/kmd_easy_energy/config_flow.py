@@ -401,6 +401,7 @@ class KMDEasyEnergyConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             description_placeholders={
                 "utility_name": str(u.get("name") or "E|Forsyning"),
                 "portal_url": str(u.get("portal_url") or "https://eforsyning.dk/"),
+                "example_url": "https://eforsyning.dk/hjvarme",
             },
         )
 

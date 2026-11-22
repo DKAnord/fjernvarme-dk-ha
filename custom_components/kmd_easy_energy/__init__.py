@@ -13,10 +13,11 @@ import voluptuous as vol
 from homeassistant.components import websocket_api
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, ServiceCall, callback
-from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 
 from .const import (
+    CONF_ACCESS_TOKEN,
     CONF_BONUS_TEMP,
     CONF_LATITUDE,
     CONF_LONGITUDE,
@@ -87,11 +88,15 @@ async def _async_setup_services(hass: HomeAssistant) -> None:
             _LOGGER.error("No config entry found for kmd_easy_energy.update_token")
             return
         coord: KMDEasyEnergyCoordinator = hass.data[DOMAIN][entry.entry_id]
-        await coord.async_update_token(
-            call.data["access_token"],
-            call.data.get("customer_id"),
-            call.data.get("customer_number"),
-        )
+        # One-shot sync with a manually obtained token; the token is not stored.
+        try:
+            await coord.async_sync_with_token(
+                call.data["access_token"],
+                call.data.get("customer_id"),
+                call.data.get("customer_number"),
+            )
+        except Exception as err:  # noqa: BLE001
+            raise HomeAssistantError(f"Synkronisering fejlede: {str(err)[:160]}") from err
 
     async def handle_refresh(call: ServiceCall) -> None:
         entry_id = call.data.get("entry_id")
@@ -261,6 +266,33 @@ def _install_frontend_card(www_js_dir: Path) -> None:
         _LOGGER.warning("Could not install frontend card to %s: %s", dst, err)
 
 
+async def _async_entry_updated(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Apply option changes (reminder on/off, prices) from cache — no KMD call."""
+    coord: KMDEasyEnergyCoordinator | None = hass.data.get(DOMAIN, {}).get(entry.entry_id)
+    if coord is None:
+        return
+    coord._reminder_sig = None
+    await coord.async_request_refresh()
+
+
+async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    """1.1 -> 1.2: drop the stored KMD access token (session-based sync).
+
+    The entry keeps working with its cached data; the next sync performs a
+    fresh MitID login. Nothing else in the entry changes.
+    """
+    if entry.version > 1:
+        return False
+    if entry.version == 1 and entry.minor_version < 2:
+        data = {k: v for k, v in entry.data.items() if k != CONF_ACCESS_TOKEN}
+        options = {k: v for k, v in entry.options.items() if k != CONF_ACCESS_TOKEN}
+        hass.config_entries.async_update_entry(
+            entry, data=data, options=options, version=1, minor_version=2
+        )
+        _LOGGER.info("Removed stored KMD access token from %s (session-based sync)", entry.title)
+    return True
+
+
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up KMD Easy Energy from a config entry."""
     await hass.async_add_executor_job(
@@ -288,29 +320,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = coordinator
 
     await coordinator.async_initialize_cache()
-    try:
-        await coordinator.async_config_entry_first_refresh()
-    except ConfigEntryAuthFailed:
-        if coordinator.has_usable_cache:
-            _LOGGER.warning(
-                "KMD token rejected; using cached data and starting reauth for %s",
-                entry.title,
-            )
-            coordinator.last_update_success = True
-            coordinator.async_set_updated_data(coordinator.data)
-            entry.async_start_reauth(hass)
-        else:
-            raise
-    except ConfigEntryNotReady:
-        if coordinator.has_usable_cache:
-            _LOGGER.warning(
-                "KMD API unavailable at startup; using cached data for %s",
-                entry.title,
-            )
-            coordinator.last_update_success = True
-            coordinator.async_set_updated_data(coordinator.data)
-        else:
-            raise
+    # Session-based: the first refresh only reads the private cache, so an HA
+    # restart restores the last synced values without contacting KMD.
+    await coordinator.async_config_entry_first_refresh()
+    entry.async_on_unload(coordinator.async_start_reminder_timer())
+    entry.async_on_unload(entry.add_update_listener(_async_entry_updated))
 
     await _async_setup_services(hass)
     _async_register_websocket(hass)

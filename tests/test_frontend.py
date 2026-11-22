@@ -48,8 +48,8 @@ def test_card_mitid_text_same_phone_only() -> None:
     assert "Vigtigt for nye brugere" not in js
 
 
-def test_card_js_harness_qr_animation() -> None:
-    """Run the Node harness (QR frames alternate, websocket subscription)."""
+def test_card_js_harnesses() -> None:
+    """Run the Node harnesses (QR animation, session-based sync / reminder)."""
     import shutil
     import subprocess
 
@@ -58,6 +58,16 @@ def test_card_js_harness_qr_animation() -> None:
     node = shutil.which("node")
     if not node:
         pytest.skip("node not installed")
-    harness = ROOT / "tests/js/card_mitid_qr.test.js"
-    res = subprocess.run([node, str(harness)], capture_output=True, text=True, timeout=60)
-    assert res.returncode == 0, res.stdout + res.stderr
+    harnesses = sorted((ROOT / "tests/js").glob("*.test.js"))
+    assert len(harnesses) >= 2
+    for harness in harnesses:
+        res = subprocess.run([node, str(harness)], capture_output=True, text=True, timeout=60)
+        assert res.returncode == 0, f"{harness.name}: {res.stdout}{res.stderr}"
+
+
+def test_card_session_sync_contract() -> None:
+    js = CARD.read_text()
+    assert "token_expired" not in js
+    assert "sync_reminder" in js
+    assert "last_sync" in js
+    assert '"kmd_easy_energy", "refresh"' not in js

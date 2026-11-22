@@ -1,6 +1,6 @@
 update_token:
-  name: Update access token
-  description: Update the Bearer token (and optional Customer-Id) after a MitID refresh.
+  name: Sync with a manual access token
+  description: Advanced fallback. Runs one sync with a Bearer token you obtained yourself. The token is used for this sync only and is not stored.
   fields:
     access_token:
       name: Access token
@@ -28,8 +28,8 @@ update_token:
         text:
 
 refresh:
-  name: Refresh data
-  description: Manually trigger a coordinator refresh for KMD Easy Energy.
+  name: Reload cached data
+  description: Re-read cached data and recompute derived values. Does not contact KMD; use start_mitid_sync (the Synkroniser button) to fetch new data.
   fields:
     entry_id:
       name: Config entry ID

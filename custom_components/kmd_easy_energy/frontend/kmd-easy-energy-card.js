@@ -103,7 +103,8 @@
       pending_grp: "🧪 Afventer første test (Pending Initial Test)",
       login_btn: "🔑 Log ind på værk ↗",
       sync_btn: "🔄 Synkroniser",
-      sync_expired: "⚠️ Token udløbet · Log ind",
+      last_sync: "Sidst synkroniseret",
+      never_synced: "Ikke synkroniseret endnu",
       kpi_ytd: "🔥 Forbrug",
       kpi_ret: "🌡️ Returtemperatur",
       kpi_fc: "📉 Prognose",
@@ -120,7 +121,8 @@
       pending_grp: "🧪 Pending Initial Test",
       login_btn: "🔑 Utility Login ↗",
       sync_btn: "🔄 Sync",
-      sync_expired: "⚠️ Token expired · Login",
+      last_sync: "Last synced",
+      never_synced: "Not synced yet",
       kpi_ytd: "🔥 Consumption",
       kpi_ret: "🌡️ Return temp",
       kpi_fc: "📉 Forecast",
@@ -233,7 +235,7 @@
       const statusEnt = this._config?.status_entity;
       const syncSt = statusEnt ? (hass?.states?.[statusEnt]?.state || "") : "";
       const sig = st
-        ? `${st.entity_id}|${st.state}|${st.attributes?.updated || ""}|${st.attributes?.hourly?.days_averaged || ""}|${st.attributes?.daily?.latest_complete}|${st.attributes?.token_expired}|${st.attributes?.initial_setup_complete}|${st.attributes?.utility_id || ""}|${st.attributes?.entry_id || ""}|${st.attributes?.sync_state || ""}|${st.attributes?.sync_message || ""}|${this._mitidOtp || ""}|${Boolean(this._mitidQr)}|${syncSt}`
+        ? `${st.entity_id}|${st.state}|${st.attributes?.updated || ""}|${st.attributes?.hourly?.days_averaged || ""}|${st.attributes?.daily?.latest_complete}|${st.attributes?.last_sync || ""}|${st.attributes?.sync_reminder}|${st.attributes?.days_since_sync}|${st.attributes?.initial_setup_complete}|${st.attributes?.utility_id || ""}|${st.attributes?.entry_id || ""}|${st.attributes?.sync_state || ""}|${st.attributes?.sync_message || ""}|${this._mitidOtp || ""}|${Boolean(this._mitidQr)}|${syncSt}`
         : "none";
       if (sig === this._lastSig) return;
       this._lastSig = sig;
@@ -578,15 +580,20 @@
         ? `${hddEntries[hddEntries.length - 1][0]} ligger på ${fmtDec(hddEntries[hddEntries.length - 1][1], 2)} kWh/HDD mod ${fmtDec(hddEntries[hddEntries.length - 2][1], 2)} i ${hddEntries[hddEntries.length - 2][0]}:`
         : "Vejrkorrigeret rumvarme-forbrug pr. graddag:";
 
-      const uDate = a.updated ? new Date(a.updated) : null;
+      // Session-based sync: "Sidst synkroniseret" = last MitID sync (no background polling).
+      const lastSyncRaw = a.last_sync || a.updated || "";
+      const uDate = lastSyncRaw ? new Date(lastSyncRaw) : null;
       const validU = uDate && !Number.isNaN(uDate.getTime());
       const isToday = validU && uDate.toDateString() === now.toDateString();
       const hhmm = validU ? `${String(uDate.getHours()).padStart(2, "0")}:${String(uDate.getMinutes()).padStart(2, "0")}` : "";
       const retrievedLbl = isToday
-        ? `Hentet i dag ${hhmm}`
+        ? `${t.last_sync} i dag ${hhmm}`
         : validU
-          ? `Hentet ${uDate.getDate()}. ${(MONTHS[uDate.getMonth()] || "").toLowerCase()} ${hhmm}`
-          : "Opdateret: ukendt";
+          ? `${t.last_sync} ${uDate.getDate()}. ${(MONTHS[uDate.getMonth()] || "").toLowerCase()} ${hhmm}`
+          : t.never_synced;
+      // Soft weekend reminder (computed by the integration; visual only, no push).
+      const syncReminder = Boolean(a.sync_reminder);
+      const syncReminderMsg = String(a.sync_reminder_message || "");
       const dayKeys = Object.keys(dy.days || {}).map((k) => parseInt(k, 10)).filter((n) => !Number.isNaN(n));
       const maxDay = dayKeys.length ? Math.max(...dayKeys) : null;
       const moLbl = (dy.month || "").split(" ")[0].slice(0, 3).toLowerCase();
@@ -637,7 +644,6 @@
           <option value="__custom__" ${isCustomNotify ? "selected" : ""}>✏️ Andet (indtast manuelt)…</option>
         </select>
         ${isCustomNotify ? `<input id="notifyInput" value="${esc(notifySvc)}" placeholder="f.eks. mobile_app_min_telefon" style="margin-top:6px" />` : ""}`;
-      const tokenExpired = Boolean(a.token_expired);
       const hasData = Boolean(
         st && (Object.keys(ann).length > 0 || Object.keys(mon).length > 0 || Object.keys(dy.days || {}).length > 0)
       );
@@ -655,9 +661,9 @@
       let bannerIcon = isToday ? "✓" : "↻";
       let bannerTone = isToday ? "ok" : "orange";
       let bannerTitle = isToday
-        ? `${activeUtil.name} Fjernvarme · Hentet i dag`
-        : "Opdater fjernvarme (MitID)";
-      let bannerSub = `${freshText} · Tryk for ny sync`;
+        ? `${activeUtil.name} Fjernvarme · Synkroniseret i dag`
+        : "Synkroniser fjernvarme (MitID)";
+      let bannerSub = `${freshText} · Tryk for at synkronisere`;
       if (hasSyncMsg) {
         if (syncMsg.startsWith("Fejl")) {
           bannerIcon = "!";
@@ -675,11 +681,12 @@
           bannerTitle = "Synkroniserer fjernvarme…";
           bannerSub = syncMsg;
         }
-      } else if (tokenExpired && !isToday) {
-        bannerIcon = "🔑";
-        bannerTone = "amber";
-        bannerTitle = `${activeUtil.name} · ${t.sync_expired}`;
       }
+      // Friendly, non-invasive weekend nudge: a calm info chip next to the
+      // Synkroniser button (never red/error styling, no notification).
+      const syncNudge = (syncReminder && !hasSyncMsg && syncReminderMsg)
+        ? `<div class="sync-nudge" role="status"><span aria-hidden="true">💧</span><span>${esc(syncReminderMsg)}</span></div>`
+        : "";
 
       this.shadowRoot.innerHTML = `
         <style>
@@ -774,6 +781,12 @@
           .hdd-pill {
             padding: 4px 9px; border-radius: 10px; font-size: 12px; font-weight: 700;
             background: rgba(245,158,11,0.16); border: 1px solid rgba(245,158,11,0.3);
+          }
+          .sync-nudge {
+            display: flex; align-items: center; gap: 8px; margin-top: -6px;
+            padding: 7px 12px; border-radius: 999px; font-size: 12.5px; font-weight: 600; line-height: 1.35;
+            color: var(--secondary-text-color);
+            background: rgba(14,165,233,0.08); border: 1px solid rgba(14,165,233,0.22);
           }
           .fresh-pill {
             padding: 3px 9px; border-radius: 999px; font-size: 11.5px; font-weight: 700;
@@ -893,6 +906,7 @@
                 <li><b>Åbn straks MitID-appen på din telefon og lås den op</b> <i>(vigtigt: MitID genererer først QR-koden / den 4-cifrede kode i det øjeblik, du åbner MitID-appen!)</i>.</li>
                 <li><b>Opsætter du på en tablet eller computer:</b> scan QR-koden her på kortet med MitID-appen på telefonen og godkend. <b>Opsætter du på samme telefon som MitID-appen:</b> indtast de <b>4 cifre</b> fra kortet (eller push-notifikationen) i MitID-appen og godkend — det kræver engangskoder slået til (se herunder).</li>
               </ol>
+              <div class="ob-note" style="margin-top:6px">ℹ️ Hver synkronisering er ét MitID-login: data siden sidste synkronisering hentes, og adgangen fra KMD (gyldig ca. 1 time) kasseres straks. Integrationen henter ikke data i baggrunden — tryk <b>🔄 Synkroniser</b>, når du vil have nye tal (f.eks. dagligt eller ugentligt).</div>
             </div>
             ${this._mitidErr ? `<div class="ob-live red">⚠️ ${esc(this._mitidErr)}</div>` : ""}
             ${(hasSyncMsg || this._startingSync) ? `<div class="ob-live ${hasSyncMsg && syncMsg.startsWith("Fejl") ? "red" : (hasSyncMsg && syncMsg.includes("MitID") ? "blue" : "")}">📡 ${esc(hasSyncMsg ? syncMsg : "Starter MitID-login…")}</div>` : ""}
@@ -913,7 +927,7 @@
             <details class="ob-manual">
               <summary>🛠️ Manuelt login i browser / Første konto-aktivering hos værket</summary>
               <div class="ob-note" style="margin:8px 0">
-                Brug kun dette, hvis du <b>(a)</b> aldrig har aktiveret din konto hos værket før (kræver kundenr. + aktiveringskode fra regning 1. gang), eller <b>(b)</b> ikke bruger MitID Bridge og vil logge ind manuelt i browseren og indsætte et Bearer token herunder. Luk browser-fanen igen, før du bruger 1-klik MitID-sync.
+                Brug kun dette, hvis du <b>(a)</b> aldrig har aktiveret din konto hos værket før (kræver kundenr. + aktiveringskode fra regning 1. gang), eller <b>(b)</b> vil logge ind manuelt i browseren og indsætte et Bearer token herunder. Tokenet bruges til <b>én</b> synkronisering og gemmes ikke. Luk browser-fanen igen, før du bruger 1-klik MitID-sync.
               </div>
               <div style="margin-bottom:8px">
                 <button class="btn login" id="loginBtn" title="${esc(wizPortalUrl)}">🔑 Åbn ${esc(activeUtil.name)} login-portal i browser ↗</button>
@@ -927,7 +941,7 @@
                 </label>
               </div>
               <div style="margin-top:8px">
-                <button class="btn primary" id="saveTokenBtn">💾 Gem token &amp; fuldfør</button>
+                <button class="btn primary" id="saveTokenBtn">▶️ Synkroniser én gang med token</button>
               </div>
             </details>
             <div class="fb-foot">
@@ -956,6 +970,7 @@
               <button class="btn" id="openSetupBtn" title="Skift værk / opsætning">⚙️</button>
             </div>
           </div>
+          ${syncNudge}
           ${mitidLiveBox}
           ${(utilStatus !== "confirmed" && hasData) ? `
           <div class="fb-bar">
@@ -1215,11 +1230,8 @@
         }
         // Prefer the domain service (looks up the entry by id / utility_id) so
         // entity_id slugs like "envafors_sk_forsyning" cannot miss the button.
-        if (tokenExpired || !hasData) {
-          this._hass.callService("kmd_easy_energy", "start_mitid_sync", payload);
-        } else {
-          this._hass.callService("kmd_easy_energy", "refresh", payload);
-        }
+        // Session-based: every "Synkroniser" is one MitID login + fetch since last sync.
+        this._hass.callService("kmd_easy_energy", "start_mitid_sync", payload);
       };
       const syncBtn = this.shadowRoot.getElementById("syncBtn");
       if (syncBtn) syncBtn.addEventListener("click", triggerSync);

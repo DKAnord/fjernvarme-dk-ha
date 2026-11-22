@@ -1,4 +1,4 @@
-"""Binary sensors for motivation penalty and abnormal consumption."""
+"""Binary sensors: motivation penalty, abnormal consumption and sync reminder."""
 
 from __future__ import annotations
 
@@ -29,6 +29,7 @@ async def async_setup_entry(
         [
             KMDMotivationPenaltyBinarySensor(coordinator, entry),
             KMDAbnormalConsumptionBinarySensor(coordinator, entry),
+            KMDSyncReminderBinarySensor(coordinator, entry),
         ]
     )
 
@@ -88,3 +89,33 @@ class KMDAbnormalConsumptionBinarySensor(KMDBaseBinarySensor):
     def extra_state_attributes(self) -> dict[str, Any]:
         data = dict((self.coordinator.data or {}).get("abnormal_consumption") or {})
         return data
+
+
+class KMDSyncReminderBinarySensor(KMDBaseBinarySensor):
+    """Soft weekend reminder: on Sat/Sun if there was no sync Thu–Sat (or that Sunday).
+
+    Visual/automation only — the integration never sends a notification for it.
+    Can be turned off in the integration options (then always off).
+    """
+
+    _attr_translation_key = "sync_reminder"
+    _attr_icon = "mdi:calendar-sync-outline"
+
+    def __init__(self, coordinator: KMDEasyEnergyCoordinator, entry: ConfigEntry) -> None:
+        super().__init__(coordinator, entry)
+        self._attr_unique_id = f"{entry.entry_id}_sync_reminder"
+
+    @property
+    def is_on(self) -> bool:
+        return bool(self.coordinator.sync_reminder()["sync_reminder"])
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        rem = self.coordinator.sync_reminder()
+        return {
+            "message": rem["sync_reminder_message"],
+            "short": rem["sync_reminder_short"],
+            "days_since_sync": rem["days_since_sync"],
+            "last_sync": rem["last_sync"],
+            "enabled": rem["sync_reminder_enabled"],
+        }

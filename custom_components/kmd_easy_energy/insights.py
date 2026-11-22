@@ -99,6 +99,19 @@ def merge_hourly_points(*series: Iterable[dict[str, Any]]) -> list[dict[str, Any
     return [by_key[k] for k in sorted(by_key)]
 
 
+def last_local_day(points: Iterable[dict[str, Any]]) -> date | None:
+    """Latest Copenhagen calendar day present in compact hourly points."""
+    latest: date | None = None
+    for item in points or []:
+        parsed = parse_iso_dt(str(item.get("DateFrom") or ""))
+        if not parsed:
+            continue
+        day = hour_start_local(parsed).date()
+        if latest is None or day > latest:
+            latest = day
+    return latest
+
+
 def hourly_points_to_buckets(
     series: Iterable[dict[str, Any]],
     *,

@@ -7,6 +7,7 @@ import calendar
 import datetime as dt_mod
 import logging
 import math
+from collections.abc import Callable
 from datetime import datetime, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -15,17 +16,16 @@ import aiohttp
 
 from homeassistant.components import persistent_notification
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
-from homeassistant.exceptions import ConfigEntryAuthFailed
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.dispatcher import async_dispatcher_send
-from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
+from homeassistant.helpers.event import async_track_time_change
+from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from homeassistant.util import dt as dt_util
 
 from .api.kmd_client import KMDClient
 from .api.kmd_mitid_auth import KMDMitIDAuthenticator
 from .const import (
-    CONF_ACCESS_TOKEN,
     CONF_BONUS_TEMP,
     CONF_CUSTOMER_ID,
     CONF_CUSTOMER_NUMBER,
@@ -36,13 +36,16 @@ from .const import (
     CONF_NOTIFY_SERVICE,
     CONF_PENALTY_TEMP,
     CONF_PORTAL_URL,
+    CONF_SYNC_REMINDER,
     CONF_UTILITY,
     CONF_UTILITY_ID,
     CONF_UTILITY_STATUS,
+    DEFAULT_SYNC_REMINDER,
     DOMAIN,
     EVENT_MITID_CHALLENGE,
+    FIRST_SYNC_BACKFILL_MONTHS,
     SIGNAL_MITID_CHALLENGE,
-    TOKEN_WARN_AGE,
+    SYNC_BACKFILL_MONTHS,
     UPDATE_INTERVAL,
 )
 from .insights import (
@@ -53,11 +56,13 @@ from .insights import (
     detect_abnormal_consumption,
     forecast_annual,
     kwh_per_hdd,
+    last_local_day,
     merge_hourly_points,
     motivation_dkk_per_kwh,
     motivation_status,
 )
 from .statistics import import_hourly_statistics
+from .sync_reminder import compute_sync_reminder, parse_last_sync
 from .tariff import load_utilities, resolve_tariff
 from .util import (
     cache_has_sensor_data,
@@ -179,8 +184,18 @@ def date_offset_months(day: dt_mod.date, months: int) -> dt_mod.date:
 
 
 
+class KMDLoginError(RuntimeError):
+    """KMD rejected the freshly issued MitID token (a real login failure)."""
+
+
 class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
-    """Coordinator holding the KMD client and fetching energy + weather data."""
+    """Session-based coordinator.
+
+    There is no background polling against KMD: ``_async_update_data`` only
+    re-reads the private cache. Each user sync is one MitID login, a fetch of
+    everything since the last sync (plus Energy statistics import), after which
+    the short-lived access token is discarded and never persisted.
+    """
 
     def __init__(
         self,
@@ -197,8 +212,10 @@ class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         )
         self.entry = entry
         self._portal_url = portal_url
+        # Only set for the duration of one sync; never persisted.
         self.client: KMDClient | None = None
-        self._token_obtained: datetime | None = None
+        self.last_sync: datetime | None = None
+        self._reminder_sig: tuple[Any, ...] | None = None
         utility_id = str(entry.data.get(CONF_UTILITY_ID, "kredslob")).strip() or "kredslob"
         self._utility_id = utility_id
         self._store = store_for(hass, entry.entry_id)
@@ -210,24 +227,77 @@ class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self.mitid_qr_svg: str | None = None
         self.mitid_qr_frames: list[str] = []
         self._sync_task: asyncio.Task[None] | None = None
-        self._build_client()
 
-    def _build_client(self) -> None:
-        token = self.entry.data.get(CONF_ACCESS_TOKEN) or self.entry.options.get(CONF_ACCESS_TOKEN)
-        customer_id = self.entry.data.get(CONF_CUSTOMER_ID) or self.entry.options.get(CONF_CUSTOMER_ID)
-        customer_number = self.entry.data.get(CONF_CUSTOMER_NUMBER) or self.entry.options.get(CONF_CUSTOMER_NUMBER)
-        if token:
-            session = async_get_clientsession(self.hass)
-            self.client = KMDClient(
-                session,
-                token,
-                customer_id=customer_id,
-                customer_number=customer_number,
-                referer=self._portal_url,
-            )
-            self._token_obtained = dt_util.utcnow()
-        else:
-            self.client = None
+    def _make_client(
+        self,
+        access_token: str,
+        customer_id: str | None = None,
+        customer_number: str | None = None,
+    ) -> KMDClient:
+        """Build a one-sync KMD client. The token lives only in this object."""
+        customer_id = (
+            customer_id
+            or self.entry.data.get(CONF_CUSTOMER_ID)
+            or self.entry.options.get(CONF_CUSTOMER_ID)
+        )
+        customer_number = (
+            customer_number
+            or self.entry.data.get(CONF_CUSTOMER_NUMBER)
+            or self.entry.options.get(CONF_CUSTOMER_NUMBER)
+        )
+        return KMDClient(
+            async_get_clientsession(self.hass),
+            access_token,
+            customer_id=customer_id,
+            customer_number=customer_number,
+            referer=self._portal_url,
+        )
+
+    @property
+    def sync_reminder_enabled(self) -> bool:
+        value = self.entry.options.get(CONF_SYNC_REMINDER)
+        if value is None:
+            value = self.entry.data.get(CONF_SYNC_REMINDER, DEFAULT_SYNC_REMINDER)
+        return bool(value)
+
+    def sync_reminder(self, now: datetime | None = None) -> dict[str, Any]:
+        """Current soft-reminder attributes (computed locally, no KMD call)."""
+        return compute_sync_reminder(
+            self.last_sync, now or dt_util.utcnow(), self.sync_reminder_enabled
+        )
+
+    def _load_last_sync(self, state: dict[str, Any]) -> None:
+        """Restore last sync time from cache (fallback: last fetch time ``updated``)."""
+        parsed = parse_last_sync(state.get("last_sync"))
+        if parsed is None and cache_has_sensor_data(state):
+            parsed = parse_last_sync(state.get("updated"))
+        if parsed is not None:
+            self.last_sync = parsed
+
+    @callback
+    def async_start_reminder_timer(self) -> Callable[[], None]:
+        """Re-evaluate the weekend reminder hourly (local only, no KMD call).
+
+        Listeners are only updated when the reminder or the day count changes,
+        so this costs at most a couple of state writes per day.
+        """
+
+        @callback
+        def _tick(_now: datetime) -> None:
+            self.async_refresh_reminder()
+
+        return async_track_time_change(self.hass, _tick, minute=0, second=7)
+
+    @callback
+    def async_refresh_reminder(self) -> None:
+        rem = self.sync_reminder()
+        sig = (rem["sync_reminder"], rem["days_since_sync"], rem["sync_reminder_enabled"])
+        if sig == self._reminder_sig:
+            return
+        self._reminder_sig = sig
+        if self.data is not None:
+            self.data = {**self.data, **rem}
+            self.async_update_listeners()
 
 
     @property
@@ -254,14 +324,11 @@ class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     delete_legacy_www_cache, self._legacy_paths
                 )
         state = sanitize_cache(state or {})
+        self._load_last_sync(state)
         state.update(self._base_meta())
         if self._initial_setup_complete is None:
-            has_token = bool(self.entry.data.get(CONF_ACCESS_TOKEN))
             self._initial_setup_complete = bool(
-                state.get(
-                    "initial_setup_complete",
-                    has_token or cache_has_sensor_data(state),
-                )
+                state.get("initial_setup_complete", cache_has_sensor_data(state))
             )
         state["initial_setup_complete"] = self._initial_setup_complete
         self.data = state
@@ -395,6 +462,7 @@ class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "entry_id": self.entry.entry_id,
             "sync_state": self.sync_state,
             "sync_message": self.sync_message,
+            **self.sync_reminder(),
         }
 
 
@@ -405,13 +473,15 @@ class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         kwh_unit: dict[str, Any] | None,
         m3_unit: dict[str, Any] | None,
         today: dt_mod.date,
+        first_sync: bool = False,
     ) -> None:
-        """Extend daily/hourly history without hammering the API.
+        """Extend daily/hourly history during a sync.
 
         Daily series (ZoomLevel=2) for this year and last year are fetched at
-        most once per Copenhagen day. Hourly history is extended by at most two
-        additional past months per day, so a full year of Energy-dashboard
-        backfill appears gradually.
+        most once per Copenhagen day. Hourly history: the first sync backfills
+        up to a full year; later syncs fill up to a few still-missing months.
+        Months already present are never re-fetched, so repeated syncs the
+        same day cost no extra history requests.
         """
         if not self.client:
             return
@@ -443,10 +513,8 @@ class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             state["daily_kwh_history"] = history
             state["daily_history_fetched_on"] = today_s
 
-        if state.get("hourly_backfill_fetched_on") == today_s:
-            return
-
         existing = merge_hourly_points(state.get("hourly_kwh") or [])
+        max_months = FIRST_SYNC_BACKFILL_MONTHS if first_sync else SYNC_BACKFILL_MONTHS
         covered_months: set[tuple[int, int]] = set()
         for item in existing:
             dt = None
@@ -464,7 +532,7 @@ class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         cursor = (today.replace(day=1) - dt_mod.timedelta(days=1)).replace(day=1)
         end_limit = date_offset_months(today, -12)
         filled = 0
-        while cursor >= end_limit and filled < 2:
+        while cursor >= end_limit and filled < max_months:
             key = (cursor.year, cursor.month)
             month_end = datetime(cursor.year, cursor.month, calendar.monthrange(cursor.year, cursor.month)[1]) + timedelta(days=1)
             month_start = datetime(cursor.year, cursor.month, 1)
@@ -567,33 +635,75 @@ class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         )
 
     async def _async_update_data(self) -> dict[str, Any]:
+        """Return cached data only. Never contacts KMD (no background polling).
+
+        Used at start-up (restores sensors after an HA restart without any
+        network call) and by the ``refresh`` service.
+        """
         state = await self._async_load_cache()
         await self.hass.async_add_executor_job(load_utilities)
+        self._load_last_sync(state)
         if self._initial_setup_complete is None:
-            has_token = bool(self.entry.data.get(CONF_ACCESS_TOKEN))
             self._initial_setup_complete = bool(
-                state.get(
-                    "initial_setup_complete",
-                    has_token or cache_has_sensor_data(state),
-                )
+                state.get("initial_setup_complete", cache_has_sensor_data(state))
             )
+        state.pop("token_expired", None)
         state.update(self._base_meta())
         state["initial_setup_complete"] = self._initial_setup_complete
+        self._enrich_derived(state)
+        return state
 
+    async def _async_fill_gap_since_last_sync(
+        self,
+        state: dict[str, Any],
+        mp: dict[str, Any],
+        kwh_unit: dict[str, Any] | None,
+        m3_unit: dict[str, Any] | None,
+        today: dt_mod.date,
+    ) -> None:
+        """Fetch hourly data from the last stored hour up to the current month.
+
+        With sporadic (weekly) syncs the previous month's last days would
+        otherwise be missing: the regular fetch covers the current month and
+        the history backfill skips months that already have some points.
+        """
         if not self.client:
-            state["token_expired"] = True
-            self._enrich_derived(state)
-            return state
+            return
+        inst = mp.get("InstallationId")
+        point = mp.get("MeasurementPointId")
+        if not inst or not point:
+            return
+        month_start = today.replace(day=1)
+        oldest = date_offset_months(today, -12)
+        for key, unit in (("hourly_kwh", kwh_unit), ("hourly_m3", m3_unit)):
+            if not unit:
+                continue
+            points = state.get(key) or []
+            last_day = last_local_day(points)
+            if last_day is None or last_day >= month_start:
+                continue
+            start = max(last_day, oldest)  # re-fetch the last (maybe partial) day
+            series = await self.client.get_hourly_with_fallback(
+                inst,
+                point,
+                unit,
+                datetime(start.year, start.month, start.day),
+                datetime(month_start.year, month_start.month, month_start.day),
+            )
+            state[key] = merge_hourly_points(
+                points, [p for x in series if (p := compact_hourly_point(x))]
+            )
 
-        if self._token_obtained and dt_util.utcnow() - self._token_obtained > TOKEN_WARN_AGE:
-            _LOGGER.warning("KMD access token is >40 minutes old; consider refreshing via MitID")
-
+    async def _async_fetch_from_kmd(self, state: dict[str, Any]) -> dict[str, Any]:
+        """Fetch everything since the last sync with the one-sync client."""
+        if not self.client:
+            raise RuntimeError("Intet KMD-login i denne synkronisering")
+        first_sync = not (state.get("hourly_kwh") or [])
         try:
             meters = await self.client.get_active_meters()
             if not meters:
                 state["meters"] = []
                 state["available_units"] = []
-                state["token_expired"] = False
                 return state
 
             mp = meters[0]
@@ -623,7 +733,6 @@ class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
             state["meters"] = meters
             state["available_units"] = available_units
-            state["token_expired"] = False
             state["has_direct_temp"] = bool(temp_unit)
             state["updated"] = now_local.isoformat(timespec="seconds")
 
@@ -874,8 +983,14 @@ class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                         _LOGGER.warning("Optional Open-Meteo archive failed: %s", err)
 
             try:
-                await self._async_backfill_history(
+                await self._async_fill_gap_since_last_sync(
                     state, mp, kwh_unit, m3_unit, copenhagen_today(now_local)
+                )
+            except Exception as err:  # noqa: BLE001
+                _LOGGER.warning("Optional gap fill since last sync failed: %s", err)
+            try:
+                await self._async_backfill_history(
+                    state, mp, kwh_unit, m3_unit, copenhagen_today(now_local), first_sync
                 )
             except Exception as err:  # noqa: BLE001
                 _LOGGER.warning("Optional history backfill failed: %s", err)
@@ -889,36 +1004,42 @@ class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             except Exception as err:  # noqa: BLE001
                 _LOGGER.warning("Optional Energy statistics import failed: %s", err)
 
-            await self._async_save_cache(state)
             return state
         except aiohttp.ClientResponseError as err:
             if err.status in (401, 403):
-                _LOGGER.warning(
-                    "KMD API returned HTTP %s (token expired or rejected)",
-                    err.status,
-                )
-                state["token_expired"] = True
-                state.update(self._base_meta())
-                self.data = state
-                raise ConfigEntryAuthFailed(
-                    "KMD access token expired or was rejected (HTTP "
-                    f"{err.status}). Paste a new token or start MitID login."
+                raise KMDLoginError(
+                    f"KMD afviste login (HTTP {err.status}) — prøv at synkronisere igen"
                 ) from err
-            if cache_has_sensor_data(state):
-                _LOGGER.warning(
-                    "KMD API HTTP %s; serving cached state", err.status
-                )
-                return state
-            raise UpdateFailed(f"KMD API HTTP {err.status}: {err.message}") from err
-        except ConfigEntryAuthFailed:
-            raise
-        except Exception as err:  # noqa: BLE001
-            if cache_has_sensor_data(state) or cache_has_sensor_data(self.data):
-                _LOGGER.warning("KMD update failed (%s); serving cached state", err)
-                cached = state if cache_has_sensor_data(state) else dict(self.data or {})
-                cached.update(self._base_meta())
-                return cached
-            raise UpdateFailed(str(err)) from err
+            raise RuntimeError(f"KMD API-fejl (HTTP {err.status})") from err
+
+    async def async_sync_with_token(
+        self,
+        access_token: str,
+        customer_id: str | None = None,
+        customer_number: str | None = None,
+    ) -> None:
+        """Run one sync with a fresh access token, then discard the token.
+
+        The token is only held by a temporary KMD client for the duration of
+        this call. It is never written to the config entry or the cache.
+        Statistics are imported idempotently (one row per hour, upserted), so
+        several syncs the same day never create duplicates.
+        """
+        state = await self._async_load_cache()
+        state.pop("token_expired", None)
+        self.client = self._make_client(access_token, customer_id, customer_number)
+        try:
+            state = await self._async_fetch_from_kmd(state)
+        finally:
+            self.client = None
+        self.last_sync = dt_util.utcnow()
+        state["last_sync"] = self.last_sync.isoformat(timespec="seconds")
+        self._initial_setup_complete = True
+        state["initial_setup_complete"] = True
+        state.update(self._base_meta())
+        await self._async_save_cache(state)
+        self._reminder_sig = None
+        self.async_set_updated_data(state)
 
     async def async_update_token(
         self,
@@ -926,17 +1047,8 @@ class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         customer_id: str | None = None,
         customer_number: str | None = None,
     ) -> None:
-        """Update stored Bearer token (and optional Customer-Id / Customer-Number) and refresh."""
-        data = dict(self.entry.data)
-        data[CONF_ACCESS_TOKEN] = access_token.strip()
-        if customer_id:
-            data[CONF_CUSTOMER_ID] = customer_id.strip()
-        if customer_number:
-            data[CONF_CUSTOMER_NUMBER] = customer_number.strip()
-        self._initial_setup_complete = True
-        self.hass.config_entries.async_update_entry(self.entry, data=data)
-        self._build_client()
-        await self.async_request_refresh()
+        """Backwards-compatible alias: one-shot sync with a pasted token (not stored)."""
+        await self.async_sync_with_token(access_token, customer_id, customer_number)
 
     async def async_set_setup_state(
         self, complete: bool, meta_updates: dict[str, Any] | None = None
@@ -951,7 +1063,6 @@ class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 self._utility_id = str(meta_updates[CONF_UTILITY_ID]).strip()
                 self._legacy_paths = legacy_www_cache_paths(self.hass, self._utility_id)
             self.hass.config_entries.async_update_entry(self.entry, data=data)
-            self._build_client()
 
         self._initial_setup_complete = complete
         if not complete:
@@ -965,8 +1076,6 @@ class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         state["initial_setup_complete"] = complete
         await self._async_save_cache(state)
         self.async_set_updated_data(state)
-        if complete and self.client:
-            await self.async_request_refresh()
 
     def _push_sync_ui(
         self,
@@ -1149,16 +1258,16 @@ class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             else:
                 raise RuntimeError("MitID timeout (120s) — prøv igen")
 
-            self._push_sync_ui("fetching_data", "MitID godkendt — henter token og fjernvarmedata…")
-            access_token = await self.hass.async_add_executor_job(auth.finalize_and_exchange_token)
-            self.sync_state = "idle"
-            self.sync_message = ""
-            self.mitid_otp_code = None
-            self.mitid_qr_svg = None
-            self.mitid_qr_frames = []
-            self._fire_mitid_event()
+            self._push_sync_ui("fetching_data", "Godkendt — henter fjernvarmedata siden sidste synkronisering…")
             await self._async_dismiss_mitid_notification()
-            await self.async_update_token(access_token)
+            access_token = await self.hass.async_add_executor_job(auth.finalize_and_exchange_token)
+            try:
+                await self.async_sync_with_token(access_token)
+            finally:
+                # Session-based: the token is used for this one sync only.
+                access_token = ""
+                auth = None
+            self._push_sync_ui("idle", "")
             await self._async_notify(notify_svc, f"✅ {util_name} opdateret", "Fjernvarmedata er hentet.")
         except Exception as err:  # noqa: BLE001
             _LOGGER.warning("Native MitID sync failed: %s", err)

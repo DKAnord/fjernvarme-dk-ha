@@ -1,9 +1,9 @@
 """Constants for KMD Easy Energy integration."""
 
-from datetime import timedelta
-
 DOMAIN = "kmd_easy_energy"
 
+# Legacy key: KMD access tokens are no longer stored (session-based sync).
+# Kept only so migration can remove it from old config entries.
 CONF_ACCESS_TOKEN = "access_token"
 CONF_UTILITY = "utility"
 CONF_UTILITY_ID = "utility_id"
@@ -22,6 +22,8 @@ CONF_PRICE_DKK_PER_KWH = "price_dkk_per_kwh"
 CONF_PRICE_DKK_PER_M3 = "price_dkk_per_m3"
 CONF_MOTIVATION_DKK_PER_KWH_PER_K = "motivation_dkk_per_kwh_per_k"
 CONF_NORMAL_HDD_YEAR = "normal_hdd_year"
+CONF_SYNC_REMINDER = "sync_reminder"
+DEFAULT_SYNC_REMINDER = True
 
 # KMD plugin API
 KMD_API_BASE = "https://easy-energy-plugin-api.kmd.dk"
@@ -36,10 +38,14 @@ ZOOM_HOUR = 3
 CONSUMPTION_TYPE_HEATING = 5
 CONSUMPTION_TYPE_WATER = 6
 
-# Coordinator poll interval (district heating data is at most hourly)
-UPDATE_INTERVAL = timedelta(minutes=30)
-TOKEN_MAX_AGE_SECONDS = 45 * 60
-TOKEN_WARN_AGE = timedelta(minutes=40)
+# Session-based sync: KMD only issues a ~1 h access token (no refresh token),
+# so the integration never polls KMD in the background. Each sync is one MitID
+# login -> fetch -> token discarded. The coordinator only re-reads its cache.
+UPDATE_INTERVAL = None
+
+# Hourly history months fetched per sync (first sync = full year backfill).
+FIRST_SYNC_BACKFILL_MONTHS = 12
+SYNC_BACKFILL_MONTHS = 3
 
 # Private HA Store version (config/.storage/kmd_easy_energy.<entry_id>)
 STORAGE_VERSION = 1

@@ -7,7 +7,7 @@ Komplet, **100% lokal** Home Assistant-integration (`kmd_easy_energy`) og **Plug
 Log ind med **MitID direkte i Home Assistant** i ren Python (OIDC PKCE + NemLog-in + MitID SRP) — **ingen Chromium, ingen ekstern server eller add-on** påkrævet. Kører direkte på Raspberry Pi, Home Assistant OS og Docker.
 
 > [!NOTE]
-> **`v0.3.3` er stabil for KMD / Kredsløb og for Watts On hos Aalborg Forsyning.** Integrationen er testet live hos **Kredsløb** og **Aalborg Forsyning** (Watts On). De øvrige 15 KMD-værker og brugerdefineret portal-URL afventer stadig live-test. **E|Forsyning** (Hjørring Varmeforsyning) er eksperimentel og ikke afprøvet live. **Watts On** er eksperimentel og uofficiel: Aalborg er bekræftet live; Forsyning Helsingør, Fjernvarme Fyn og Hillerød Forsyning afventer første test — beta-testere søges. Alle tilbagemeldinger er guld værd — også *"det virker ikke hos mit værk"*. Brug feedback-knappen på kortet eller [opret et issue](https://github.com/DKAnord/kmd-fjernvarme-ha/issues) med navnet på dit værk.
+> **`v0.3.4` er stabil for KMD / Kredsløb og for Watts On hos Aalborg Forsyning.** Integrationen er testet live hos **Kredsløb** og **Aalborg Forsyning** (Watts On). De øvrige 15 KMD-værker og brugerdefineret portal-URL afventer stadig live-test. **E|Forsyning** (Hjørring Varmeforsyning) er eksperimentel og ikke afprøvet live. **Watts On** er eksperimentel og uofficiel: Aalborg er bekræftet live; Forsyning Helsingør, Fjernvarme Fyn og Hillerød Forsyning afventer første test — beta-testere søges. Alle tilbagemeldinger er guld værd — også *"det virker ikke hos mit værk"*. Brug feedback-knappen på kortet eller [opret et issue](https://github.com/DKAnord/kmd-fjernvarme-ha/issues) med navnet på dit værk.
 
 ---
 
@@ -101,13 +101,13 @@ Klik på knappen for at tilføje arkivet i HACS → klik **Hent (Download)** (se
    [![Tilføj integration](https://my.home-assistant.io/badges/config_flow_start.svg)](https://my.home-assistant.io/redirect/config_flow_start/?domain=kmd_easy_energy)
 
 2. Dashboard-kortet installeres automatisk. I **storage-tilstand** (standard) opretter eller opdaterer integrationen selv Lovelace-ressourcen ved opstart. Tjek under **Indstillinger → Dashboards → (`⋮`) Ressourcer**, at URL'en er:
-   - **URL:** `/local/js/kmd-easy-energy-card.js?v=0.3.3`
+   - **URL:** `/local/js/kmd-easy-energy-card.js?v=0.3.4`
    - **Ressourcetype:** `JavaScript-modul`
    *(Integrationen kopierer kortet til `/config/www/js/kmd-easy-energy-card.js` ved opstart. Home Assistant cacher filer under `/local/` i op til 31 dage, så `?v=…` er nødvendig efter en opdatering — ellers kan browseren eller Companion-appen blive ved med at køre et gammelt kort uden QR-kode. Kører du Lovelace i YAML-tilstand, skal du selv rette URL'en.)*
 3. Tilføj kortet **Fjernvarme (KMD Easy Energy): Dashboard** på et dashboard via den visuelle kortvælger (eller se [dashboards/lovelace-plug-and-play.yaml](dashboards/lovelace-plug-and-play.yaml)).
 
 > [!TIP]
-> **Mangler QR-koden efter en opdatering?** Så kører du sandsynligvis stadig det gamle kort i browserens cache. Ret ressource-URL'en til den ovenfor (med `?v=0.3.3`), og genindlæs hardt: **Ctrl+Shift+R** / **Cmd+Shift+R**. I Companion-appen: **Fejlfinding / Debugging → Nulstil frontend-cache**, og luk appen helt og åbn den igen. Du kan tjekke at det nye kort er indlæst ved i browserens udviklerværktøj at se, at elementet har `data-kmd-card-version="0.3.3"`.
+> **Mangler QR-koden efter en opdatering?** Så kører du sandsynligvis stadig det gamle kort i browserens cache. Ret ressource-URL'en til den ovenfor (med `?v=0.3.4`), og genindlæs hardt: **Ctrl+Shift+R** / **Cmd+Shift+R**. I Companion-appen: **Fejlfinding / Debugging → Nulstil frontend-cache**, og luk appen helt og åbn den igen. Du kan tjekke at det nye kort er indlæst ved i browserens udviklerværktøj at se, at elementet har `data-kmd-card-version="0.3.4"`.
 
 ---
 
@@ -209,6 +209,10 @@ Gælder KMD-værker med MitID (fx Kredsløb). E|Forsyning og Watts On har deres 
 - `sensor.<værk>_balance` — Saldo (`DKK`)
 - `sensor.<værk>_heating_degree_days_7d` — 7-dages graddage (`HDD17`) fra din udetemperatursensor og/eller Open-Meteo
 - `sensor.<værk>_energy_price` — Variabel varmepris (`DKK/kWh`), fra indstillinger eller offentliggjort takst
+- `sensor.<værk>_effective_energy_price` — Effektiv variabel varmepris (`DKK/kWh`) efter bonus/gebyr fra motivationstarif
+- `sensor.<værk>_latest_day_cost` — Estimeret variabelt forbrug for seneste hele døgn (`DKK`, ekskl. faste afgifter)
+- `sensor.<værk>_month_cost` — Estimeret variabelt forbrug denne måned (`DKK`, ekskl. faste afgifter)
+- `sensor.<værk>_year_cost` — Estimeret variabelt forbrug år-til-dato (`DKK`, ekskl. faste afgifter; attributten `monthly_dkk` har beløb pr. måned)
 - `sensor.<værk>_motivation_status` — Motivationstarif (`bonus` / `neutral` / `gebyr`) ud fra returtemperatur
 - `sensor.<værk>_motivation_adjustment` — Motivationsregulering (`DKK/kWh`, negativ = bonus)
 - `sensor.<værk>_kwh_per_hdd` — kWh pr. graddag (HDD17)
@@ -221,6 +225,8 @@ Gælder KMD-værker med MitID (fx Kredsløb). E|Forsyning og Watts On har deres 
 - `button.<værk>_sync` — 1-klik knap til at starte MitID-synkronisering (E|Forsyning / Watts On: **Synkroniser nu**)
 
 **Kun det, backenden kan levere:** Sensorer oprettes efter backendens evner (`capabilities`). E|Forsyning får fx ingen saldo-sensor. For Watts On oprettes volumen- og returtemperatur-sensorer først, når en synkronisering faktisk har fundet de data (integrationen genindlæses én gang). Overbliks-sensoren har attributterne `backend`, `data_source`, `data_granularity`, `capabilities` (hvad der faktisk er data til, fx `hourly`, `daily`, `monthly`, `temperatures`, `volume`, `cost`, `billing`, `forecast`, `mitid`, `reminder`) og `backend_capabilities`, og kortet skjuler grafer og felter uden data.
+
+**Estimeret forbrug i kr. på tværs af alle værker:** Har dit værk endnu ikke en offentliggjort takst i integrationen (fx **Aalborg Forsyning** / Watts On eller **E|Forsyning**), kan du under **Indstillinger → Enheder og tjenester → Fjernvarme → Konfigurer** indtaste din varmepris (`kr/kWh`), returtemperaturgrænser og motivationssats (`kr/kWh/°C`). Så oprettes de fire `*_cost` / `effective_energy_price`-sensorer automatisk, og dashboard-kortet viser panelet **💰 Estimeret forbrug i kr.** (ekskl. faste afgifter) — inspireret af [@dkvand](https://github.com/dkvand)s dashboard.
 
 ### Tjenester (`services.yaml`)
 - `kmd_easy_energy.configure_utility` — Konfigurer værk, lokation, retur-grænser, MitID Bruger-ID og start evt. sync
@@ -259,11 +265,11 @@ Download diagnostics fra integrationen, hvis du skal have support: tokens, MitID
 
 ---
 
-## 🇬🇧 English notes (new in `v0.3.0`–`v0.3.3`)
+## 🇬🇧 English notes (new in `v0.3.0`–`v0.3.4`)
 
-This is a Denmark-only Home Assistant integration for district heating on the KMD Easy Energy platform. Version **`v0.3.3`** (first stable line: **`v0.3.0`**) moves the usage cache to private `.storage`, keeps MitID OTP/QR off sensor attributes and off the event bus (the bundled card gets them via the websocket subscription `kmd_easy_energy/mitid/subscribe`; event `kmd_easy_energy_mitid_challenge` carries status only), and uses **session-based sync**: KMD only issues a ~1 h access token (no refresh token), so each "Synkroniser" press is one MitID login that fetches everything since the last sync and then discards the token (never stored). There is no background polling, no reauth/repair for an expired token, and cached values are restored after an HA restart without contacting KMD. A soft, non-invasive weekend nudge (a calm info chip under the Synkroniser button; no notification, repair or push) (`binary_sensor.<entry>_sync_reminder`, Danish text on the card) is shown on Saturday/Sunday if there was no sync on Thursday, Friday or Saturday that week; it can be turned off in the options.
+This is a Denmark-only Home Assistant integration for district heating on the KMD Easy Energy platform. Version **`v0.3.4`** (first stable line: **`v0.3.0`**) moves the usage cache to private `.storage`, keeps MitID OTP/QR off sensor attributes and off the event bus (the bundled card gets them via the websocket subscription `kmd_easy_energy/mitid/subscribe`; event `kmd_easy_energy_mitid_challenge` carries status only), and uses **session-based sync**: KMD only issues a ~1 h access token (no refresh token), so each "Synkroniser" press is one MitID login that fetches everything since the last sync and then discards the token (never stored). There is no background polling, no reauth/repair for an expired token, and cached values are restored after an HA restart without contacting KMD. A soft, non-invasive weekend nudge (a calm info chip under the Synkroniser button; no notification, repair or push) (`binary_sensor.<entry>_sync_reminder`, Danish text on the card) is shown on Saturday/Sunday if there was no sync on Thursday, Friday or Saturday that week; it can be turned off in the options.
 
-For the Energy dashboard, add the imported hourly statistics `kmd_easy_energy:energy_<entry>` / `:volume_<entry>`, not the month-to-date entities. Heat price (DKK/kWh) is an option; Kredsløb defaults come from the [official price page](https://www.kredslob.dk/privat/fjernvarme/fjernvarmepriser) for the current year. Motivation tariff, degree-day forecast and an abnormal-consumption binary sensor are included; the integration never sends leak notifications on its own.
+For the Energy dashboard, add the imported hourly statistics `kmd_easy_energy:energy_<entry>` / `:volume_<entry>`, not the month-to-date entities. Heat price (DKK/kWh) is an option (and unlocks cross-provider variable cost estimate sensors + the card's `💰 Estimated variable cost` panel across KMD, Watts On, and E|Forsyning); Kredsløb defaults come from the [official price page](https://www.kredslob.dk/privat/fjernvarme/fjernvarmepriser) for the current year. Motivation tariff, degree-day forecast and an abnormal-consumption binary sensor are included; the integration never sends leak notifications on its own.
 
 **E|Forsyning (experimental, untested, beta testers wanted):** utilities on eforsyning.dk (e.g. Hjørring Varmeforsyning) use a second backend with consumer number + web PIN (no MitID), automatic daily sync, daily readings (no hourly data) and the same card/sensors/statistics. The card and the entities are capability-driven, so sections without data are hidden. The protocol was studied from and reimplemented after [kpoppel/homeassistant-eforsyning](https://github.com/kpoppel/homeassistant-eforsyning) (Apache-2.0) — thank you! See NOTICE.
 
@@ -271,7 +277,7 @@ For the Energy dashboard, add the imported hourly statistics `kmd_easy_energy:en
 
 **Outdoor temperature:** degree days and temperature lines use, in this order, an optional HA outdoor temperature sensor (daily means from the recorder's long-term statistics, local-first, read-only), then Open-Meteo (external service) for any day the sensor doesn't cover. Open-Meteo uses the location override from the options if set, otherwise the HA home location, otherwise the utility's coordinates. Config entry 1.3 stops treating the utility's coordinates as your location; explicit overrides are kept. The source is exposed as `temp_source` / `outdoor_temp` (no coordinates) and shown on the card.
 
-**Breaking for custom dashboards:** attributes `mitid_otp_code` and `mitid_qr_svg` are removed. Use the bundled card or the websocket subscription above. After updating, the Lovelace resource must be `/local/js/kmd-easy-energy-card.js?v=0.3.3` (Home Assistant caches `/local/` for 31 days; a stale v0.2.x card shows no QR). Storage-mode Lovelace is updated automatically on startup; then hard-refresh the dashboard (Companion app: reset frontend cache). Setup from a tablet/PC works with MitID's default QR (both animated frames are shown on the card); only setup on the same phone as the MitID app needs one-time codes enabled in the MitID app. Phone OTP sync is verified live on Kredsløb; tablet QR and additional KMD Easy Energy utilities are open for beta testing.
+**Breaking for custom dashboards:** attributes `mitid_otp_code` and `mitid_qr_svg` are removed. Use the bundled card or the websocket subscription above. After updating, the Lovelace resource must be `/local/js/kmd-easy-energy-card.js?v=0.3.4` (Home Assistant caches `/local/` for 31 days; a stale v0.2.x card shows no QR). Storage-mode Lovelace is updated automatically on startup; then hard-refresh the dashboard (Companion app: reset frontend cache). Setup from a tablet/PC works with MitID's default QR (both animated frames are shown on the card); only setup on the same phone as the MitID app needs one-time codes enabled in the MitID app. Phone OTP sync is verified live on Kredsløb; tablet QR and additional KMD Easy Energy utilities are open for beta testing.
 
 ---
 

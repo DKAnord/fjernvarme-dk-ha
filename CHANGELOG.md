@@ -2,6 +2,14 @@
 
 Alle væsentlige ændringer i **Fjernvarme (KMD Easy Energy) – HA Connector & Dashboard** dokumenteres her.
 
+## [0.3.4] - 2026-11-22
+
+### Omkostningsestimater & Dashboard (alle udbydere)
+- **4 nye udbyder-uafhængige kr.-estimatsensorer** (`Effektiv varmepris`, `Estimeret forbrug (seneste døgn)`, `Estimeret forbrug (denne måned)`, `Estimeret forbrug (i år)` med `monthly_dkk`-attribut) — virker på tværs af KMD, Watts On og E|Forsyning, når varmepris er kendt eller indtastet under integrationens indstillinger.
+- **Nyt `💰 Estimeret forbrug i kr.`-panel på dashboard-kortet:** Viser estimat for seneste døgn, denne måned, i år samt effektiv kr/kWh inkl. bonus/gebyr (ekskl. faste afgifter) og `~kr.` i månedsgrafens tooltips — inspireret af [@dkvand](https://github.com/dkvand)s dashboard.
+- **Procentbaseret motivationstarif** (`motivation_pct_per_k`) i `tariff.py`, så fx ±2 %/°C automatisk skalerer med den valgte varmepris.
+- **Kortets indbyggede værkliste** er synkroniseret med `utilities.json` (Aalborg `confirmed`, Helsingør/Fyn/Hillerød på Watts On), og misvisende `0 kWh` for forrige år uden data skjules.
+
 ## [0.3.3] - 2026-11-22
 
 ### Watts On

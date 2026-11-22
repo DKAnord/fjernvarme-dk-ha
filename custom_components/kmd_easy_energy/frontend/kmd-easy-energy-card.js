@@ -3,7 +3,7 @@
  * Zero external dependencies, Shadow DOM, responsive, interactive tooltips, DA/EN i18n.
  */
 (() => {
-  const VER = "0.3.3";
+  const VER = "0.3.4";
   const MONTHS = ["Jan", "Feb", "Mar", "Apr", "Maj", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Dec"];
   const DAYS_IN_MONTH = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
   const isLeapYear = (y) => (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0;
@@ -88,13 +88,15 @@
     { id: "albertslund-forsyning", name: "Albertslund Forsyning", city: "Albertslund", url: "https://forsyning.albertslund.dk/selvbetjening", status: "pending_test" },
     { id: "nykobing-sj", name: "Nykøbing Sjælland Varmeværk", city: "Odsherred", url: "https://www.nsfv.dk/", status: "pending_test" },
     { id: "lef", name: "Langeland Energi & Forsyning", city: "Langeland", url: "https://www.lef.dk/selvbetjening/", status: "pending_test" },
-    { id: "forsyning-helsingor", name: "Forsyning Helsingør (Mit FH)", city: "Helsingør", url: "https://www.fh.dk/selvbetjening", status: "pending_test" },
+    { id: "forsyning-helsingor", name: "Forsyning Helsingør", city: "Helsingør", url: "https://www.fh.dk/watts", status: "pending_test", backend: "wattson" },
     { id: "provas", name: "Provas", city: "Haderslev", url: "https://www.provas.dk/selvbetjening/", status: "pending_test" },
     { id: "skanderborg-forsyning", name: "Skanderborg Forsyning", city: "Skanderborg", url: "https://www.skanderborgforsyning.dk/selvbetjening/", status: "pending_test" },
     { id: "samn", name: "SAMN Forsyning", city: "Horsens / Odder", url: "https://www.samn.dk/", status: "pending_test" },
     { id: "go-energi", name: "go'energi", city: "Thy-Mors", url: "https://www.goenergi.dk/", status: "pending_test" },
     { id: "hjorring-varmeforsyning", name: "Hjørring Varmeforsyning", city: "Hjørring", url: "https://eforsyning.dk/hjvarme/", status: "pending_test", backend: "eforsyning" },
-    { id: "aalborg-forsyning", name: "Aalborg Forsyning", city: "Aalborg", url: "https://aalborgforsyning.dk/services/forbrug/watts-on/", status: "pending_test", backend: "wattson" },
+    { id: "aalborg-forsyning", name: "Aalborg Forsyning", city: "Aalborg", url: "https://aalborgforsyning.dk/services/forbrug/watts-on/", status: "confirmed", backend: "wattson" },
+    { id: "fjernvarme-fyn", name: "Fjernvarme Fyn", city: "Odense / Fyn", url: "https://www.fjernvarmefyn.dk/spar-paa-energien/overblik/watts-on-app/", status: "pending_test", backend: "wattson" },
+    { id: "hillerod-forsyning", name: "Hillerød Forsyning", city: "Hillerød", url: "https://hfors.dk/selvbetjening/se-forbrug-regninger/watts-on-din-forbrugsapp-til-vand-varme", status: "pending_test", backend: "wattson" },
   ];
 
   const I18N = {
@@ -1097,7 +1099,7 @@
             <div class="kpi">
               <div class="k-lbl">${esc(t.kpi_ytd)} ${curYr} (ÅTD)</div>
               <div class="k-val">${fmtInt(yCur)} kWh</div>
-              <div class="k-sub">${prevYr} hele år: ${fmtInt(yPrev)} kWh</div>
+              <div class="k-sub">${yPrev > 0 ? `${prevYr} hele år: ${fmtInt(yPrev)} kWh` : (lang === "en" ? "Year-to-date" : "År-til-dato")}</div>
             </div>
             ${has("temperatures") ? `<div class="kpi">
               <div class="k-lbl">${esc(t.kpi_ret)} ${curYr}</div>
@@ -1113,12 +1115,55 @@
               <div class="k-lbl">${esc(t.kpi_bill)} ${curYr}</div>
               <div class="k-val">${fmtInt(bl[`total_${curYr}_kr`] ?? bl.total_2026_kr ?? 0)} kr.</div>
               <div class="k-sub">Saldo ${fmtDec(bl.saldo_kr ?? 0, 2)} kr.${bl.last_bill_date ? ` · ${esc(bl.last_bill_date)}` : ""}</div>
-            </div>` : (has("cost") && typeof costEst.ytd_dkk === "number" ? `<div class="kpi" data-section="cost-estimate">
-              <div class="k-lbl">Estimeret forbrug ${curYr}</div>
-              <div class="k-val">~${fmtInt(costEst.ytd_dkk)} kr.</div>
-              <div class="k-sub">${typeof costEst.current_month_dkk === "number" ? `Denne md: ~${fmtInt(costEst.current_month_dkk)} kr. · ` : ""}ekskl. faste afg.</div>
-            </div>` : "")}
+            </div>` : ""}
           </div>
+
+          ${(has("cost") && (
+            typeof costEst.latest_day_dkk === "number"
+            || typeof costEst.current_month_dkk === "number"
+            || typeof costEst.ytd_dkk === "number"
+            || typeof costEst.effective_price_dkk_per_kwh === "number"
+          )) ? (() => {
+            const hasBase = typeof costEst.base_price_dkk_per_kwh === "number";
+            const baseTxt = hasBase ? `${fmtDec(costEst.base_price_dkk_per_kwh, 3)} kr/kWh` : "";
+            const adj = costEst.adjustment_pct;
+            let effSub = "";
+            if (typeof adj === "number" && adj < 0) {
+              effSub = `<span class="good">${fmtDec(Math.abs(adj), 1)} % bonus</span>${hasBase ? ` · ${lang === "en" ? "base" : "grundpris"} ${baseTxt}` : ""}`;
+            } else if (typeof adj === "number" && adj > 0) {
+              effSub = `<span class="bad">+${fmtDec(adj, 1)} % ${lang === "en" ? "surcharge" : "gebyr"}</span>${hasBase ? ` · ${lang === "en" ? "base" : "grundpris"} ${baseTxt}` : ""}`;
+            } else if (hasBase) {
+              effSub = `${lang === "en" ? "Base price" : "Grundpris"} ${baseTxt}`;
+            }
+            return `<div class="panel" data-section="cost-estimate">
+              <div class="p-head">
+                <div class="p-title">${lang === "en" ? `💰 Estimated variable cost (${curYr})` : `💰 Estimeret forbrug i kr. (${curYr})`}</div>
+                <div class="p-leg"><span>${lang === "en" ? "Excl. fixed fees · estimate, not invoice" : "Ekskl. faste afgifter · estimat, ikke regningen"}</span></div>
+              </div>
+              <div class="kpis">
+                ${typeof costEst.latest_day_dkk === "number" ? `<div class="kpi">
+                  <div class="k-lbl">${lang === "en" ? "Latest day" : "Seneste døgn"}</div>
+                  <div class="k-val">~${fmtInt(costEst.latest_day_dkk)} kr.</div>
+                  <div class="k-sub">${typeof costEst.latest_day_kwh === "number" ? `${fmtInt(costEst.latest_day_kwh)} kWh` : ""}${costEst.latest_day_label ? `${typeof costEst.latest_day_kwh === "number" ? " · " : ""}${esc(costEst.latest_day_label)}` : ""}</div>
+                </div>` : ""}
+                ${typeof costEst.current_month_dkk === "number" ? `<div class="kpi">
+                  <div class="k-lbl">${lang === "en" ? "This month" : "Denne måned"}</div>
+                  <div class="k-val">~${fmtInt(costEst.current_month_dkk)} kr.</div>
+                  <div class="k-sub">${typeof costEst.current_month_kwh === "number" ? `${fmtInt(costEst.current_month_kwh)} kWh` : ""}</div>
+                </div>` : ""}
+                ${typeof costEst.ytd_dkk === "number" ? `<div class="kpi">
+                  <div class="k-lbl">${lang === "en" ? `Year to date (${curYr})` : `I år (${curYr})`}</div>
+                  <div class="k-val">~${fmtInt(costEst.ytd_dkk)} kr.</div>
+                  <div class="k-sub">${yCur > 0 ? `${fmtInt(yCur)} kWh` : ""}</div>
+                </div>` : ""}
+                ${typeof costEst.effective_price_dkk_per_kwh === "number" ? `<div class="kpi">
+                  <div class="k-lbl">${lang === "en" ? "Effective price" : "Effektiv pris"}</div>
+                  <div class="k-val">${fmtDec(costEst.effective_price_dkk_per_kwh, 3)} kr/kWh</div>
+                  <div class="k-sub">${effSub}</div>
+                </div>` : ""}
+              </div>
+            </div>`;
+          })() : ""}
 
           ${(has("monthly") || has("temperatures")) ? `<div class="grid2">
             ${has("monthly") ? `<div class="panel" data-section="monthly">

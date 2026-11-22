@@ -55,7 +55,7 @@ from .insights import (
     motivation_status,
 )
 from .statistics import import_hourly_statistics
-from .tariff import resolve_tariff
+from .tariff import load_utilities, resolve_tariff
 from .util import (
     cache_has_sensor_data,
     delete_legacy_www_cache,
@@ -543,6 +543,7 @@ class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
     async def _async_update_data(self) -> dict[str, Any]:
         state = await self._async_load_cache()
+        await self.hass.async_add_executor_job(load_utilities)
         if self._initial_setup_complete is None:
             has_token = bool(self.entry.data.get(CONF_ACCESS_TOKEN))
             self._initial_setup_complete = bool(
@@ -1046,7 +1047,7 @@ class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         )
 
     async def _async_run_mitid_flow(self, username: str, notify_svc: str) -> None:
-        auth = KMDMitIDAuthenticator()
+        auth = await self.hass.async_add_executor_job(KMDMitIDAuthenticator)
         util_name = str(self.entry.data.get(CONF_UTILITY) or self.entry.title or "KMD Easy Energy")
         try:
             self._push_sync_ui("starting", "Starter MitID-login (100% i Home Assistant)…")

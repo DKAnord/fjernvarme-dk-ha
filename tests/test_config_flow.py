@@ -39,7 +39,7 @@ def test_manifest_and_hacs_versions() -> None:
     assert manifest["version"] == "0.3.0"
     assert manifest["config_flow"] is True
     assert manifest["iot_class"] == "cloud_polling"
-    assert any(r.startswith("requests") for r in manifest["requirements"])
+    assert not any(r.startswith("requests") for r in manifest["requirements"])
     assert hacs["homeassistant"].count(".") == 2
     assert UPDATE_INTERVAL.total_seconds() == 30 * 60
 

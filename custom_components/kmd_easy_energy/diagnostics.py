@@ -53,6 +53,9 @@ TO_REDACT = {
     "FullName",
     "FirstName",
     "LastName",
+    "latitude",
+    "longitude",
+    "notify_service",
 }
 
 

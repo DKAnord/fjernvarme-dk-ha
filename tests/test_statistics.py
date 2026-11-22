@@ -17,6 +17,19 @@ def test_statistic_ids() -> None:
     assert volume_statistic_id("abc") == "kmd_easy_energy:volume_abc"
 
 
+def test_statistic_ids_normalize_uppercase_ulid() -> None:
+    from homeassistant.components.recorder.statistics import valid_statistic_id
+
+    ulid = "01M80451DZVEQJHQM9NP0W3ZBW"
+    esid = energy_statistic_id(ulid)
+    vsid = volume_statistic_id(ulid)
+    assert esid == "kmd_easy_energy:energy_01m80451dzveqjhqm9np0w3zbw"
+    assert vsid == "kmd_easy_energy:volume_01m80451dzveqjhqm9np0w3zbw"
+    assert valid_statistic_id(esid)
+    assert valid_statistic_id(vsid)
+    assert valid_statistic_id(energy_statistic_id("Entry-With-Hyphens"))
+
+
 def test_import_skips_without_recorder() -> None:
     hass = MagicMock()
     hass.config.components = set()

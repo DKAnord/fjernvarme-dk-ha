@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
@@ -25,12 +26,17 @@ def _mean_type_none() -> Any:
         return None
 
 
+def _slug_entry_id(entry_id: str) -> str:
+    """Normalize a Home Assistant config entry ULID/ID to lowercase statistic_id slug."""
+    return re.sub(r"[^a-z0-9_]", "_", str(entry_id).lower())
+
+
 def energy_statistic_id(entry_id: str) -> str:
-    return f"{DOMAIN}:energy_{entry_id}"
+    return f"{DOMAIN}:energy_{_slug_entry_id(entry_id)}"
 
 
 def volume_statistic_id(entry_id: str) -> str:
-    return f"{DOMAIN}:volume_{entry_id}"
+    return f"{DOMAIN}:volume_{_slug_entry_id(entry_id)}"
 
 
 def _metadata(

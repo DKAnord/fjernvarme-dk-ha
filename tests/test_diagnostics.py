@@ -54,6 +54,9 @@ async def test_diagnostics_redacts_entry_secrets() -> None:
             "customer_id": "cust-99",
             "customer_number": "cn-88",
             "utility_id": "kredslob",
+            "latitude": 56.153,
+            "longitude": 10.106,
+            "notify_service": "mobile_app_pixel_test",
         },
         options={"portal_url": "https://minvarme.kredslob.dk/"},
     )
@@ -77,6 +80,9 @@ async def test_diagnostics_redacts_entry_secrets() -> None:
     assert result["entry"]["data"]["access_token"] == "**REDACTED**"
     assert result["entry"]["data"]["mitid_username"] == "**REDACTED**"
     assert result["entry"]["data"]["customer_id"] == "**REDACTED**"
+    assert result["entry"]["data"]["latitude"] == "**REDACTED**"
+    assert result["entry"]["data"]["longitude"] == "**REDACTED**"
+    assert result["entry"]["data"]["notify_service"] == "**REDACTED**"
     assert result["entry"]["data"]["utility_id"] == "kredslob"
     assert result["coordinator"]["utility_id"] == "kredslob"
     assert "access_token" in TO_REDACT

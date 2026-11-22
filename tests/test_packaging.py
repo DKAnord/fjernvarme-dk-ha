@@ -31,7 +31,8 @@ def test_manifest_loggers_and_integration_type() -> None:
     assert manifest["integration_type"] == "service"
     assert "custom_components.kmd_easy_energy" in manifest["loggers"]
     assert manifest["version"] == "0.3.0"
-    assert any(str(r).startswith("requests") for r in manifest["requirements"])
+    assert "recorder" in manifest.get("after_dependencies", [])
+    assert not any(str(r).startswith("requests") for r in manifest["requirements"])
 
 
 def test_hacs_json_min_version_and_render_readme() -> None:

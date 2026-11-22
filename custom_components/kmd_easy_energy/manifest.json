@@ -1,6 +1,12 @@
 {
   "domain": "kmd_easy_energy",
   "name": "Fjernvarme (KMD Easy Energy)",
+  "after_dependencies": [
+    "recorder"
+  ],
+  "categories": [
+    "energy"
+  ],
   "codeowners": [
     "@DKAnord"
   ],
@@ -15,11 +21,7 @@
   "requirements": [
     "beautifulsoup4>=4.12.0",
     "pycryptodome>=3.19.0",
-    "qrcode>=7.4.2",
-    "requests>=2.31.0"
+    "qrcode>=7.4.2"
   ],
-  "version": "0.3.0",
-  "categories": [
-    "energy"
-  ]
+  "version": "0.3.0"
 }

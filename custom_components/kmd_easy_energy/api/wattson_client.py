@@ -73,8 +73,13 @@ WATTS_API_BASE = "https://p.watts-energy.dk/"
 
 # Verified (Novafos-V2, water): users/api/v3/User, installations/api/v3/users/
 # {user}/locations, provisioning/api/v1/locations/{loc}, water/api/consumptions/
-# {device}?startDate=. Heat endpoints are GUESSES following the water pattern.
+# {device}?startDate=. Heat: the first candidate is verified live against an
+# Aalborg Forsyning district-heating meter (2026-11-22) and is the path the
+# Watts On app itself uses; it takes ?newerThan= (?startDate= gives HTTP 400).
+# Its items are {Id, SD, ED, En (kWh), Vol (m³), Fl, TI, TO, CD, MQ}, with
+# TI/TO = supply/return temperature. The other candidates are older guesses.
 HEAT_ENDPOINT_CANDIDATES: tuple[str, ...] = (
+    "heating/api/v1/devices/{device_id}/consumption/recent",
     "heating/api/consumptions/{device_id}",
     "districtheating/api/consumptions/{device_id}",
     "heat/api/consumptions/{device_id}",
@@ -421,7 +426,9 @@ class WattsOnClient:
         for template in candidates:
             path = template.replace("{device_id}", device_id).replace("<device_id>", device_id)
             try:
-                data = await self.get(path, {"startDate": stamp})
+                # The app's /recent endpoints take newerThan; the others startDate.
+                param = "newerThan" if path.rstrip("/").endswith("/recent") else "startDate"
+                data = await self.get(path, {param: stamp})
             except WattsOnNotFound as err:
                 probe.append({"endpoint": template, "result": str(err)})
                 continue
@@ -439,9 +446,9 @@ ENERGY_KEYS = ("energy", "en", "heat", "heatEnergy", "energyConsumption", "kwh",
 VOLUME_KEYS = ("vol", "volume", "m3", "waterVolume")
 FWD_KEYS = (
     "ft", "forwardTemperature", "flowTemperature", "supplyTemperature", "tempForward",
-    "inletTemperature", "t1",
+    "inletTemperature", "t1", "ti",
 )
-RET_KEYS = ("rt", "returnTemperature", "tempReturn", "outletTemperature", "t2")
+RET_KEYS = ("rt", "returnTemperature", "tempReturn", "outletTemperature", "t2", "to")
 QUALITY_KEYS = ("mq", "measuredQuality", "quality")
 GENERIC_KEYS = ("value", "consumption", "val")
 

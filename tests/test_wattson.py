@@ -179,6 +179,7 @@ async def test_devices_are_classified_and_carry_no_personal_fields() -> None:
 async def test_heat_endpoint_probing_records_only_templates_and_status() -> None:
     session = fx.FakeSession(
         {
+            f"dk/heating/api/v1/devices/{fx.HEAT_DEVICE}/consumption/recent": (404, {}),
             f"dk/heating/api/consumptions/{fx.HEAT_DEVICE}": (404, {}),
             f"dk/districtheating/api/consumptions/{fx.HEAT_DEVICE}": fx.heat_items(1),
         }
@@ -187,10 +188,11 @@ async def test_heat_endpoint_probing_records_only_templates_and_status() -> None
     used, items, probe = await client.async_heat_consumptions(
         fx.HEAT_DEVICE, datetime(2026, 11, 1, tzinfo=timezone.utc)
     )
-    assert used == HEAT_ENDPOINT_CANDIDATES[1] and len(items) == 24
+    assert used == HEAT_ENDPOINT_CANDIDATES[2] and len(items) == 24
     assert probe == [
         {"endpoint": HEAT_ENDPOINT_CANDIDATES[0], "result": "HTTP 404"},
-        {"endpoint": HEAT_ENDPOINT_CANDIDATES[1], "result": "ok"},
+        {"endpoint": HEAT_ENDPOINT_CANDIDATES[1], "result": "HTTP 404"},
+        {"endpoint": HEAT_ENDPOINT_CANDIDATES[2], "result": "ok"},
     ]
     call = [c for c in session.calls if "districtheating" in c["url"]][0]
     assert call["params"] == {"startDate": "2026-11-01T00:00:00Z"}
@@ -202,9 +204,46 @@ async def test_heat_endpoint_probing_records_only_templates_and_status() -> None
     assert len(probe) == 1 and [c for c in session.calls if "heating" in c["url"]][0]["url"].endswith(fx.HEAT_DEVICE)
 
 
+def _aalborg_items() -> list[dict]:
+    """Shape of a real Aalborg Forsyning heat reply (values made up)."""
+    return [
+        {"Id": fx.HEAT_DEVICE, "SD": "2026-11-22T13:00:00Z", "ED": "2026-11-22T14:00:00Z",
+         "En": 4, "Vol": 0.05806, "Fl": 0.04, "TI": 69.48, "TO": 27.36, "CD": 42.12, "MQ": "measured"},
+        {"Id": fx.HEAT_DEVICE, "SD": "2026-11-22T14:00:00Z", "ED": "2026-11-22T15:00:00Z",
+         "En": 2, "Vol": 0.04194, "Fl": 0.03, "TI": 69.66, "TO": 27.75, "CD": 41.91, "MQ": "measured"},
+    ]
+
+
+@pytest.mark.asyncio
+async def test_verified_heat_endpoint_is_tried_first_with_newer_than() -> None:
+    session = fx.FakeSession(
+        {f"dk/heating/api/v1/devices/{fx.HEAT_DEVICE}/consumption/recent": _aalborg_items()}
+    )
+    client = WattsOnClient(session, fx.REFRESH_1)
+    used, items, probe = await client.async_heat_consumptions(
+        fx.HEAT_DEVICE, datetime(2026, 11, 1, tzinfo=timezone.utc)
+    )
+    assert used == "heating/api/v1/devices/{device_id}/consumption/recent"
+    assert probe == [{"endpoint": used, "result": "ok"}] and len(items) == 2
+    call = [c for c in session.calls if "consumption/recent" in c["url"]][0]
+    assert call["params"] == {"newerThan": "2026-11-01T00:00:00Z"}
+
+
+def test_parse_aalborg_heat_items_with_ti_to_temperatures() -> None:
+    p = parse_heat_items(_aalborg_items(), unit_hint="kWh")
+    assert not p.skipped and not p.assumptions and p.energy_unit == "kWh"
+    first = p.intervals[0]
+    assert first["kwh"] == 4.0 and first["m3"] == 0.0581 and first["hours"] == 1.0
+    assert first["t_fwd"] == 69.48 and first["t_ret"] == 27.36
+    assert p.has_energy and p.has_volume and p.has_temps
+
+
 @pytest.mark.asyncio
 async def test_no_heat_endpoint_is_not_found() -> None:
-    session = fx.FakeSession({f"dk/heating/api/consumptions/{fx.HEAT_DEVICE}": (404, {})})
+    session = fx.FakeSession({
+            f"dk/heating/api/v1/devices/{fx.HEAT_DEVICE}/consumption/recent": (404, {}),
+            f"dk/heating/api/consumptions/{fx.HEAT_DEVICE}": (404, {}),
+        })
     with pytest.raises(WattsOnNotFound):
         await WattsOnClient(session, fx.REFRESH_1).async_heat_consumptions(
             fx.HEAT_DEVICE, datetime(2026, 11, 1, tzinfo=timezone.utc)
@@ -381,10 +420,10 @@ async def test_wattson_sync_rotates_token_detects_device_and_saves(tmp_path: Pat
     for secret in (fx.REFRESH_1, fx.REFRESH_2, fx.ACCESS, "Testvej", "12345678"):
         assert secret not in dumped
     # First sync asked from 1 January.
-    heat_call = [c for c in session.calls if "consumptions" in c["url"]][0]
-    assert heat_call["params"]["startDate"].startswith(f"{datetime.now().year - 1}-12-31T") or heat_call[
+    heat_call = [c for c in session.calls if "consumption" in c["url"]][0]
+    assert heat_call["params"]["newerThan"].startswith(f"{datetime.now().year - 1}-12-31T") or heat_call[
         "params"
-    ]["startDate"].startswith(f"{datetime.now().year}-01-01T")
+    ]["newerThan"].startswith(f"{datetime.now().year}-01-01T")
     # New capabilities detected -> one reload so the entities get created.
     hass.config_entries.async_schedule_reload.assert_called_once_with("entry-1")
     coord.data = saved  # what async_set_updated_data does
@@ -404,9 +443,9 @@ async def test_wattson_second_sync_is_incremental_and_skips_discovery(tmp_path: 
         await coord.async_sync_wattson()
     urls = [c["url"] for c in session.calls]
     assert not any("locations" in u or "users/api" in u for u in urls)  # no rediscovery
-    heat = [c for c in session.calls if "consumptions" in c["url"]]
+    heat = [c for c in session.calls if "consumption" in c["url"]]
     assert len(heat) == 1  # known endpoint, no probing
-    assert heat[0]["params"]["startDate"] < "2026-11-04"  # two days before newest stored hour
+    assert heat[0]["params"]["newerThan"] < "2026-11-04"  # two days before newest stored hour
     assert store.data["wattson"]["requests_last_sync"] == 2  # token + one data call
     hass.config_entries.async_schedule_reload.assert_not_called()
 
@@ -438,7 +477,10 @@ async def test_wattson_no_heat_meter_and_missing_endpoint_are_friendly(tmp_path:
     coord2, _, _, _ = _w_coord(tmp_path, FakeStore({}))
     with patch(
         "kmd_easy_energy.coordinator.async_get_clientsession",
-        return_value=fx.FakeSession({f"dk/heating/api/consumptions/{fx.HEAT_DEVICE}": (404, {})}),
+        return_value=fx.FakeSession({
+            f"dk/heating/api/v1/devices/{fx.HEAT_DEVICE}/consumption/recent": (404, {}),
+            f"dk/heating/api/consumptions/{fx.HEAT_DEVICE}": (404, {}),
+        }),
     ):
         with pytest.raises(RuntimeError, match="README"):
             await coord2.async_sync_wattson()

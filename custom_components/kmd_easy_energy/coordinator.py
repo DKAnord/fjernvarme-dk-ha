@@ -430,7 +430,8 @@ class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                         complete_day_dts[-1] + timedelta(days=1),
                     )
                     state["hourly_kwh_points"] = len(h_series)
-                    by_day: dict[str, list[tuple[int, float, bool]]] = {}
+                    valid_day_isos = {d.date().isoformat() for d in complete_day_dts}
+                    by_day: dict[str, dict[int, list[float]]] = {}
                     for x in h_series:
                         df_raw = x.get("DateFrom") or ""
                         if not df_raw:
@@ -439,26 +440,53 @@ class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                         if not dt_obj:
                             continue
                         dt_loc = dt_obj.astimezone(cph_tz) if dt_obj.tzinfo else dt_obj.replace(tzinfo=cph_tz)
-                        by_day.setdefault(dt_loc.date().isoformat(), []).append(
-                            (dt_loc.hour, float(x.get("Value") or 0), bool(x.get("IsComplete")))
+                        day_iso = dt_loc.date().isoformat()
+                        if day_iso not in valid_day_isos:
+                            continue
+                        by_day.setdefault(day_iso, {}).setdefault(dt_loc.hour, []).append(
+                            float(x.get("Value") or 0)
                         )
                     buckets: list[list[float]] = [[] for _ in range(24)]
                     n_days = 0
-                    for pts in by_day.values():
-                        if len(pts) < 23:
+                    for day_hrs in by_day.values():
+                        if len(day_hrs) < 23:
                             continue
-                        nonzero_hrs = sum(1 for _, v, _ in pts if v > 0)
+                        hr_avgs = {hr_idx: sum(vals) / len(vals) for hr_idx, vals in day_hrs.items()}
+                        nonzero_hrs = sum(1 for v in hr_avgs.values() if v > 0)
                         if nonzero_hrs >= 12:
                             n_days += 1
-                            for hr_idx, val, _ in pts:
+                            for hr_idx, val in hr_avgs.items():
                                 if 0 <= hr_idx < 24:
                                     buckets[hr_idx].append(val)
+                    if h_series:
+                        raw_sample = [
+                            (x.get("DateFrom"), x.get("Value"), x.get("IsComplete"))
+                            for x in (h_series[:3] + (h_series[-3:] if len(h_series) > 3 else []))
+                        ]
+                    else:
+                        raw_sample = []
                     if n_days >= 1 and all(buckets):
                         avg_24 = [round(sum(b) / len(b), 2) for b in buckets]
+                        _LOGGER.info(
+                            "KMD hourly MTD profile: n_days=%d, points=%d, sum(avg_24)=%.2f kWh/d vs daily_avg=%s, sample=%s, avg_24=%s",
+                            n_days,
+                            len(h_series),
+                            sum(avg_24),
+                            (state.get("daily") or {}).get("gennemsnit"),
+                            raw_sample,
+                            avg_24,
+                        )
                         hr_obj = state.setdefault("hourly", {})
                         hr_obj["period"] = f"{M_KEYS[mo - 1].lower()}-{yr} MTD ({n_days} dage)"
                         hr_obj["days_averaged"] = n_days
                         hr_obj["kwh"] = avg_24
+                    elif h_series:
+                        _LOGGER.info(
+                            "KMD hourly MTD skipped: n_days=%d, points=%d, sample=%s",
+                            n_days,
+                            len(h_series),
+                            raw_sample,
+                        )
 
             if m3_unit:
                 start_mo = datetime(yr, mo, 1)

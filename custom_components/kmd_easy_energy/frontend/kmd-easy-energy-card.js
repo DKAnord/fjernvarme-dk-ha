@@ -3,9 +3,77 @@
  * Zero external dependencies, Shadow DOM, responsive, interactive tooltips, DA/EN i18n.
  */
 (() => {
-  const VER = "0.2.0";
+  const VER = "0.2.1";
   const MONTHS = ["Jan", "Feb", "Mar", "Apr", "Maj", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Dec"];
   const DAYS_IN_MONTH = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+  const isLeapYear = (y) => (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0;
+  const daysInMonth = (mIdx, yr) => (mIdx === 1 && isLeapYear(yr) ? 29 : DAYS_IN_MONTH[mIdx] || 30);
+
+  const identifyPeakHours = (kwh) => {
+    const valid = (Array.isArray(kwh) ? kwh : []).filter((v) => typeof v === "number" && Number.isFinite(v) && v > 0);
+    if (valid.length < 4) {
+      return { peaks: new Set(), peakList: [], median: 0, maxVal: 0, maxIdx: 0, minPos: 0 };
+    }
+    const s = [...valid].sort((a, b) => a - b);
+    const n = s.length;
+    const mid = Math.floor(n / 2);
+    const median = n % 2 === 1 ? s[mid] : (s[mid - 1] + s[mid]) / 2;
+    const q25 = s[Math.floor(n * 0.25)];
+    const q75 = s[Math.floor(n * 0.75)];
+    const iqr = q75 - q25;
+    const absDev = s.map((v) => Math.abs(v - median)).sort((a, b) => a - b);
+    const mad = n % 2 === 1 ? absDev[mid] : (absDev[mid - 1] + absDev[mid]) / 2;
+    let sigma = Math.max(1.4826 * mad, iqr / 1.349);
+    if (sigma === 0) {
+      const mean = s.reduce((a, b) => a + b, 0) / n;
+      sigma = Math.sqrt(s.reduce((a, v) => a + (v - mean) ** 2, 0) / n);
+    }
+    const maxVal = s[n - 1];
+    const minPos = s[0];
+    const maxIdx = kwh.indexOf(maxVal);
+    if (maxVal <= 0 || (maxVal - median) < Math.max(0.05, median * 0.05)) {
+      return { peaks: new Set(), peakList: [], median, maxVal, maxIdx, minPos };
+    }
+    const thresh = Math.max(
+      median + Math.max(1.0 * sigma, median * 0.10),
+      median + 0.55 * (maxVal - median)
+    );
+    let candidates = [];
+    kwh.forEach((v, h) => {
+      if (typeof v === "number" && Number.isFinite(v) && v >= thresh) {
+        candidates.push([h, v]);
+      }
+    });
+    if (candidates.length === 0 && maxVal >= median * 1.08) {
+      kwh.forEach((v, h) => {
+        if (typeof v === "number" && Number.isFinite(v) && v >= maxVal - 1e-6) {
+          candidates.push([h, v]);
+        }
+      });
+    }
+    candidates.sort((a, b) => (b[1] - a[1]) || (a[0] - b[0]));
+    const top = candidates.slice(0, 4);
+    return {
+      peaks: new Set(top.map((c) => c[0])),
+      peakList: top.map((c) => c[0]).sort((a, b) => a - b),
+      median,
+      maxVal,
+      maxIdx,
+      minPos,
+    };
+  };
+
+  const niceStep = (maxV, targetTicks = 4) => {
+    if (maxV <= 0) return 1;
+    const raw = maxV / targetTicks;
+    const mag = Math.pow(10, Math.floor(Math.log10(raw)));
+    const norm = raw / mag;
+    if (norm <= 1) return mag;
+    if (norm <= 2) return 2 * mag;
+    if (norm <= 2.5) return 2.5 * mag;
+    if (norm <= 5) return 5 * mag;
+    return 10 * mag;
+  };
 
   const UTILITIES = [
     { id: "kredslob", name: "Kredsløb", city: "Aarhus", url: "https://minvarme.kredslob.dk/", status: "confirmed" },
@@ -116,7 +184,7 @@
     }
 
     _renderMonthlySvg(mCur, mPrev, mTemp, curYr, prevYr, t) {
-      const W = 720, H = 235, pad = { l: 44, r: 38, t: 20, b: 30 };
+      const W = 540, H = 235, pad = { l: 48, r: 38, t: 26, b: 32 };
       const cw = W - pad.l - pad.r, ch = H - pad.t - pad.b;
       const vals = MONTHS.flatMap((m) => [mCur[m], mPrev[m]]).filter((v) => typeof v === "number");
       const maxKwh = Math.max(3000, ...vals, 1);
@@ -126,7 +194,7 @@
       const yKwh = (v) => pad.t + ch - (v / maxKwh) * ch;
       const yTmp = (v) => pad.t + ch - ((v - minT) / Math.max(1, maxT - minT)) * ch;
 
-      let grid = "";
+      let grid = `<text x="${pad.l - 6}" y="13" text-anchor="end" class="ax-unit">kWh</text><text x="${W - pad.r + 6}" y="13" text-anchor="start" class="ax-unit">°C</text>`;
       for (let i = 0; i <= 4; i++) {
         const kv = Math.round((maxKwh / 4) * i);
         const y = yKwh(kv);
@@ -136,7 +204,7 @@
       [0, 10, 20].forEach((tv) => {
         if (tv >= minT && tv <= maxT) {
           const y = yTmp(tv);
-          grid += `<text x="${W - pad.r + 6}" y="${y + 4}" text-anchor="start" class="ax ax-t">${tv}°</text>`;
+          grid += `<text x="${W - pad.r + 6}" y="${y + 4}" text-anchor="start" class="ax-t">${tv}°</text>`;
         }
       });
 
@@ -147,15 +215,15 @@
         const vPrev = mPrev[m];
         const vCur = mCur[m];
         const tCur = mTemp[`${curYr}-${String(i + 1).padStart(2, "0")}`];
-        const bw = Math.min(18, xStep * 0.34);
+        const bw = Math.min(15, xStep * 0.34);
 
         if (typeof vPrev === "number") {
           const y = yKwh(vPrev);
-          bars += `<rect x="${cx - bw - 1}" y="${y}" width="${bw}" height="${Math.max(1, pad.t + ch - y)}" rx="4" fill="rgba(148,163,184,0.45)" data-tip="${m}: ${prevYr} = ${fmtInt(vPrev)} kWh${typeof vCur === 'number' ? ` · ${curYr} = ${fmtInt(vCur)} kWh` : ''}${typeof tCur === 'number' ? ` · ${t.outdoor} ${fmtDec(tCur)}°C` : ''}"/>`;
+          bars += `<rect x="${cx - bw - 1}" y="${y}" width="${bw}" height="${Math.max(1, pad.t + ch - y)}" rx="3" fill="rgba(148,163,184,0.45)" data-tip="${m}: ${prevYr} = ${fmtInt(vPrev)} kWh${typeof vCur === 'number' ? ` · ${curYr} = ${fmtInt(vCur)} kWh` : ''}${typeof tCur === 'number' ? ` · ${t.outdoor} ${fmtDec(tCur)}°C` : ''}"/>`;
         }
         if (typeof vCur === "number") {
           const y = yKwh(vCur);
-          bars += `<rect x="${cx + 1}" y="${y}" width="${bw}" height="${Math.max(1, pad.t + ch - y)}" rx="4" fill="url(#gHeat)" data-tip="${m}: ${curYr} = ${fmtInt(vCur)} kWh${typeof vPrev === 'number' ? ` (${prevYr}: ${fmtInt(vPrev)} kWh)` : ''}${typeof tCur === 'number' ? ` · ${t.outdoor} ${fmtDec(tCur)}°C` : ''}"/>`;
+          bars += `<rect x="${cx + 1}" y="${y}" width="${bw}" height="${Math.max(1, pad.t + ch - y)}" rx="3" fill="url(#gHeat)" data-tip="${m}: ${curYr} = ${fmtInt(vCur)} kWh${typeof vPrev === 'number' ? ` (${prevYr}: ${fmtInt(vPrev)} kWh)` : ''}${typeof tCur === 'number' ? ` · ${t.outdoor} ${fmtDec(tCur)}°C` : ''}"/>`;
         }
         if (typeof tCur === "number") {
           pts.push([cx, yTmp(tCur), `${m} ${t.outdoor.toLowerCase()}: ${fmtDec(tCur)} °C`]);
@@ -175,7 +243,7 @@
     }
 
     _renderReturnTempSvg(rtMonthly, bonusT, penaltyT, curYr) {
-      const W = 720, H = 205, pad = { l: 38, r: 16, t: 18, b: 28 };
+      const W = 540, H = 225, pad = { l: 42, r: 14, t: 28, b: 32 };
       const cw = W - pad.l - pad.r, ch = H - pad.t - pad.b;
       const minY = 20, maxY = Math.max(44, penaltyT + 4);
       const yPos = (v) => pad.t + ch - ((v - minY) / (maxY - minY)) * ch;
@@ -187,8 +255,9 @@
         const col = tv === bonusT ? "#22c55e" : (tv === penaltyT ? "#ef4444" : "rgba(148,163,184,0.22)");
         const dash = (tv === bonusT || tv === penaltyT) ? "5,4" : "3,3";
         const sw = (tv === bonusT || tv === penaltyT) ? "1.6" : "1";
+        const cls = tv === bonusT ? "ax-bonus" : (tv === penaltyT ? "ax-penalty" : "ax");
         grid += `<line x1="${pad.l}" y1="${y}" x2="${W - pad.r}" y2="${y}" stroke="${col}" stroke-width="${sw}" stroke-dasharray="${dash}"/>`;
-        grid += `<text x="${pad.l - 5}" y="${y + 4}" text-anchor="end" class="ax">${tv}°</text>`;
+        grid += `<text x="${pad.l - 6}" y="${y + 4}" text-anchor="end" class="${cls}">${tv}°</text>`;
       });
 
       let bars = "";
@@ -198,41 +267,50 @@
         if (typeof v === "number") {
           const y = yPos(Math.min(maxY, Math.max(minY, v)));
           const col = v < bonusT ? "#22c55e" : (v <= penaltyT ? "#f59e0b" : "#ef4444");
-          const bw = Math.min(28, xStep * 0.56);
+          const bw = Math.min(24, xStep * 0.58);
           bars += `<rect x="${cx - bw / 2}" y="${y}" width="${bw}" height="${Math.max(2, pad.t + ch - y)}" rx="5" fill="${col}" fill-opacity="0.88" data-tip="${m} ${curYr}: ${fmtDec(v)} °C (${v < bonusT ? 'Bonus!' : v <= penaltyT ? 'Neutral' : 'Gebyr!'})"/>`;
-          bars += `<text x="${cx}" y="${y - 5}" text-anchor="middle" class="val">${fmtDec(v)}</text>`;
+          bars += `<text x="${cx}" y="${y - 7}" text-anchor="middle" class="val val-sm">${fmtDec(v)}</text>`;
         }
         bars += `<text x="${cx}" y="${H - 8}" text-anchor="middle" class="ax">${m}</text>`;
       });
       return `<svg viewBox="0 0 ${W} ${H}" class="svg">${grid}${bars}</svg>`;
     }
 
-    _renderHourlyAvgSvg(hourly, bonusT) {
+    _renderHourlyAvgSvg(hourly, bonusT, peakInfo) {
       const kwh = Array.isArray(hourly?.kwh) ? hourly.kwh : [];
       const rt = Array.isArray(hourly?.ret_temp) ? hourly.ret_temp : [];
-      const W = 720, H = 205, pad = { l: 38, r: 34, t: 18, b: 28 };
+      const W = 540, H = 230, pad = { l: 40, r: 42, t: 28, b: 32 };
       const cw = W - pad.l - pad.r, ch = H - pad.t - pad.b;
-      const maxK = Math.max(3.2, ...kwh.map((v) => v * 1.15));
-      const minT = 25, maxT = 36;
+      const validK = kwh.filter((v) => typeof v === "number" && Number.isFinite(v));
+      const rawMaxK = validK.length ? Math.max(...validK) * 1.18 : 3.2;
+      const maxK = Math.max(rawMaxK < 1.5 ? 1.5 : 3.2, rawMaxK);
+      const validT = rt.filter((v) => typeof v === "number" && Number.isFinite(v));
+      const minT = Math.min(25, ...validT, bonusT - 2);
+      const maxT = Math.max(36, ...validT, bonusT + 4);
       const xStep = cw / 24;
       const yK = (v) => pad.t + ch - (v / maxK) * ch;
-      const yT = (t) => pad.t + ch - ((t - minT) / (maxT - minT)) * ch;
+      const yT = (t) => pad.t + ch - ((t - minT) / Math.max(1, maxT - minT)) * ch;
 
-      let grid = "";
-      [1, 2, 3].forEach((kv) => {
-        if (kv <= maxK) {
-          const y = yK(kv);
+      let grid = `<text x="${pad.l - 6}" y="13" text-anchor="end" class="ax-unit">kWh/t</text><text x="${W - pad.r + 6}" y="13" text-anchor="start" class="ax-unit">°C</text>`;
+      const kStep = maxK <= 1.8 ? 0.5 : (maxK <= 5 ? 1 : niceStep(maxK, 4));
+      for (let kv = kStep; kv <= maxK + 1e-6; kv += kStep) {
+        const y = yK(kv);
+        if (y >= pad.t - 2) {
           grid += `<line x1="${pad.l}" y1="${y}" x2="${W - pad.r}" y2="${y}" stroke="rgba(148,163,184,0.20)" stroke-dasharray="3,3"/>`;
-          grid += `<text x="${pad.l - 5}" y="${y + 4}" text-anchor="end" class="ax">${kv}</text>`;
+          grid += `<text x="${pad.l - 6}" y="${y + 4}" text-anchor="end" class="ax">${kStep < 1 ? fmtDec(kv, 1) : Math.round(kv)}</text>`;
         }
-      });
+      }
       if (bonusT >= minT && bonusT <= maxT) {
         grid += `<line x1="${pad.l}" y1="${yT(bonusT)}" x2="${W - pad.r}" y2="${yT(bonusT)}" stroke="rgba(34,197,94,0.65)" stroke-dasharray="4,4"/>`;
-        grid += `<text x="${W - pad.r + 5}" y="${yT(bonusT) + 4}" class="ax" fill="#22c55e">${bonusT}°</text>`;
+        grid += `<text x="${W - pad.r + 6}" y="${yT(bonusT) + 4}" class="ax-bonus">${bonusT}°</text>`;
       }
+      [Math.round(minT), Math.round(maxT)].forEach((tv) => {
+        if (Math.abs(tv - bonusT) >= 3) {
+          grid += `<text x="${W - pad.r + 6}" y="${yT(tv) + 4}" class="ax-t">${tv}°</text>`;
+        }
+      });
 
-      const avgKwh = kwh.length ? kwh.reduce((a, b) => a + b, 0) / kwh.length : 0;
-      const peakThresh = Math.max(1.5, avgKwh * 1.12);
+      const info = peakInfo || identifyPeakHours(kwh);
       let bars = "";
       const pts = [];
       for (let h = 0; h < 24; h++) {
@@ -241,9 +319,12 @@
         const tv = rt[h];
         if (typeof kv === "number") {
           const y = yK(kv);
-          const isPeak = kv >= peakThresh;
-          const bw = Math.min(18, xStep * 0.62);
-          bars += `<rect x="${cx - bw / 2}" y="${y}" width="${bw}" height="${Math.max(2, pad.t + ch - y)}" rx="4" fill="${isPeak ? '#ec4899' : '#f59e0b'}" fill-opacity="${isPeak ? '0.92' : '0.72'}" data-tip="Kl. ${String(h).padStart(2, '0')}:00 snit: ${fmtDec(kv, 2)} kWh/t${typeof tv === 'number' ? ` · Retur ${fmtDec(tv)} °C` : ''}"/>`;
+          const isPeak = info.peaks.has(h);
+          const bw = Math.min(15, xStep * 0.64);
+          bars += `<rect x="${cx - bw / 2}" y="${y}" width="${bw}" height="${Math.max(2, pad.t + ch - y)}" rx="3.5" fill="${isPeak ? '#ec4899' : '#f59e0b'}" fill-opacity="${isPeak ? '0.94' : '0.72'}" data-tip="Kl. ${String(h).padStart(2, '0')}:00 snit: ${fmtDec(kv, 2)} kWh/t${isPeak ? ' (Spidstime)' : ''}${typeof tv === 'number' ? ` · Retur ${fmtDec(tv)} °C` : ''}"/>`;
+          if (h === info.maxIdx && info.peaks.has(h)) {
+            bars += `<text x="${cx}" y="${Math.max(pad.t - 4, y - 6)}" text-anchor="middle" class="val">${fmtDec(kv, 2)}</text>`;
+          }
         }
         if (typeof tv === "number") {
           pts.push([cx, yT(Math.min(maxT, Math.max(minT, tv))), `Kl. ${String(h).padStart(2, '0')}:00 snit retur: ${fmtDec(tv)} °C`]);
@@ -254,7 +335,7 @@
       let line = "";
       if (pts.length > 1) {
         const d = pts.map((p, i) => `${i === 0 ? "M" : "L"}${p[0].toFixed(1)},${p[1].toFixed(1)}`).join(" ");
-        line = `<path d="${d}" fill="none" stroke="#38bdf8" stroke-width="2.3" stroke-linejoin="round"/>`;
+        line = `<path d="${d}" fill="none" stroke="#38bdf8" stroke-width="2.4" stroke-linejoin="round"/>`;
         pts.forEach(([x, y, tip]) => {
           line += `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="2.8" fill="#0ea5e9" stroke="#fff" stroke-width="1" data-tip="${esc(tip)}"/>`;
         });
@@ -265,53 +346,59 @@
     _renderMtdVsYtdSvg(ann, mPrev, dy, curYr, prevYr) {
       const days = dy?.days || {};
       const entries = Object.keys(days).map((k) => [parseInt(k, 10), days[k]]).sort((a, b) => a[0] - b[0]);
-      const cleanDays = entries.filter(([, v], idx) => !(idx === entries.length - 1 && entries.length > 2 && (dy?.latest_complete === false || v < 10)));
+      const hasTrailingPartial = entries.length > 2 && (dy?.latest_complete === false || entries[entries.length - 1][1] < 10);
+      const trailingPartialVal = hasTrailingPartial ? Number(entries[entries.length - 1][1] || 0) : 0;
+      const cleanDays = hasTrailingPartial ? entries.slice(0, -1) : entries;
       const mtdAvg = cleanDays.length ? cleanDays.reduce((s, x) => s + x[1], 0) / cleanDays.length : Number(dy?.gennemsnit || 0);
 
       const now = new Date();
       const latestDayNum = cleanDays.length ? cleanDays[cleanDays.length - 1][0] : now.getDate();
-      const mIdx = now.getMonth();
+      let mIdx = now.getMonth();
+      if (typeof dy?.latest_date === "string" && dy.latest_date.startsWith(`${curYr}-`)) {
+        const parsedMo = parseInt(dy.latest_date.slice(5, 7), 10);
+        if (parsedMo >= 1 && parsedMo <= 12) mIdx = parsedMo - 1;
+      }
       let daysElapsed = latestDayNum;
-      for (let i = 0; i < mIdx; i++) daysElapsed += DAYS_IN_MONTH[i];
-      const ytdTotal = Number(ann[String(curYr)] || 0);
+      for (let i = 0; i < mIdx; i++) daysElapsed += daysInMonth(i, curYr);
+      const ytdTotal = Math.max(0, Number(ann[String(curYr)] || 0) - trailingPartialVal);
       const ytdAvg = daysElapsed > 0 ? ytdTotal / daysElapsed : 0;
 
       const curMonthName = MONTHS[mIdx] || "Nov";
       const prevYearSameMonthTotal = Number(mPrev[curMonthName] || 0);
-      const prevYearSameMonthAvg = prevYearSameMonthTotal > 0 ? prevYearSameMonthTotal / (DAYS_IN_MONTH[mIdx] || 30) : 0;
-      const prevYrAvg = Number(ann[String(prevYr)] || 0) / 365;
+      const prevYearSameMonthAvg = prevYearSameMonthTotal > 0 ? prevYearSameMonthTotal / daysInMonth(mIdx, prevYr) : 0;
+      const prevYrDays = isLeapYear(prevYr) ? 366 : 365;
+      const prevYrAvg = Number(ann[String(prevYr)] || 0) / prevYrDays;
 
       const barsData = [
         { lbl: `${curMonthName} MTD`, sub: `${cleanDays.length} dage`, val: mtdAvg, col: "#f97316" },
         { lbl: `${curMonthName} ${prevYr}`, sub: `${fmtInt(prevYearSameMonthTotal)} kWh`, val: prevYearSameMonthAvg, col: "#94a3b8" },
         { lbl: `${curYr} ÅTD snit`, sub: `${daysElapsed} dage`, val: ytdAvg, col: "#38bdf8" },
-        { lbl: `${prevYr} årssnit`, sub: "365 dage", val: prevYrAvg, col: "#64748b" },
+        { lbl: `${prevYr} årssnit`, sub: `${prevYrDays} dage`, val: prevYrAvg, col: "#64748b" },
       ].filter((b) => b.val > 0);
 
-      const W = 720, H = 205, pad = { l: 42, r: 22, t: 22, b: 36 };
+      const W = 540, H = 235, pad = { l: 44, r: 16, t: 30, b: 48 };
       const cw = W - pad.l - pad.r, ch = H - pad.t - pad.b;
-      const maxV = Math.max(70, ...barsData.map((b) => b.val * 1.15));
+      const maxV = Math.max(60, ...barsData.map((b) => b.val * 1.18));
       const yPos = (v) => pad.t + ch - (v / maxV) * ch;
       const xStep = cw / Math.max(1, barsData.length);
 
-      let grid = "";
-      [20, 40, 60].forEach((kv) => {
-        if (kv <= maxV) {
-          const y = yPos(kv);
-          grid += `<line x1="${pad.l}" y1="${y}" x2="${W - pad.r}" y2="${y}" stroke="rgba(148,163,184,0.20)" stroke-dasharray="3,3"/>`;
-          grid += `<text x="${pad.l - 6}" y="${y + 4}" text-anchor="end" class="ax">${kv}</text>`;
-        }
-      });
+      let grid = `<text x="${pad.l - 6}" y="13" text-anchor="end" class="ax-unit">kWh/d</text>`;
+      const step = niceStep(maxV, 3);
+      for (let kv = step; kv <= maxV; kv += step) {
+        const y = yPos(kv);
+        grid += `<line x1="${pad.l}" y1="${y}" x2="${W - pad.r}" y2="${y}" stroke="rgba(148,163,184,0.20)" stroke-dasharray="3,3"/>`;
+        grid += `<text x="${pad.l - 6}" y="${y + 4}" text-anchor="end" class="ax">${Math.round(kv)}</text>`;
+      }
 
       let bars = "";
       barsData.forEach((b, i) => {
         const cx = pad.l + xStep * (i + 0.5);
         const y = yPos(b.val);
-        const bw = Math.min(64, xStep * 0.52);
-        bars += `<rect x="${cx - bw / 2}" y="${y}" width="${bw}" height="${Math.max(2, pad.t + ch - y)}" rx="8" fill="${b.col}" fill-opacity="0.88" data-tip="${b.lbl}: ${fmtDec(b.val)} kWh/dag (${b.sub})"/>`;
-        bars += `<text x="${cx}" y="${y - 6}" text-anchor="middle" class="val">${fmtDec(b.val)} kWh/d</text>`;
-        bars += `<text x="${cx}" y="${H - 18}" text-anchor="middle" class="ax">${esc(b.lbl)}</text>`;
-        bars += `<text x="${cx}" y="${H - 5}" text-anchor="middle" class="ax" style="opacity:.75;font-size:9.5px">${esc(b.sub)}</text>`;
+        const bw = Math.min(54, xStep * 0.52);
+        bars += `<rect x="${cx - bw / 2}" y="${y}" width="${bw}" height="${Math.max(2, pad.t + ch - y)}" rx="7" fill="${b.col}" fill-opacity="0.88" data-tip="${b.lbl}: ${fmtDec(b.val)} kWh/dag (${b.sub})"/>`;
+        bars += `<text x="${cx}" y="${y - 8}" text-anchor="middle" class="val val-lg">${fmtDec(b.val)} kWh/d</text>`;
+        bars += `<text x="${cx}" y="${H - 22}" text-anchor="middle" class="ax">${esc(b.lbl)}</text>`;
+        bars += `<text x="${cx}" y="${H - 6}" text-anchor="middle" class="ax-sub">${esc(b.sub)}</text>`;
       });
       return `<svg viewBox="0 0 ${W} ${H}" class="svg">${grid}${bars}</svg>`;
     }
@@ -323,40 +410,50 @@
       if (clean.length === 0) return `<div class="empty">${esc(t.no_daily)}</div>`;
 
       const ymPrefix = (daily?.latest_date || new Date().toISOString().slice(0, 7)).slice(0, 7);
-      const W = 720, H = 185, pad = { l: 34, r: 34, t: 18, b: 28 };
+      const W = 540, H = 220, pad = { l: 42, r: 40, t: 26, b: 32 };
       const cw = W - pad.l - pad.r, ch = H - pad.t - pad.b;
-      const maxK = Math.max(70, ...clean.map((x) => x[1]));
+      const topK = Math.max(70, ...clean.map((x) => x[1] * 1.08));
       const tVals = clean.map(([d]) => dailyTemp[`${ymPrefix}-${String(d).padStart(2, "0")}`]).filter((v) => typeof v === "number");
-      const minT = Math.min(0, ...tVals), maxT = Math.max(12, ...tVals);
+      const minT = Math.floor(Math.min(0, ...tVals));
+      const maxT = Math.ceil(Math.max(12, ...tVals));
       const xStep = cw / clean.length;
-      const yK = (v) => pad.t + ch - (v / maxK) * ch;
+      const yK = (v) => pad.t + ch - (v / topK) * ch;
       const yT = (v) => pad.t + ch - ((v - minT) / Math.max(1, maxT - minT)) * ch;
 
-      let grid = "";
-      [20, 40, 60].forEach((kv) => {
-        if (kv <= maxK) {
-          const y = yK(kv);
-          grid += `<line x1="${pad.l}" y1="${y}" x2="${W - pad.r}" y2="${y}" stroke="rgba(148,163,184,0.20)" stroke-dasharray="3,3"/>`;
-          grid += `<text x="${pad.l - 5}" y="${y + 4}" text-anchor="end" class="ax">${kv}</text>`;
-        }
-      });
+      let grid = `<text x="${pad.l - 6}" y="13" text-anchor="end" class="ax-unit">kWh</text><text x="${W - pad.r + 6}" y="13" text-anchor="start" class="ax-unit">°C</text>`;
+      const kStep = niceStep(topK, 3);
+      for (let kv = kStep; kv <= topK; kv += kStep) {
+        const y = yK(kv);
+        grid += `<line x1="${pad.l}" y1="${y}" x2="${W - pad.r}" y2="${y}" stroke="rgba(148,163,184,0.20)" stroke-dasharray="3,3"/>`;
+        grid += `<text x="${pad.l - 6}" y="${y + 4}" text-anchor="end" class="ax">${Math.round(kv)}</text>`;
+      }
+      if (tVals.length > 0) {
+        const midT = Math.round((minT + maxT) / 2);
+        [minT, midT, maxT].filter((v, i, a) => a.indexOf(v) === i).forEach((tv) => {
+          const y = yT(tv);
+          grid += `<text x="${W - pad.r + 6}" y="${y + 4}" text-anchor="start" class="ax-t">${tv}°</text>`;
+        });
+      }
 
+      const labelStep = clean.length > 15 ? 2 : 1;
       let bars = "";
       const pts = [];
       clean.forEach(([d, v], idx) => {
         const cx = pad.l + xStep * (idx + 0.5);
         const y = yK(v);
-        const bw = Math.min(24, xStep * 0.62);
+        const bw = Math.min(20, xStep * 0.64);
         const dt = dailyTemp[`${ymPrefix}-${String(d).padStart(2, "0")}`];
-        bars += `<rect x="${cx - bw / 2}" y="${y}" width="${bw}" height="${Math.max(2, pad.t + ch - y)}" rx="4" fill="url(#gDay)" data-tip="${d}.: ${v} kWh${typeof dt === 'number' ? ` · ${t.outdoor} ${fmtDec(dt)} °C` : ''}"/>`;
-        bars += `<text x="${cx}" y="${H - 8}" text-anchor="middle" class="ax">${d}.</text>`;
+        bars += `<rect x="${cx - bw / 2}" y="${y}" width="${bw}" height="${Math.max(2, pad.t + ch - y)}" rx="3.5" fill="url(#gDay)" data-tip="${d}.: ${v} kWh${typeof dt === 'number' ? ` · ${t.outdoor} ${fmtDec(dt)} °C` : ''}"/>`;
+        if (idx % labelStep === 0 || idx === clean.length - 1 && (clean.length - 1) % labelStep === 0) {
+          bars += `<text x="${cx}" y="${H - 8}" text-anchor="middle" class="ax">${d}.</text>`;
+        }
         if (typeof dt === "number") pts.push([cx, yT(dt), `${d}. ${t.outdoor.toLowerCase()}: ${fmtDec(dt)} °C`]);
       });
 
       let line = "";
       if (pts.length > 1) {
         const path = pts.map((p, i) => `${i === 0 ? "M" : "L"}${p[0].toFixed(1)},${p[1].toFixed(1)}`).join(" ");
-        line = `<path d="${path}" fill="none" stroke="#38bdf8" stroke-width="2.2"/>`;
+        line = `<path d="${path}" fill="none" stroke="#38bdf8" stroke-width="2.3"/>`;
         pts.forEach(([x, y, tip]) => {
           line += `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="3.2" fill="#0ea5e9" stroke="#fff" stroke-width="1" data-tip="${esc(tip)}"/>`;
         });
@@ -399,9 +496,17 @@
       const fcPct = budK > 0 ? Math.round(((expK - budK) / budK) * 100) : 0;
       const hddMap = ins.kwh_per_hdd || {};
       const hrArr = Array.isArray(hr.kwh) ? hr.kwh : [];
-      const peakHourVal = hrArr.length ? Math.max(...hrArr) : 0;
-      const peakHourIdx = hrArr.length ? hrArr.indexOf(peakHourVal) : 0;
-      const minHourVal = hrArr.length ? Math.min(...hrArr) : 0;
+      const peakInfo = identifyPeakHours(hrArr);
+      const peakHourVal = peakInfo.maxVal || (hrArr.length ? Math.max(...hrArr) : 0);
+      const peakHourIdx = peakInfo.maxIdx || (hrArr.length ? hrArr.indexOf(peakHourVal) : 0);
+      const minHourVal = peakInfo.minPos || (hrArr.length ? Math.min(...hrArr) : 0);
+      const peakLegendTxt = peakInfo.peaks.size > 1
+        ? `Peak ${String(peakHourIdx).padStart(2, "0")}:00 (${fmtDec(peakHourVal, 2)} kWh/t) · ${peakInfo.peaks.size} ${lang === "en" ? "peak hrs" : "spidstimer"}`
+        : peakInfo.peaks.size === 1
+          ? `Peak ${String(peakHourIdx).padStart(2, "0")}:00 (${fmtDec(peakHourVal, 2)} kWh/t)`
+          : `${lang === "en" ? "No sharp peak" : "Ingen markant spidstime"} (maks ${fmtDec(peakHourVal, 2)} kWh/t)`;
+      const peakOtherList = peakInfo.peakList.filter((h) => h !== peakHourIdx).map((h) => `kl. ${String(h).padStart(2, "0")}:00`);
+      const peakInsightSub = peakOtherList.length ? ` (samt ${peakOtherList.join(", ")})` : "";
       const baseDayKwh = Number(ins.baseload_kwh_mo ?? 0) / 30;
       const rtDist = rtCur > 0 ? rtCur - bonusT : 0;
       const hddEntries = Object.entries(hddMap);
@@ -545,12 +650,18 @@
           }
           .p-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
           .p-title { font-size: 15.5px; font-weight: 800; }
-          .p-leg { font-size: 11.5px; color: var(--secondary-text-color); display: flex; gap: 10px; flex-wrap: wrap; }
+          .p-leg { font-size: 12.5px; color: var(--secondary-text-color); display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
           .dot { display: inline-block; width: 9px; height: 9px; border-radius: 3px; margin-right: 4px; vertical-align: middle; }
           .svg { width: 100%; height: auto; display: block; overflow: visible; }
-          .ax { font-size: 10.5px; fill: var(--secondary-text-color, #64748b); font-weight: 600; }
-          .ax-t { fill: #0ea5e9; }
-          .val { font-size: 9.5px; fill: var(--primary-text-color, #1e293b); font-weight: 700; }
+          .ax { font-size: 13px; fill: var(--primary-text-color, #e2e8f0); opacity: 0.84; font-weight: 600; }
+          .ax-sub { font-size: 11.5px; fill: var(--secondary-text-color, #94a3b8); font-weight: 600; }
+          .ax-unit { font-size: 11px; fill: var(--secondary-text-color, #94a3b8); font-weight: 700; }
+          .ax-t { font-size: 12.5px; fill: #38bdf8; font-weight: 700; }
+          .ax-bonus { font-size: 12.5px; fill: #22c55e; font-weight: 700; }
+          .ax-penalty { font-size: 12.5px; fill: #ef4444; font-weight: 700; }
+          .val { font-size: 12px; fill: var(--primary-text-color, #f8fafc); font-weight: 800; paint-order: stroke; stroke: var(--card-background-color, #1c1c1c); stroke-width: 4px; stroke-linejoin: round; }
+          .val-sm { font-size: 11.5px; }
+          .val-lg { font-size: 13px; }
           rect[data-tip], circle[data-tip] { cursor: pointer; transition: opacity 0.12s ease; }
           rect[data-tip]:hover, circle[data-tip]:hover { opacity: 0.78; }
           .tip {
@@ -828,11 +939,11 @@
               <div class="p-head">
                 <div class="p-title">🚿 Timeprofil · ${esc(hr.period || `${curYr} MTD`)} (snit pr. time)</div>
                 <div class="p-leg">
-                  <span><i class="dot" style="background:#ec4899"></i>Peak ${String(peakHourIdx).padStart(2, "0")}:00 (${fmtDec(peakHourVal, 2)} kWh/t)</span>
+                  <span><i class="dot" style="background:#ec4899"></i>${esc(peakLegendTxt)}</span>
                   <span><i class="dot" style="background:#38bdf8"></i>Retur °C</span>
                 </div>
               </div>
-              ${this._renderHourlyAvgSvg(hr, bonusT)}
+              ${this._renderHourlyAvgSvg(hr, bonusT, peakInfo)}
             </div>
 
             <div class="panel">
@@ -867,7 +978,7 @@
               </div>
               <div class="ins">
                 <div class="ins-title">🚿 Døgnrytme (${esc(hr.days_averaged || Object.keys(dy.days || {}).length)}-dages MTD)</div>
-                Højeste spidstime er kl. <b>${String(peakHourIdx).padStart(2, "0")}:00</b> med <b>${fmtDec(peakHourVal, 2)} kWh/t</b>, mens bundniveauet ligger på ~${fmtDec(minHourVal, 2)} kWh/t.
+                Højeste spidstime er kl. <b>${String(peakHourIdx).padStart(2, "0")}:00</b> med <b>${fmtDec(peakHourVal, 2)} kWh/t</b>${esc(peakInsightSub)}, mens bundniveauet ligger på ~${fmtDec(minHourVal, 2)} kWh/t.
               </div>
               <div class="ins">
                 <div class="ins-title">⚡ Returtemperatur &amp; Afkøling</div>

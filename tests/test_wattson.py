@@ -311,6 +311,9 @@ def test_mapping_hourly_daily_temps_and_detection() -> None:
     assert s["monthly"]["2026"]["Nov"] == 144
     assert len(s["hourly_kwh"]) == 72 and s["daily_stat_kwh"] == []
     assert s["hourly"]["kwh"] == [2.0] * 24 and s["hourly"]["days_averaged"] == 3
+    # Return temperature per local hour for the card's "Retur °C" line
+    # (fixture: 30 °C on odd UTC hours = even CET hours, else 34 °C).
+    assert s["hourly"]["ret_temp"] == [30.0 if h % 2 == 0 else 34.0 for h in range(24)]
     assert s["data_granularity"] == "hourly" and s["has_direct_temp"] is True
     assert s["return_temp"]["monthly_2026"]["Nov"] == 32.0
     assert s["latest_reading"]["temp_return"] == 32.0
@@ -327,6 +330,7 @@ def test_mapping_only_energy_known_hides_temps_and_volume() -> None:
     caps = effective_capabilities("wattson", s)
     assert "temperatures" not in caps and "volume" not in caps and "hourly" in caps
     assert s["hourly_temp"] == [] and s["has_direct_temp"] is False
+    assert "ret_temp" not in s["hourly"]
 
 
 def test_mapping_incomplete_day_and_today_excluded_and_merge_is_idempotent() -> None:

@@ -1,5 +1,7 @@
 # 🔥 Fjernvarme (KMD Easy Energy) — HA Connector & Dashboard
 
+[![Åbn i HACS](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=DKAnord&repository=kmd-fjernvarme-ha&category=integration)
+
 Komplet, **100% lokal** Home Assistant-integration (`kmd_easy_energy`) og **Plug-and-Play Lovelace-dashboard** (`custom:kmd-easy-energy-card`) til danske fjernvarmeværker på **KMD Easy Energy** (`easy-energy-plugin-api.kmd.dk`).
 
 Log ind med **MitID direkte i Home Assistant** i ren Python (OIDC PKCE + NemLog-in + MitID SRP) — **ingen Chromium, ingen ekstern server eller add-on** påkrævet. Kører direkte på Raspberry Pi, Home Assistant OS og Docker.
@@ -64,17 +66,34 @@ Se [E|Forsyning-backend](#-eforsyning-backend-eksperimentel) nedenfor.
 
 ## 📦 Installation via HACS
 
+**Hurtig 1-klik-tilføjelse i HACS:**
+
+[![Åbn i HACS](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=DKAnord&repository=kmd-fjernvarme-ha&category=integration)
+
+Klik på knappen for at tilføje arkivet i HACS → klik **Hent (Download)** → slå **Vis betaversioner (Show beta versions)** til → vælg **`v0.3.0-beta.3`** → genstart Home Assistant.
+
+<details>
+<summary>Eller tilføj manuelt i HACS</summary>
+
 1. Åbn **HACS** i Home Assistant → **Integrationer** → menuen (`⋮` øverst til højre) → **Brugerdefinerede arkiver (Custom repositories)**.
 2. Tilføj:
    - **Repository:** `https://github.com/DKAnord/kmd-fjernvarme-ha`
    - **Kategori:** `Integration`
 3. Søg efter **Fjernvarme (KMD)** i HACS, klik **Hent (Download)**, slå **Vis betaversioner (Show beta versions)** til, vælg **`v0.3.0-beta.3`**, og genstart Home Assistant.
-4. Gå til **Indstillinger → Enheder og tjenester → Tilføj integration → Fjernvarme (KMD Easy Energy)**, og vælg dit varmeværk.
-5. Tilføj dashboard-kortet som ressource under **Indstillinger → Dashboards → (`⋮`) Ressourcer → Tilføj ressource**:
+
+</details>
+
+**Efter genstart:**
+
+1. Tilføj integrationen i Home Assistant (**Indstillinger → Enheder og tjenester → Tilføj integration → Fjernvarme (KMD Easy Energy)**) og vælg dit varmeværk:
+
+   [![Tilføj integration](https://my.home-assistant.io/badges/config_flow_start.svg)](https://my.home-assistant.io/redirect/config_flow_start/?domain=kmd_easy_energy)
+
+2. Tilføj dashboard-kortet som ressource under **Indstillinger → Dashboards → (`⋮`) Ressourcer → Tilføj ressource**:
    - **URL:** `/local/js/kmd-easy-energy-card.js`
    - **Ressourcetype:** `JavaScript-modul`
    *(Integrationen kopierer automatisk kortet til `/config/www/js/kmd-easy-energy-card.js` ved opstart).*
-6. Tilføj kortet **Fjernvarme (KMD Easy Energy): Dashboard** på et dashboard via den visuelle kortvælger (eller se [dashboards/lovelace-plug-and-play.yaml](dashboards/lovelace-plug-and-play.yaml)).
+3. Tilføj kortet **Fjernvarme (KMD Easy Energy): Dashboard** på et dashboard via den visuelle kortvælger (eller se [dashboards/lovelace-plug-and-play.yaml](dashboards/lovelace-plug-and-play.yaml)).
 
 ---
 

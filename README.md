@@ -7,7 +7,7 @@ Komplet, **100% lokal** Home Assistant-integration (`kmd_easy_energy`) og **Plug
 Log ind med **MitID direkte i Home Assistant** i ren Python (OIDC PKCE + NemLog-in + MitID SRP) — **ingen Chromium, ingen ekstern server eller add-on** påkrævet. Kører direkte på Raspberry Pi, Home Assistant OS og Docker.
 
 > [!NOTE]
-> **🧪 Beta-testere søges (`v0.3.0-beta.3`):** Integrationen er indtil videre kun testet live hos **Kredsløb**. De øvrige 16 KMD-værker, Hjørring Varmeforsyning (E|Forsyning) og brugerdefineret portal-URL er endnu ikke afprøvet live. Alle tilbagemeldinger er guld værd — også *"det virker ikke hos mit værk"*. Brug feedback-knappen på kortet eller [opret et issue](https://github.com/DKAnord/kmd-fjernvarme-ha/issues) med navnet på dit værk.
+> **🧪 Beta-testere søges (`v0.3.0-beta.4`):** Integrationen er indtil videre kun testet live hos **Kredsløb**. De øvrige 16 KMD-værker, Hjørring Varmeforsyning (E|Forsyning), Aalborg Forsyning (Watts On) og brugerdefineret portal-URL er endnu ikke afprøvet live. Alle tilbagemeldinger er guld værd — også *"det virker ikke hos mit værk"*. Brug feedback-knappen på kortet eller [opret et issue](https://github.com/DKAnord/kmd-fjernvarme-ha/issues) med navnet på dit værk.
 
 ---
 
@@ -75,7 +75,7 @@ Se [Watts On-backend](#-watts-on-backend-aalborg-forsyning-eksperimentel) nedenf
 
 [![Åbn i HACS](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=DKAnord&repository=kmd-fjernvarme-ha&category=integration)
 
-Klik på knappen for at tilføje arkivet i HACS → klik **Hent (Download)** → slå **Vis betaversioner (Show beta versions)** til → vælg **`v0.3.0-beta.3`** → genstart Home Assistant.
+Klik på knappen for at tilføje arkivet i HACS → klik **Hent (Download)** → slå **Vis betaversioner (Show beta versions)** til → vælg **`v0.3.0-beta.4`** → genstart Home Assistant.
 
 <details>
 <summary>Eller tilføj manuelt i HACS</summary>
@@ -84,7 +84,7 @@ Klik på knappen for at tilføje arkivet i HACS → klik **Hent (Download)** →
 2. Tilføj:
    - **Repository:** `https://github.com/DKAnord/kmd-fjernvarme-ha`
    - **Kategori:** `Integration`
-3. Søg efter **Fjernvarme (KMD)** i HACS, klik **Hent (Download)**, slå **Vis betaversioner (Show beta versions)** til, vælg **`v0.3.0-beta.3`**, og genstart Home Assistant.
+3. Søg efter **Fjernvarme (KMD)** i HACS, klik **Hent (Download)**, slå **Vis betaversioner (Show beta versions)** til, vælg **`v0.3.0-beta.4`**, og genstart Home Assistant.
 
 </details>
 
@@ -236,9 +236,9 @@ Download diagnostics fra integrationen, hvis du skal have support: tokens, MitID
 
 ---
 
-## 🇬🇧 English notes (new in `v0.3.0-beta.3`)
+## 🇬🇧 English notes (new in `v0.3.0-beta.4`)
 
-This is a Denmark-only Home Assistant integration for district heating on the KMD Easy Energy platform. Version **`v0.3.0-beta.3`** moves the usage cache to private `.storage`, keeps MitID OTP/QR off sensor attributes and off the event bus (the bundled card gets them via the websocket subscription `kmd_easy_energy/mitid/subscribe`; event `kmd_easy_energy_mitid_challenge` carries status only), and uses **session-based sync**: KMD only issues a ~1 h access token (no refresh token), so each "Synkroniser" press is one MitID login that fetches everything since the last sync and then discards the token (never stored). There is no background polling, no reauth/repair for an expired token, and cached values are restored after an HA restart without contacting KMD. A soft, non-invasive weekend nudge (a calm info chip under the Synkroniser button; no notification, repair or push) (`binary_sensor.<entry>_sync_reminder`, Danish text on the card) is shown on Saturday/Sunday if there was no sync on Thursday, Friday or Saturday that week; it can be turned off in the options.
+This is a Denmark-only Home Assistant integration for district heating on the KMD Easy Energy platform. Version **`v0.3.0-beta.4`** moves the usage cache to private `.storage`, keeps MitID OTP/QR off sensor attributes and off the event bus (the bundled card gets them via the websocket subscription `kmd_easy_energy/mitid/subscribe`; event `kmd_easy_energy_mitid_challenge` carries status only), and uses **session-based sync**: KMD only issues a ~1 h access token (no refresh token), so each "Synkroniser" press is one MitID login that fetches everything since the last sync and then discards the token (never stored). There is no background polling, no reauth/repair for an expired token, and cached values are restored after an HA restart without contacting KMD. A soft, non-invasive weekend nudge (a calm info chip under the Synkroniser button; no notification, repair or push) (`binary_sensor.<entry>_sync_reminder`, Danish text on the card) is shown on Saturday/Sunday if there was no sync on Thursday, Friday or Saturday that week; it can be turned off in the options.
 
 For the Energy dashboard, add the imported hourly statistics `kmd_easy_energy:energy_<entry>` / `:volume_<entry>`, not the month-to-date entities. Heat price (DKK/kWh) is an option; Kredsløb defaults come from the [official price page](https://www.kredslob.dk/privat/fjernvarme/fjernvarmepriser) for the current year. Motivation tariff, degree-day forecast and an abnormal-consumption binary sensor are included; the integration never sends leak notifications on its own.
 

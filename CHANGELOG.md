@@ -2,7 +2,12 @@
 
 Alle væsentlige ændringer i **Fjernvarme (KMD Easy Energy) – HA Connector & Dashboard** dokumenteres her.
 
-## [Unreleased]
+## [0.3.0-beta.4] (efter 0.3.0-beta.3)
+
+### Rettet: MitID QR-stabilitet
+- **In-place QR-opdatering i kortet:** Når MitID roterer `updateCount` og sender nye QR-frames, opdateres billedet direkte uden at rive Shadow DOM'en ned eller desynkronisere 1-sekunds timeren; begge frames pre-warmes med `Image()`, og 5s setup-timeouten genrenderer ikke under aktiv QR/OTP.
+- **Ingen kunstig 1,2s forsinkelse efter MitID long-poll:** Coordinatoren looper straks efter long-poll-svar (kun `0,15s` pause ved svar under `0,2s`) og sender kun fuld state-opdatering ved første QR-visning.
+- **Bedre læsbarhed:** QR-SVG får eksplicit pixel-størrelse, hvid `<rect>`-baggrund (også i dark mode) og ISO-standard `border=4` quiet zone.
 
 ### Ændret: Udetemperaturens kilde (HA-sensor, HA-hjemmelokation, værkets placering)
 - **Rettet:** Open-Meteo brugte reelt altid værkets koordinater, fordi de blev kopieret ind i config entry ved opsætningen. Home Assistants hjemmelokation blev derfor aldrig brugt. Nu gælder: **egen placering i indstillingerne → HA-hjemmelokation → værkets placering** (sidstnævnte kun, hvis HA ikke har en hjemmelokation, dvs. 0/0).

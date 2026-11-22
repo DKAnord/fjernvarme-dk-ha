@@ -3,9 +3,12 @@
 Verified shapes (from TheRealBatBro/Home-Assistant-Novafos-V2, water):
 users/api/v3/User -> {"id": ...}; locations list with "id"; provisioning
 location detail with devices ("deviceId", "utilityType", "unit"); hourly
-consumption items with short keys "sd"/"ed"/"vol"/"mq". The heat device type
-("DistrictHeating") and the heat item keys ("en", "ft", "rt") are INVENTED
-guesses — real Aalborg Forsyning data must confirm or correct them.
+consumption items with short keys "sd"/"ed"/"vol"/"mq". Aalborg Forsyning
+heat (live 2026-11-22) uses heating/api/v1/devices/{id}/consumption/recent
+with ?newerThan= and items {Id, SD, ED, En (kWh), Vol (m³), Fl, TI, TO, CD,
+MQ}; that shape is tested with synthetic values in test_wattson.py.
+heat_items() below still uses invented short keys ("en", "ft", "rt") as a
+generic fallback fixture.
 """
 
 from __future__ import annotations

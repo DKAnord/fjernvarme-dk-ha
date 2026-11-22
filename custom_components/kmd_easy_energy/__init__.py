@@ -98,6 +98,15 @@ async def _async_setup_services(hass: HomeAssistant) -> None:
         except Exception as err:  # noqa: BLE001
             raise HomeAssistantError(f"Synkronisering fejlede: {str(err)[:160]}") from err
 
+    async def handle_sync(call: ServiceCall) -> None:
+        """Backend-independent sync (MitID for KMD, login for E|Forsyning)."""
+        entry = _pick_entry(call.data.get("entry_id"))
+        if not entry:
+            _LOGGER.error("No config entry found for kmd_easy_energy.sync")
+            return
+        coord: KMDEasyEnergyCoordinator = hass.data[DOMAIN][entry.entry_id]
+        await coord.async_start_sync()
+
     async def handle_refresh(call: ServiceCall) -> None:
         entry_id = call.data.get("entry_id")
         domain_data: dict[str, KMDEasyEnergyCoordinator] = hass.data.get(DOMAIN, {})
@@ -196,6 +205,7 @@ async def _async_setup_services(hass: HomeAssistant) -> None:
         ("configure_utility", handle_configure_utility),
         ("reset_setup", handle_reset_setup),
         ("start_mitid_sync", handle_start_mitid_sync),
+        ("sync", handle_sync),
     ):
         if not hass.services.has_service(DOMAIN, svc_name):
             hass.services.async_register(DOMAIN, svc_name, handler)
@@ -271,6 +281,10 @@ async def _async_entry_updated(hass: HomeAssistant, entry: ConfigEntry) -> None:
     coord: KMDEasyEnergyCoordinator | None = hass.data.get(DOMAIN, {}).get(entry.entry_id)
     if coord is None:
         return
+    if coord.is_eforsyning and coord.auto_sync_signature != coord.started_auto_sync_signature:
+        # Auto-sync on/off or hour changed: re-create the timer via reload.
+        hass.config_entries.async_schedule_reload(entry.entry_id)
+        return
     coord._reminder_sig = None
     await coord.async_request_refresh()
 
@@ -324,6 +338,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # restart restores the last synced values without contacting KMD.
     await coordinator.async_config_entry_first_refresh()
     entry.async_on_unload(coordinator.async_start_reminder_timer())
+    # E|Forsyning only (no MitID needed): optional daily automatic sync.
+    entry.async_on_unload(coordinator.async_start_auto_sync())
     entry.async_on_unload(entry.add_update_listener(_async_entry_updated))
 
     await _async_setup_services(hass)
@@ -345,6 +361,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 "configure_utility",
                 "reset_setup",
                 "start_mitid_sync",
+                "sync",
             ):
                 hass.services.async_remove(DOMAIN, svc_name)
     return unload_ok

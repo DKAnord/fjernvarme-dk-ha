@@ -19,14 +19,25 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.dispatcher import async_dispatcher_send
-from homeassistant.helpers.event import async_track_time_change
+from homeassistant.helpers.event import async_call_later, async_track_time_change
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from homeassistant.util import dt as dt_util
 
+from .api.eforsyning_client import EforsyningClient, EforsyningLoginError
 from .api.kmd_client import KMDClient
 from .api.kmd_mitid_auth import KMDMitIDAuthenticator
 from .const import (
+    BACKEND_EFORSYNING,
+    BACKEND_KMD,
+    BACKENDS,
+    CONF_AUTO_SYNC,
+    CONF_AUTO_SYNC_HOUR,
+    CONF_BACKEND,
     CONF_BONUS_TEMP,
+    CONF_EF_INSTALLATION_ID,
+    CONF_EF_PASSWORD,
+    CONF_EF_SUPPLIER_ID,
+    CONF_EF_USERNAME,
     CONF_CUSTOMER_ID,
     CONF_CUSTOMER_NUMBER,
     CONF_LATITUDE,
@@ -40,7 +51,10 @@ from .const import (
     CONF_UTILITY,
     CONF_UTILITY_ID,
     CONF_UTILITY_STATUS,
+    DEFAULT_AUTO_SYNC,
+    DEFAULT_AUTO_SYNC_HOUR,
     DEFAULT_SYNC_REMINDER,
+    DEFAULT_SYNC_REMINDER_BY_BACKEND,
     DOMAIN,
     EVENT_MITID_CHALLENGE,
     FIRST_SYNC_BACKFILL_MONTHS,
@@ -48,6 +62,8 @@ from .const import (
     SYNC_BACKFILL_MONTHS,
     UPDATE_INTERVAL,
 )
+from .capabilities import backend_capabilities, effective_capabilities
+from .eforsyning_mapping import apply_eforsyning_data
 from .insights import (
     compact_hourly_point,
     copenhagen_today,
@@ -197,6 +213,10 @@ class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     the short-lived access token is discarded and never persisted.
     """
 
+    # Class-level defaults (also used by tests that bypass __init__).
+    backend: str = BACKEND_KMD
+    started_auto_sync_signature: tuple[bool, int] | None = None
+
     def __init__(
         self,
         hass: HomeAssistant,
@@ -227,6 +247,9 @@ class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self.mitid_qr_svg: str | None = None
         self.mitid_qr_frames: list[str] = []
         self._sync_task: asyncio.Task[None] | None = None
+        backend = str(entry.data.get(CONF_BACKEND) or BACKEND_KMD).strip().lower()
+        self.backend: str = backend if backend in BACKENDS else BACKEND_KMD
+        self.started_auto_sync_signature: tuple[bool, int] | None = None
 
     def _make_client(
         self,
@@ -254,11 +277,50 @@ class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         )
 
     @property
-    def sync_reminder_enabled(self) -> bool:
-        value = self.entry.options.get(CONF_SYNC_REMINDER)
+    def is_eforsyning(self) -> bool:
+        return self.backend == BACKEND_EFORSYNING
+
+    def _opt(self, key: str, default: Any = None) -> Any:
+        value = self.entry.options.get(key)
         if value is None:
-            value = self.entry.data.get(CONF_SYNC_REMINDER, DEFAULT_SYNC_REMINDER)
-        return bool(value)
+            value = self.entry.data.get(key, default)
+        return value
+
+    @property
+    def sync_reminder_enabled(self) -> bool:
+        default = DEFAULT_SYNC_REMINDER_BY_BACKEND.get(self.backend, DEFAULT_SYNC_REMINDER)
+        return bool(self._opt(CONF_SYNC_REMINDER, default))
+
+    @property
+    def auto_sync_enabled(self) -> bool:
+        """Automatic daily sync — only for backends that need no MitID."""
+        return self.is_eforsyning and bool(self._opt(CONF_AUTO_SYNC, DEFAULT_AUTO_SYNC))
+
+    @property
+    def backend_capabilities(self) -> frozenset[str]:
+        """Static capabilities of this backend (decides which entities exist)."""
+        return backend_capabilities(self.backend)
+
+    def capabilities(self, state: dict[str, Any] | None = None) -> list[str]:
+        """Backend capabilities that the cached data can actually fill."""
+        return effective_capabilities(
+            self.backend,
+            self.data if state is None else state,
+            reminder_enabled=self.sync_reminder_enabled,
+            auto_sync_enabled=self.auto_sync_enabled,
+        )
+
+    @property
+    def auto_sync_signature(self) -> tuple[bool, int]:
+        return (self.auto_sync_enabled, self.auto_sync_hour)
+
+    @property
+    def auto_sync_hour(self) -> int:
+        try:
+            hour = int(self._opt(CONF_AUTO_SYNC_HOUR, DEFAULT_AUTO_SYNC_HOUR))
+        except (TypeError, ValueError):
+            hour = DEFAULT_AUTO_SYNC_HOUR
+        return min(23, max(0, hour))
 
     def sync_reminder(self, now: datetime | None = None) -> dict[str, Any]:
         """Current soft-reminder attributes (computed locally, no KMD call)."""
@@ -456,6 +518,10 @@ class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 or self.entry.data.get(CONF_PENALTY_TEMP)
                 or 40.0
             ),
+            "backend": self.backend,
+            "data_source": "E|Forsyning" if self.is_eforsyning else "KMD Easy Energy",
+            "auto_sync": self.auto_sync_enabled,
+            "auto_sync_hour": self.auto_sync_hour if self.auto_sync_enabled else None,
             "has_mitid_username": bool(mitid_user),
             "mitid_username_masked": masked_user,
             "notify_service": notify_svc,
@@ -574,6 +640,10 @@ class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             complete = [p for p in series if p.get("IsComplete") and p.get("Value") is not None]
             if complete:
                 return_temp = float(complete[-1]["Value"])
+        if return_temp is None and state.get("latest_reading"):
+            latest_rt = (state.get("latest_reading") or {}).get("temp_return")
+            if isinstance(latest_rt, (int, float)) and latest_rt > 0:
+                return_temp = float(latest_rt)
         if return_temp is None:
             rt_ann = (state.get("return_temp") or {}).get("annual") or {}
             yr_s = str(copenhagen_today().year)
@@ -633,6 +703,8 @@ class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         state["abnormal_consumption"] = detect_abnormal_consumption(
             daily_kwh, daily_hdd, target
         )
+        state["backend_capabilities"] = sorted(self.backend_capabilities)
+        state["capabilities"] = self.capabilities(state)
 
     async def _async_update_data(self) -> dict[str, Any]:
         """Return cached data only. Never contacts KMD (no background polling).
@@ -652,6 +724,40 @@ class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         state["initial_setup_complete"] = self._initial_setup_complete
         self._enrich_derived(state)
         return state
+
+    async def _async_update_weather(self, state: dict[str, Any]) -> None:
+        """Optional Open-Meteo 7-day HDD + archive insights (backend-independent)."""
+        lat = (
+            self.entry.options.get(CONF_LATITUDE)
+            or self.entry.data.get(CONF_LATITUDE)
+            or self.hass.config.latitude
+        )
+        lon = (
+            self.entry.options.get(CONF_LONGITUDE)
+            or self.entry.data.get(CONF_LONGITUDE)
+            or self.hass.config.longitude
+        )
+        if lat is not None and lon is not None:
+            today = copenhagen_today().isoformat()
+            if state.get("weather_7d_fetched_on") == today and state.get("hdd_7d") is not None:
+                _LOGGER.debug("Skipping Open-Meteo 7d (already fetched %s)", today)
+            else:
+                try:
+                    state["hdd_7d"] = await self._fetch_open_meteo_7d(float(lat), float(lon))
+                    state["weather_7d_fetched_on"] = today
+                except Exception as err:  # noqa: BLE001
+                    _LOGGER.warning("Optional Open-Meteo 7d failed: %s", err)
+            if state.get("weather_archive_fetched_on") == today and state.get("weather"):
+                _LOGGER.debug("Skipping Open-Meteo archive (already fetched %s)", today)
+            else:
+                try:
+                    daily_temp = await self._fetch_open_meteo_archive(float(lat), float(lon))
+                    computed = _compute_weather_and_insights(state, daily_temp)
+                    state["weather"] = computed["weather"]
+                    state["insights"] = computed["insights"]
+                    state["weather_archive_fetched_on"] = today
+                except Exception as err:  # noqa: BLE001
+                    _LOGGER.warning("Optional Open-Meteo archive failed: %s", err)
 
     async def _async_fill_gap_since_last_sync(
         self,
@@ -950,37 +1056,7 @@ class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 _LOGGER.warning("Optional balance/statement failed: %s", err)
 
             # 6. Open-Meteo weather + insights
-            lat = (
-                self.entry.options.get(CONF_LATITUDE)
-                or self.entry.data.get(CONF_LATITUDE)
-                or self.hass.config.latitude
-            )
-            lon = (
-                self.entry.options.get(CONF_LONGITUDE)
-                or self.entry.data.get(CONF_LONGITUDE)
-                or self.hass.config.longitude
-            )
-            if lat is not None and lon is not None:
-                today = copenhagen_today().isoformat()
-                if state.get("weather_7d_fetched_on") == today and state.get("hdd_7d") is not None:
-                    _LOGGER.debug("Skipping Open-Meteo 7d (already fetched %s)", today)
-                else:
-                    try:
-                        state["hdd_7d"] = await self._fetch_open_meteo_7d(float(lat), float(lon))
-                        state["weather_7d_fetched_on"] = today
-                    except Exception as err:  # noqa: BLE001
-                        _LOGGER.warning("Optional Open-Meteo 7d failed: %s", err)
-                if state.get("weather_archive_fetched_on") == today and state.get("weather"):
-                    _LOGGER.debug("Skipping Open-Meteo archive (already fetched %s)", today)
-                else:
-                    try:
-                        daily_temp = await self._fetch_open_meteo_archive(float(lat), float(lon))
-                        computed = _compute_weather_and_insights(state, daily_temp)
-                        state["weather"] = computed["weather"]
-                        state["insights"] = computed["insights"]
-                        state["weather_archive_fetched_on"] = today
-                    except Exception as err:  # noqa: BLE001
-                        _LOGGER.warning("Optional Open-Meteo archive failed: %s", err)
+            await self._async_update_weather(state)
 
             try:
                 await self._async_fill_gap_since_last_sync(
@@ -1049,6 +1125,110 @@ class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     ) -> None:
         """Backwards-compatible alias: one-shot sync with a pasted token (not stored)."""
         await self.async_sync_with_token(access_token, customer_id, customer_number)
+
+    # ------------------------------------------------------------------
+    # E|Forsyning backend (forbrugernummer + webpinkode, no MitID)
+    # ------------------------------------------------------------------
+    def _make_eforsyning_client(self) -> EforsyningClient:
+        return EforsyningClient(
+            async_get_clientsession(self.hass),
+            str(self._opt(CONF_EF_USERNAME, "") or ""),
+            str(self._opt(CONF_EF_PASSWORD, "") or ""),
+            str(self._opt(CONF_EF_SUPPLIER_ID, "") or ""),
+            self._opt(CONF_EF_INSTALLATION_ID),
+        )
+
+    async def async_sync_eforsyning(self) -> None:
+        """One E|Forsyning sync: login -> daily readings -> map -> statistics.
+
+        Raises KMDLoginError on rejected credentials (shown on the card, no
+        reauth/repair) and RuntimeError on other failures. The cache is only
+        written after a successful fetch, so a failure keeps the old values.
+        """
+        state = await self._async_load_cache()
+        today = copenhagen_today()
+        first_sync = not (state.get("daily_kwh_history") or {})
+        client = self._make_eforsyning_client()
+        try:
+            fetched = await client.async_fetch(today, years_back=1 if first_sync else 0)
+        except EforsyningLoginError as err:
+            raise KMDLoginError(str(err)) from err
+        except Exception as err:  # noqa: BLE001
+            raise RuntimeError(str(err)[:160] or "E|Forsyning-fejl") from err
+        finally:
+            client.discard_credentials()
+        apply_eforsyning_data(state, fetched, today)
+        state["updated"] = dt_util.now().isoformat(timespec="seconds")
+        await self._async_update_weather(state)
+        self._enrich_derived(state)
+        try:
+            imported = import_hourly_statistics(self.hass, self.entry, state)
+            if imported["energy"] or imported["volume"]:
+                state["statistics_imported_on"] = today.isoformat()
+                state["statistics_imported"] = imported
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.warning("Optional Energy statistics import failed: %s", err)
+        self.last_sync = dt_util.utcnow()
+        state["last_sync"] = self.last_sync.isoformat(timespec="seconds")
+        self._initial_setup_complete = True
+        state["initial_setup_complete"] = True
+        state.update(self._base_meta())
+        await self._async_save_cache(state)
+        self._reminder_sig = None
+        self.async_set_updated_data(state)
+
+    async def _async_run_eforsyning_sync(self, automatic: bool = False) -> None:
+        try:
+            self._push_sync_ui("fetching_data", "Henter data fra E|Forsyning…")
+            await self.async_sync_eforsyning()
+            self._push_sync_ui("idle", "")
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.warning(
+                "E|Forsyning %s sync failed: %s", "automatic" if automatic else "manual", err
+            )
+            self._push_sync_ui("error", f"Fejl: {str(err)[:160]}")
+
+    async def async_start_sync(self, automatic: bool = False) -> None:
+        """Backend-independent "Synkroniser" (card, button, ``sync`` service)."""
+        if not self.is_eforsyning:
+            await self.async_start_mitid_sync()
+            return
+        if self._sync_task and not self._sync_task.done():
+            _LOGGER.info("Sync already running")
+            return
+        self._sync_task = self.hass.async_create_task(
+            self._async_run_eforsyning_sync(automatic)
+        )
+
+    @callback
+    def async_start_auto_sync(self) -> Callable[[], None]:
+        """Daily automatic sync for E|Forsyning (no-op for KMD/MitID).
+
+        Runs at the configured hour (Europe/Copenhagen HA time) and once a few
+        minutes after start-up when the last sync is older than a day.
+        """
+        self.started_auto_sync_signature = self.auto_sync_signature
+        if not self.auto_sync_enabled:
+            return lambda: None
+
+        @callback
+        def _daily(_now: datetime) -> None:
+            self.hass.async_create_task(self.async_start_sync(automatic=True))
+
+        unsub_daily = async_track_time_change(
+            self.hass, _daily, hour=self.auto_sync_hour, minute=17, second=0
+        )
+        unsub_start: Callable[[], None] | None = None
+        stale = self.last_sync is None or (dt_util.utcnow() - self.last_sync) > timedelta(hours=26)
+        if stale:
+            unsub_start = async_call_later(self.hass, 120, _daily)
+
+        def _unsub() -> None:
+            unsub_daily()
+            if unsub_start:
+                unsub_start()
+
+        return _unsub
 
     async def async_set_setup_state(
         self, complete: bool, meta_updates: dict[str, Any] | None = None
@@ -1151,7 +1331,14 @@ class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         mitid_username: str | None = None,
         notify_service: str | None = None,
     ) -> None:
-        """Start 100% pure-Python MitID + OIDC sync inside Home Assistant."""
+        """Start 100% pure-Python MitID + OIDC sync inside Home Assistant.
+
+        For the E|Forsyning backend (no MitID) this starts a normal sync, so
+        the existing button entity and service keep working.
+        """
+        if self.is_eforsyning:
+            await self.async_start_sync()
+            return
         if mitid_username is not None or notify_service is not None:
             data = dict(self.entry.data)
             if mitid_username and mitid_username.strip():

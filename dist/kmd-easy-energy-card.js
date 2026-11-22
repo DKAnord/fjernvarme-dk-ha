@@ -93,6 +93,7 @@
     { id: "skanderborg-forsyning", name: "Skanderborg Forsyning", city: "Skanderborg", url: "https://www.skanderborgforsyning.dk/selvbetjening/", status: "pending_test" },
     { id: "samn", name: "SAMN Forsyning", city: "Horsens / Odder", url: "https://www.samn.dk/", status: "pending_test" },
     { id: "go-energi", name: "go'energi", city: "Thy-Mors", url: "https://www.goenergi.dk/", status: "pending_test" },
+    { id: "hjorring-varmeforsyning", name: "Hjørring Varmeforsyning", city: "Hjørring", url: "https://eforsyning.dk/hjvarme/", status: "pending_test", backend: "eforsyning" },
   ];
 
   const I18N = {
@@ -554,6 +555,14 @@
       const fc = a.forecast || {};
       const bl = a.billing || {};
 
+      // Capability-driven rendering: the integration reports which data the
+      // backend actually delivered. Sections without data are hidden (no empty
+      // charts, no "–" tiles). Old integrations without the attribute: show all.
+      const capList = Array.isArray(a.capabilities) ? a.capabilities : null;
+      const has = (c) => (capList ? capList.includes(c) : true);
+      const backend = a.backend || "kmd";
+      const hasMitid = capList ? capList.includes("mitid") : backend !== "eforsyning";
+      const dataSource = a.data_source || (backend === "eforsyning" ? "E|Forsyning" : "KMD Easy Energy");
       const yCur = Number(ann[String(curYr)] ?? st?.state ?? 0);
       const yPrev = Number(ann[String(prevYr)] ?? 0);
       const rtCur = Number(rtA[String(curYr)] ?? rtA["2026"] ?? 0);
@@ -604,15 +613,18 @@
       const freshText = retrievedLbl + (maxDay !== null ? ` · Data t.o.m. ${maxDay}. ${moLbl}${isPartial ? " (delvis)" : ""}` : "");
 
       const activeUtilId = this._selectedUtilId || cfg.utility_id || a.utility_id || "kredslob";
-      const activeUtil = UTILITIES.find((u) => u.id === activeUtilId) || UTILITIES[0];
+      const activeUtil = UTILITIES.find((u) => u.id === activeUtilId)
+        || (a.utility ? { id: activeUtilId, name: a.utility, city: a.location || "", url: a.portal_url || "", status: a.utility_status || "pending_test", backend } : UTILITIES[0]);
       const activePortalUrl = cfg.portal_url || a.portal_url || activeUtil.url;
       const locName = cfg.location || a.location || activeUtil.city || "Lokal";
       const utilStatus = a.utility_status || activeUtil.status;
       const statusBadge = utilStatus === "confirmed" ? t.confirmed : t.pending;
 
-      const confirmedOpts = UTILITIES.filter((u) => u.status === "confirmed")
+      // The MitID wizard only lists KMD utilities (E|Forsyning is set up in HA's config flow).
+      const kmdUtils = UTILITIES.filter((u) => (u.backend || "kmd") === "kmd");
+      const confirmedOpts = kmdUtils.filter((u) => u.status === "confirmed")
         .map((u) => `<option value="${u.id}" ${u.id === activeUtilId ? "selected" : ""}>✅ ${esc(u.name)} (${esc(u.city)})</option>`).join("");
-      const pendingOpts = UTILITIES.filter((u) => u.status !== "confirmed")
+      const pendingOpts = kmdUtils.filter((u) => u.status !== "confirmed")
         .map((u) => `<option value="${u.id}" ${u.id === activeUtilId ? "selected" : ""}>🧪 ${esc(u.name)} (${esc(u.city)})</option>`).join("");
 
       const statusEnt = cfg.status_entity;
@@ -653,7 +665,7 @@
       const wizLocation = this._wizLocation ?? locName;
       const wizBonus = this._wizBonus ?? bonusT;
       const wizPenalty = this._wizPenalty ?? penaltyT;
-      const mitidLiveBox = otpCode
+      const mitidLiveBox = !hasMitid ? "" : otpCode
         ? `<div class="mitid-box otp"><div>🔑 Indtast denne 4-cifrede engangskode i MitID-appen:</div><div class="otp-digits">${esc(otpCode.split("").join(" "))}</div></div>`
         : (qrSvg ? `<div class="mitid-box qr"><div>📲 Scan QR-koden med MitID-appen på din telefon:</div><div class="qr-wrap"><img id="mitidQrImg" src="${esc(this._qrDataUrl((this._mitidQrFrames || [])[this._mitidQrIdx || 0] || qrSvg))}" alt="MitID QR-kode" /></div><div class="qr-hint">Koden skifter hvert sekund — hold telefonen roligt foran skærmen. Står kortet på samme telefon som MitID-appen, kan QR-koden ikke scannes — slå i stedet engangskoder til i MitID-appen (Menu → Godkend med QR- eller engangskoder → Engangskoder).</div></div>` : "");
 
@@ -662,7 +674,7 @@
       let bannerTone = isToday ? "ok" : "orange";
       let bannerTitle = isToday
         ? `${activeUtil.name} Fjernvarme · Synkroniseret i dag`
-        : "Synkroniser fjernvarme (MitID)";
+        : (hasMitid ? "Synkroniser fjernvarme (MitID)" : "Synkroniser fjernvarme");
       let bannerSub = `${freshText} · Tryk for at synkronisere`;
       if (hasSyncMsg) {
         if (syncMsg.startsWith("Fejl")) {
@@ -670,7 +682,7 @@
           bannerTone = "red";
           bannerTitle = "Fjernvarme sync fejlede";
           bannerSub = syncMsg;
-        } else if (syncMsg.includes("MitID")) {
+        } else if (hasMitid && syncMsg.includes("MitID")) {
           bannerIcon = "🔑";
           bannerTone = "blue";
           bannerTitle = "Venter på MitID-godkendelse…";
@@ -684,6 +696,29 @@
       }
       // Friendly, non-invasive weekend nudge: a calm info chip next to the
       // Synkroniser button (never red/error styling, no notification).
+      const autoHour = a.auto_sync && a.auto_sync_hour !== null && a.auto_sync_hour !== undefined
+        ? ` · synkroniseres automatisk dagligt ca. kl. ${String(a.auto_sync_hour).padStart(2, "0")}:17`
+        : "";
+      const sourceNote = backend !== "kmd"
+        ? `<div class="src-note">ℹ️ Data fra ${esc(dataSource)}${has("hourly") ? "" : " · daglige aflæsninger"}${esc(autoHour)} · eksperimentel</div>`
+        : "";
+      const efOnboard = `
+          <div class="onboard">
+            <div class="ob-head">
+              <div class="tb-left">
+                <span class="tb-title">🔥 ${esc(activeUtil.name)} — ${esc(dataSource)}</span>
+                <span class="badge warn">🧪 Eksperimentel</span>
+              </div>
+              <div class="bn-btns">
+                ${!isInitialSetup ? `<button class="btn" id="closeSetupBtn">✕ Luk</button>` : ""}
+              </div>
+            </div>
+            <div class="ob-note">Data fra ${esc(dataSource)}. Login med forbrugernummer og webpinkode er sat op i Home Assistant (Indstillinger → Enheder &amp; tjenester) — der bruges ikke MitID. Tryk <b>🔄 Hent data nu</b> for første hentning${autoHour ? "; derefter hentes data automatisk hver dag" : ""}.</div>
+            ${(hasSyncMsg || this._startingSync) ? `<div class="ob-live ${hasSyncMsg && syncMsg.startsWith("Fejl") ? "red" : ""}">📡 ${esc(hasSyncMsg ? syncMsg : "Henter data…")}</div>` : ""}
+            <div class="tb-actions">
+              <button class="btn primary" id="efSyncBtn">🔄 Hent data nu</button>
+            </div>
+          </div>`;
       const syncNudge = (syncReminder && !hasSyncMsg && syncReminderMsg)
         ? `<div class="sync-nudge" role="status"><span aria-hidden="true">💧</span><span>${esc(syncReminderMsg)}</span></div>`
         : "";
@@ -782,6 +817,7 @@
             padding: 4px 9px; border-radius: 10px; font-size: 12px; font-weight: 700;
             background: rgba(245,158,11,0.16); border: 1px solid rgba(245,158,11,0.3);
           }
+          .src-note { font-size: 12px; color: var(--secondary-text-color); margin-top: -6px; padding: 0 4px; }
           .sync-nudge {
             display: flex; align-items: center; gap: 8px; margin-top: -6px;
             padding: 7px 12px; border-radius: 999px; font-size: 12.5px; font-weight: 600; line-height: 1.35;
@@ -861,7 +897,7 @@
           }
         </style>
         <div class="wrap">
-          ${cfg.show_sync_bar !== false ? (showOnboarding ? `
+          ${cfg.show_sync_bar !== false ? (showOnboarding && !hasMitid ? efOnboard : showOnboarding ? `
           <div class="onboard">
             <div class="ob-head">
               <div class="tb-left">
@@ -971,6 +1007,7 @@
             </div>
           </div>
           ${syncNudge}
+          ${sourceNote}
           ${mitidLiveBox}
           ${(utilStatus !== "confirmed" && hasData) ? `
           <div class="fb-bar">
@@ -990,25 +1027,25 @@
               <div class="k-val">${fmtInt(yCur)} kWh</div>
               <div class="k-sub">${prevYr} hele år: ${fmtInt(yPrev)} kWh</div>
             </div>
-            <div class="kpi">
+            ${has("temperatures") ? `<div class="kpi">
               <div class="k-lbl">${esc(t.kpi_ret)} ${curYr}</div>
               <div class="k-val ${rtCur > 0 ? (rtCur < bonusT ? "good" : (rtCur <= penaltyT ? "warn" : "bad")) : ""}">${rtCur > 0 ? `${fmtDec(rtCur)} °C` : "–"}</div>
               <div class="k-sub">${rtCur > 0 ? (rtCur < bonusT ? `🟢 Bonus-zone (<${bonusT} °C)` : `${fmtDec(rtCur - bonusT)} °C til bonus (<${bonusT} °C)`) : `Grænser: <${bonusT}° bonus / >${penaltyT}° gebyr`}</div>
-            </div>
-            <div class="kpi">
+            </div>` : ""}
+            ${has("forecast") ? `<div class="kpi">
               <div class="k-lbl">${esc(t.kpi_fc)}</div>
               <div class="k-val good">${expK > 0 ? `${fmtInt(expK)} kWh` : "–"}</div>
               <div class="k-sub">${budK > 0 ? `${fcPct}% mod budget (${fmtInt(budK)} kWh)` : esc(fc.period || "–")}</div>
-            </div>
-            <div class="kpi">
+            </div>` : ""}
+            ${has("billing") ? `<div class="kpi">
               <div class="k-lbl">${esc(t.kpi_bill)} ${curYr}</div>
               <div class="k-val">${fmtInt(bl[`total_${curYr}_kr`] ?? bl.total_2026_kr ?? 0)} kr.</div>
               <div class="k-sub">Saldo ${fmtDec(bl.saldo_kr ?? 0, 2)} kr.${bl.last_bill_date ? ` · ${esc(bl.last_bill_date)}` : ""}</div>
-            </div>
+            </div>` : ""}
           </div>
 
-          <div class="grid2">
-            <div class="panel">
+          ${(has("monthly") || has("temperatures")) ? `<div class="grid2">
+            ${has("monthly") ? `<div class="panel" data-section="monthly">
               <div class="p-head">
                 <div class="p-title">📊 Månedligt forbrug: ${curYr} vs. ${prevYr} &amp; Udetemp</div>
                 <div class="p-leg">
@@ -1018,9 +1055,9 @@
                 </div>
               </div>
               ${this._renderMonthlySvg(mCur, mPrev, wx.monthly_temp || {}, curYr, prevYr, t)}
-            </div>
+            </div>` : ""}
 
-            <div class="panel">
+            ${has("temperatures") ? `<div class="panel" data-section="return-temp">
               <div class="p-head">
                 <div class="p-title">🎯 Returtemperatur ${curYr} (°C) vs. Bonus (${bonusT}°) &amp; Gebyr (${penaltyT}°)</div>
                 <div class="p-leg">
@@ -1030,11 +1067,11 @@
                 </div>
               </div>
               ${this._renderReturnTempSvg(rtM, bonusT, penaltyT, curYr)}
-            </div>
-          </div>
+            </div>` : ""}
+          </div>` : ""}
 
-          <div class="grid2">
-            <div class="panel">
+          ${(has("hourly") || has("daily")) ? `<div class="grid2">
+            ${has("hourly") ? `<div class="panel" data-section="hourly">
               <div class="p-head">
                 <div class="p-title">🚿 Timeprofil · ${esc(hr.period || `${curYr} MTD`)} (snit pr. time)</div>
                 <div class="p-leg">
@@ -1043,18 +1080,18 @@
                 </div>
               </div>
               ${this._renderHourlyAvgSvg(hr, bonusT, peakInfo)}
-            </div>
+            </div>` : ""}
 
-            <div class="panel">
+            ${has("daily") ? `<div class="panel" data-section="mtd-ytd">
               <div class="p-head">
                 <div class="p-title">⚖️ Døgnforbrug: Måned-til-dato (MTD) vs. År-til-dato (YTD)</div>
                 <div class="p-leg"><span>Gennemsnit pr. dag (${esc(t.avg_day)})</span></div>
               </div>
               ${this._renderMtdVsYtdSvg(ann, mPrev, dy, curYr, prevYr)}
-            </div>
-          </div>
+            </div>` : ""}
+          </div>` : ""}
 
-          <div class="panel">
+          ${has("daily") ? `<div class="panel" data-section="daily">
             <div class="p-head">
               <div class="p-title">📅 ${esc(dy.month || `${curYr}`)}: Dagligt forbrug (kWh) &amp; Udetemp</div>
               <div class="p-leg">
@@ -1063,7 +1100,7 @@
               </div>
             </div>
             ${this._renderDailySvg(dy, wx.daily_temp || {}, t)}
-          </div>
+          </div>` : ""}
 
           <div class="panel">
             <div class="p-head">
@@ -1075,14 +1112,14 @@
                 <div class="ins-title">🌡️ ${esc(ins.temp_r2_pct ?? "–")}% styret af udetemperaturen</div>
                 Månedligt forbrug følger ${esc(locName)}-temperaturen tæt (R² = ${esc(ins.temp_r2_pct ?? "–")}%). Grundlast til varmt brugsvand + tomgang er kun <b>~${fmtDec(ins.baseload_kwh_mo ?? 0, 0)} kWh/md</b> (~${fmtDec(baseDayKwh, 1)} kWh/dag om sommeren).
               </div>
-              <div class="ins">
+              ${has("hourly") ? `<div class="ins" data-section="ins-hourly">
                 <div class="ins-title">🚿 Døgnrytme (${esc(hr.days_averaged || Object.keys(dy.days || {}).length)}-dages MTD)</div>
                 Højeste spidstime er kl. <b>${String(peakHourIdx).padStart(2, "0")}:00</b> med <b>${fmtDec(peakHourVal, 2)} kWh/t</b>${esc(peakInsightSub)}, mens bundniveauet ligger på ~${fmtDec(minHourVal, 2)} kWh/t.
-              </div>
-              <div class="ins">
+              </div>` : ""}
+              ${has("temperatures") ? `<div class="ins" data-section="ins-temp">
                 <div class="ins-title">⚡ Returtemperatur &amp; Afkøling</div>
                 Aktuelt års-snit er <b>${rtCur > 0 ? `${fmtDec(rtCur)} °C` : "–"}</b>${rtCur > 0 ? (rtDist < 0 ? ` (🟢 i bonus-zone under <b>${bonusT} °C</b>)` : ` (<b>${fmtDec(rtDist, 1)} °C</b> fra bonus under <b>${bonusT} °C</b>, gebyr over <b>${penaltyT} °C</b>)`) : ` (bonus under <b>${bonusT} °C</b>, gebyr over <b>${penaltyT} °C</b>)`}.
-              </div>
+              </div>` : ""}
               <div class="ins">
                 <div class="ins-title">📈 Effektivitet pr. graddag (kWh / HDD17)</div>
                 ${esc(hddSummary)}
@@ -1230,9 +1267,16 @@
         }
         // Prefer the domain service (looks up the entry by id / utility_id) so
         // entity_id slugs like "envafors_sk_forsyning" cannot miss the button.
-        // Session-based: every "Synkroniser" is one MitID login + fetch since last sync.
+        // KMD: every "Synkroniser" is one MitID login + fetch since last sync.
+        // Backends without MitID (E|Forsyning) use the generic "sync" service.
+        if (!hasMitid) {
+          this._hass.callService("kmd_easy_energy", "sync", a.entry_id ? { entry_id: a.entry_id } : {});
+          return;
+        }
         this._hass.callService("kmd_easy_energy", "start_mitid_sync", payload);
       };
+      const efSyncBtn = this.shadowRoot.getElementById("efSyncBtn");
+      if (efSyncBtn) efSyncBtn.addEventListener("click", triggerSync);
       const syncBtn = this.shadowRoot.getElementById("syncBtn");
       if (syncBtn) syncBtn.addEventListener("click", triggerSync);
       const syncTap = this.shadowRoot.getElementById("syncTap");

@@ -15,5 +15,32 @@ The full MIT license text is at:
 CLI helpers (Helpers.py) and example login flows from the upstream project
 are not included; only BrowserClient and CustomSRP are used at runtime.
 
+------------------------------------------------------------------------
+
+The E|Forsyning backend is derived from kpoppel/homeassistant-eforsyning:
+
+  https://github.com/kpoppel/homeassistant-eforsyning
+
+Copyright kpoppel and contributors
+Licensed under the Apache License, Version 2.0.
+
+Derived files (each carries a header saying it is derived and that changes
+were made):
+  custom_components/kmd_easy_energy/api/eforsyning_client.py
+
+The protocol (login flow and data endpoints) was studied from that project
+and reimplemented as an async aiohttp client; no code was copied verbatim.
+The full Apache License 2.0 text, as distributed by the upstream project, is at:
+  custom_components/kmd_easy_energy/api/LICENSE-eforsyning-Apache-2.0.txt
+
+The upstream project does not ship a NOTICE file. Test fixtures in
+tests/fixtures_eforsyning.py use invented values in the response shapes
+handled by the upstream client.
+
+Thank you to kpoppel and the contributors of homeassistant-eforsyning.
+
+------------------------------------------------------------------------
+
 This project is not affiliated with or endorsed by MitID, NemLog-in,
-Digitaliseringsstyrelsen, KMD, or any district-heating utility.
+Digitaliseringsstyrelsen, KMD, E|Forsyning / DFF-EDB, or any district-heating
+utility.

@@ -17,6 +17,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util import dt as dt_util
 
 from .const import DOMAIN
+from .capabilities import CAP_BILLING, CAP_COST, CAP_TEMPERATURES, CAP_VOLUME
 from .coordinator import KMDEasyEnergyCoordinator
 
 
@@ -27,23 +28,43 @@ async def async_setup_entry(
 ) -> None:
     """Set up KMD Easy Energy sensors."""
     coordinator: KMDEasyEnergyCoordinator = hass.data[DOMAIN][entry.entry_id]
-    async_add_entities(
-        [
-            KMDOverviewSensor(coordinator, entry),
-            KMDEnergySensor(coordinator, entry),
-            KMDVolumeSensor(coordinator, entry),
-            KMDReturnTempSensor(coordinator, entry),
-            KMDBalanceSensor(coordinator, entry),
-            KMDHDDSensor(coordinator, entry),
-            KMDEnergyPriceSensor(coordinator, entry),
-            KMDMotivationStatusSensor(coordinator, entry),
-            KMDMotivationAdjustmentSensor(coordinator, entry),
-            KMDKwhPerHddSensor(coordinator, entry),
-            KMDNormalizedAnnualSensor(coordinator, entry),
-            KMDForecastAnnualSensor(coordinator, entry),
-            KMDLastSyncSensor(coordinator, entry),
-        ]
-    )
+    async_add_entities(sensors_for(coordinator, entry))
+
+
+# Sensors that need a specific backend capability (others are always created).
+SENSOR_CAPABILITY: dict[str, str] = {
+    "KMDVolumeSensor": CAP_VOLUME,
+    "KMDReturnTempSensor": CAP_TEMPERATURES,
+    "KMDBalanceSensor": CAP_BILLING,
+    "KMDMotivationStatusSensor": CAP_TEMPERATURES,
+    "KMDMotivationAdjustmentSensor": CAP_TEMPERATURES,
+    "KMDEnergyPriceSensor": CAP_COST,
+}
+
+
+def sensors_for(coordinator: KMDEasyEnergyCoordinator, entry: ConfigEntry) -> list[SensorEntity]:
+    """Only create sensors the backend can fill (no permanently 'unknown' entities)."""
+    caps = coordinator.backend_capabilities
+    classes = [
+        KMDOverviewSensor,
+        KMDEnergySensor,
+        KMDVolumeSensor,
+        KMDReturnTempSensor,
+        KMDBalanceSensor,
+        KMDHDDSensor,
+        KMDEnergyPriceSensor,
+        KMDMotivationStatusSensor,
+        KMDMotivationAdjustmentSensor,
+        KMDKwhPerHddSensor,
+        KMDNormalizedAnnualSensor,
+        KMDForecastAnnualSensor,
+        KMDLastSyncSensor,
+    ]
+    return [
+        cls(coordinator, entry)
+        for cls in classes
+        if SENSOR_CAPABILITY.get(cls.__name__) in (None, *caps)
+    ]
 
 
 class KMDBaseSensor(CoordinatorEntity[KMDEasyEnergyCoordinator], SensorEntity):
@@ -79,6 +100,13 @@ class KMDBaseSensor(CoordinatorEntity[KMDEasyEnergyCoordinator], SensorEntity):
             "degree_day",
             "daily_hdd",
             "daily_kwh_history",
+            "daily_m3_history",
+            "daily_return_temp",
+            "daily_forward_temp",
+            "daily_stat_kwh",
+            "daily_stat_m3",
+            "latest_reading",
+            "eforsyning",
         }
     )
 
@@ -145,6 +173,14 @@ class KMDOverviewSensor(KMDBaseSensor):
             "entry_id": data.get("entry_id") or self._entry.entry_id,
             "sync_state": data.get("sync_state", "idle"),
             "sync_message": data.get("sync_message", ""),
+            "backend": data.get("backend", "kmd"),
+            "data_source": data.get("data_source", "KMD Easy Energy"),
+            "data_granularity": data.get("data_granularity", "hourly"),
+            "auto_sync": bool(data.get("auto_sync", False)),
+            "capabilities": data.get("capabilities")
+            or sorted(self.coordinator.capabilities(data)),
+            "backend_capabilities": data.get("backend_capabilities")
+            or sorted(self.coordinator.backend_capabilities),
             "annual": data.get("annual") or {},
             "monthly": data.get("monthly") or {},
             "daily": data.get("daily") or {},
@@ -214,7 +250,12 @@ class KMDVolumeSensor(KMDBaseSensor):
 
     @property
     def native_value(self) -> float | None:
-        return _sum_complete((self.coordinator.data or {}).get("hourly_m3"))
+        data = self.coordinator.data or {}
+        hourly = _sum_complete(data.get("hourly_m3"))
+        if hourly is not None:
+            return hourly
+        # E|Forsyning: month-to-date m³ from daily readings (None = unknown).
+        return (data.get("daily_m3") or {}).get("total")
 
 
 class KMDReturnTempSensor(KMDBaseSensor):
@@ -235,6 +276,10 @@ class KMDReturnTempSensor(KMDBaseSensor):
             complete = [p for p in series if p.get("IsComplete") and p.get("Value") is not None]
             if complete:
                 return complete[-1].get("Value")
+        # Daily-reading backends (E|Forsyning): latest daily return temperature.
+        latest = (data.get("latest_reading") or {}).get("temp_return")
+        if isinstance(latest, (int, float)) and latest > 0:
+            return latest
         rt_ann = (data.get("return_temp") or {}).get("annual") or {}
         yr_s = str(dt_util.now().year)
         return rt_ann.get(yr_s)

@@ -29,11 +29,49 @@
           "customer_id": "Kunde-ID (valgfrit)",
           "location_name": "By / Lokationsnavn"
         }
+      },
+      "eforsyning": {
+        "title": "E|Forsyning-login ({utility_name})",
+        "description": "⚠️ Eksperimentel: E|Forsyning-understøttelsen er endnu ikke testet live — vi søger beta-testere.\n\nLog ind med **forbrugernummer** og **webpinkode** fra din varmeregning (samme som på {portal_url}). Der bruges ikke MitID. Oplysningerne gemmes i Home Assistant som andre integrationers adgangskoder, logges aldrig og fjernes i diagnostik.\n\n**Forsyningid** (kun for 'Andet E|Forsyning-værk'): Åbn dit værks side på eforsyning.dk (f.eks. https://eforsyning.dk/hjvarme), tryk F12 → Netværk, søg efter 'GetVaerkSettings' og kopiér værdien efter `forsyningid=` (en lang kode med bogstaver, tal og bindestreger).",
+        "data": {
+          "eforsyning_username": "Forbrugernummer",
+          "eforsyning_password": "Webpinkode",
+          "eforsyning_supplier_id": "Forsyningid (GetVaerkSettings)",
+          "location_name": "By / Lokationsnavn"
+        },
+        "data_description": {
+          "eforsyning_username": "Står på din varmeregning.",
+          "eforsyning_password": "Webpinkoden fra regningen (gemmes kun i Home Assistant).",
+          "eforsyning_supplier_id": "Lang kode fra eforsyning.dk, f.eks. B30A6948-2461-4827-B8EB-5D93169CCB8B for Hjørring Varmeforsyning."
+        }
+      },
+      "eforsyning_installation": {
+        "title": "Vælg installation",
+        "description": "Din konto har flere installationer. Vælg den, denne opsætning skal vise.",
+        "data": {
+          "eforsyning_installation_id": "Installation"
+        }
+      },
+      "reconfigure_eforsyning": {
+        "title": "Opdater E|Forsyning-login ({utility_name})",
+        "description": "Lad webpinkode stå tom for at beholde den gemte.",
+        "data": {
+          "eforsyning_username": "Forbrugernummer",
+          "eforsyning_password": "Webpinkode (tom = behold)",
+          "eforsyning_supplier_id": "Forsyningid"
+        }
       }
     },
     "abort": {
       "reconfigure_successful": "Fjernvarme-konfiguration opdateret",
       "already_configured": "Dette værk er allerede konfigureret"
+    },
+    "error": {
+      "invalid_auth": "E|Forsyning afviste forbrugernummer/webpinkode.",
+      "cannot_connect": "Kunne ikke forbinde til E|Forsyning (tjek forsyningid og netværk).",
+      "unknown": "Uventet fejl — se loggen.",
+      "eforsyning_missing": "Udfyld både forbrugernummer og webpinkode.",
+      "eforsyning_supplier_required": "Forsyningid skal udfyldes for dette værk."
     }
   },
   "options": {
@@ -52,7 +90,9 @@
           "price_dkk_per_m3": "Volumenpris (kr./m³, valgfri, 0 = ikke sat)",
           "motivation_dkk_per_kwh_per_k": "Motivationstarif (kr./kWh/°C, 0 = offentliggjort standard)",
           "normal_hdd_year": "Normalår-graddage HDD17 (0 = skøn 3100)",
-          "sync_reminder": "Blød påmindelse i weekenden (vises lør/søn, hvis der ikke er synkroniseret tors–lør)"
+          "sync_reminder": "Blød påmindelse i weekenden (vises lør/søn, hvis der ikke er synkroniseret tors–lør)",
+          "auto_sync": "Automatisk daglig synkronisering (kun E|Forsyning)",
+          "auto_sync_hour": "Tidspunkt for automatisk synkronisering (time 0–23)"
         }
       }
     }
@@ -107,6 +147,9 @@
     "button": {
       "sync": {
         "name": "Synkroniser MitID"
+      },
+      "sync_now": {
+        "name": "Synkroniser nu"
       }
     },
     "binary_sensor": {

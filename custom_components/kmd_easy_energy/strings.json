@@ -29,11 +29,49 @@
           "customer_id": "Customer ID (optional)",
           "location_name": "City / Location label"
         }
+      },
+      "eforsyning": {
+        "title": "E|Forsyning login ({utility_name})",
+        "description": "⚠️ Experimental: E|Forsyning support has not been tested live yet — beta testers wanted.\n\nLog in with the **forbrugernummer** (consumer number) and **webpinkode** (web PIN) from your heating bill (same as on {portal_url}). No MitID is used. The credentials are stored in Home Assistant like other integrations' passwords, never logged and redacted in diagnostics.\n\n**Supplier id** (only for 'Other E|Forsyning utility'): open your utility's page on eforsyning.dk (e.g. https://eforsyning.dk/hjvarme), press F12 → Network, search for 'GetVaerkSettings' and copy the value after `forsyningid=`.",
+        "data": {
+          "eforsyning_username": "Consumer number (forbrugernummer)",
+          "eforsyning_password": "Web PIN (webpinkode)",
+          "eforsyning_supplier_id": "Supplier id (GetVaerkSettings forsyningid)",
+          "location_name": "City / location name"
+        },
+        "data_description": {
+          "eforsyning_username": "Printed on your heating bill.",
+          "eforsyning_password": "The web PIN from your bill (stored only in Home Assistant).",
+          "eforsyning_supplier_id": "Long id from eforsyning.dk, e.g. B30A6948-2461-4827-B8EB-5D93169CCB8B for Hjørring Varmeforsyning."
+        }
+      },
+      "eforsyning_installation": {
+        "title": "Choose installation",
+        "description": "Your account has several installations. Choose the one this entry should show.",
+        "data": {
+          "eforsyning_installation_id": "Installation"
+        }
+      },
+      "reconfigure_eforsyning": {
+        "title": "Update E|Forsyning login ({utility_name})",
+        "description": "Leave the web PIN empty to keep the stored one.",
+        "data": {
+          "eforsyning_username": "Consumer number",
+          "eforsyning_password": "Web PIN (empty = keep)",
+          "eforsyning_supplier_id": "Supplier id"
+        }
       }
     },
     "abort": {
       "reconfigure_successful": "Updated KMD Easy Energy configuration",
       "already_configured": "This utility is already configured"
+    },
+    "error": {
+      "invalid_auth": "E|Forsyning rejected the consumer number / web PIN.",
+      "cannot_connect": "Could not connect to E|Forsyning (check the supplier id and network).",
+      "unknown": "Unexpected error — see the log.",
+      "eforsyning_missing": "Enter both consumer number and web PIN.",
+      "eforsyning_supplier_required": "The supplier id is required for this utility."
     }
   },
   "options": {
@@ -52,7 +90,9 @@
           "price_dkk_per_m3": "Volume price (DKK/m³, optional, 0 = unset)",
           "motivation_dkk_per_kwh_per_k": "Motivation tariff (DKK/kWh/°C, 0 = published default)",
           "normal_hdd_year": "Normal-year HDD17 (0 = 3100 estimate)",
-          "sync_reminder": "Soft weekend reminder (shown Sat/Sun if not synced Thu–Sat)"
+          "sync_reminder": "Soft weekend reminder (shown Sat/Sun if not synced Thu–Sat)",
+          "auto_sync": "Automatic daily sync (E|Forsyning only)",
+          "auto_sync_hour": "Automatic sync time (hour 0–23)"
         }
       }
     }
@@ -107,6 +147,9 @@
     "button": {
       "sync": {
         "name": "Sync MitID"
+      },
+      "sync_now": {
+        "name": "Sync now"
       }
     },
     "binary_sensor": {

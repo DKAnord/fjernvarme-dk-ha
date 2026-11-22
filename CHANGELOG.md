@@ -2,7 +2,22 @@
 
 Alle væsentlige ændringer i **Fjernvarme (KMD Easy Energy) – HA Connector & Dashboard** dokumenteres her.
 
-## [Unreleased] (efter 0.3.0-beta.1)
+## [Unreleased]
+
+### Tilføjet: E|Forsyning-backend (eksperimentel, ikke testet live — beta-testere søges)
+- Ny backend for værker på **E|Forsyning** (eforsyning.dk / DFF-EDB). Første værk: **Hjørring Varmeforsyning** (forsyningid `B30A6948-2461-4827-B8EB-5D93169CCB8B`, fundet på den offentlige side eforsyning.dk/hjvarme). *Andet E|Forsyning-værk* kan sættes op med værkets forsyningid.
+- `utilities.json` har nyt felt `backend` (`kmd` for alle eksisterende værker, `eforsyning` for nye).
+- Opsætning med **forbrugernummer + webpinkode** i stedet for MitID (gemmes i config entry, logges aldrig, redigeres i diagnostics). Valg af installation, hvis kontoen har flere. Reconfigure kan skifte login.
+- **Automatisk daglig synkronisering** for E|Forsyning (standard ca. kl. 06:17, kan ændres/slås fra). Weekend-påmindelsen er slået fra som standard for E|Forsyning. Ny tjeneste `kmd_easy_energy.sync` (uanset backend); knappen hedder *Synkroniser nu* for E|Forsyning.
+- Daglige aflæsninger mappes til samme data som KMD-backenden (dagligt, månedligt, år kun ved fuld dækning, m³, m³-vægtet returtemperatur). Energy-statistik importeres med én række pr. døgn. Der er ingen timedata, saldo eller budgetprognose fra E|Forsyning.
+- Protokollen er studeret fra og genimplementeret efter [kpoppel/homeassistant-eforsyning](https://github.com/kpoppel/homeassistant-eforsyning) (Apache-2.0). Afledt fil markeret, licenstekst medfølger, kreditering i README og NOTICE.
+
+### Tilføjet: Kapabilitetsstyret kort og entiteter (alle backends)
+- Coordinatoren udstiller `capabilities` (fx `hourly`, `daily`, `monthly`, `temperatures`, `volume`, `cost`, `billing`, `forecast`, `mitid`, `reminder`, `auto_sync`) = det backenden kan levere **og** der faktisk er data til, samt `backend_capabilities`.
+- Kortet skjuler grafer, KPI-felter og indsigter uden data (ingen tomme grafer eller "–"-felter) og viser kun MitID-UI, når backenden bruger MitID. Ældre integrationer uden attributten viser alt som før.
+- Sensorer og binære sensorer oprettes kun, når backenden kan udfylde dem (fx ingen saldo-sensor for E|Forsyning). Uændret for KMD-værker.
+
+## [0.3.0-beta.2] (efter 0.3.0-beta.1)
 
 ### Brudende ændringer
 - Access tokens gemmes ikke, og der er ingen baggrundspolling: nye data kommer kun ved **Synkroniser** (MitID). Automatiseringer, der kaldte `kmd_easy_energy.refresh` for at hente nye data, skal i stedet bruge `start_mitid_sync` (kræver godkendelse i MitID-appen).

@@ -64,3 +64,28 @@ WS_TYPE_MITID_SUBSCRIBE = "kmd_easy_energy/mitid/subscribe"
 # Volume is the district-heating circulating water (m³), not drinking water.
 # SensorDeviceClass.WATER lets the entity be added on the Energy dashboard
 # water/volume track; see README / CHANGELOG.
+
+# ---------------------------------------------------------------------------
+# Backends. "kmd" = KMD Easy Energy (MitID, session-based). "eforsyning" =
+# E|Forsyning (eforsyning.dk / dff-edb.dk; forbrugernummer + webpinkode).
+# ---------------------------------------------------------------------------
+CONF_BACKEND = "backend"
+BACKEND_KMD = "kmd"
+BACKEND_EFORSYNING = "eforsyning"
+BACKENDS = (BACKEND_KMD, BACKEND_EFORSYNING)
+
+# E|Forsyning credentials (stored in the config entry like other HA
+# integrations store passwords; never logged, redacted in diagnostics).
+CONF_EF_USERNAME = "eforsyning_username"  # forbrugernummer
+CONF_EF_PASSWORD = "eforsyning_password"  # webpinkode
+CONF_EF_SUPPLIER_ID = "eforsyning_supplier_id"  # GetVaerkSettings forsyningid
+CONF_EF_INSTALLATION_ID = "eforsyning_installation_id"
+EFORSYNING_BASE_URL = "https://eforsyning.dk/"
+
+# Automatic sync (only for backends that need no MitID, i.e. E|Forsyning).
+CONF_AUTO_SYNC = "auto_sync"
+CONF_AUTO_SYNC_HOUR = "auto_sync_hour"
+DEFAULT_AUTO_SYNC = True
+DEFAULT_AUTO_SYNC_HOUR = 6
+# Weekend reminder default per backend (E|Forsyning syncs itself daily).
+DEFAULT_SYNC_REMINDER_BY_BACKEND = {BACKEND_KMD: True, BACKEND_EFORSYNING: False}

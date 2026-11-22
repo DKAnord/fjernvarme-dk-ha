@@ -2,6 +2,7 @@
   "domain": "kmd_easy_energy",
   "name": "Fjernvarme (KMD Easy Energy)",
   "after_dependencies": [
+    "lovelace",
     "recorder"
   ],
   "categories": [

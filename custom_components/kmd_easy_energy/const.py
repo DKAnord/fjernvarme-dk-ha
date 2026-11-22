@@ -85,7 +85,7 @@ CARD_RESOURCE_PATH = f"/local/js/{CARD_JS_FILENAME}"
 # Backends. "kmd" = KMD Easy Energy (MitID, session-based). "eforsyning" =
 # E|Forsyning (eforsyning.dk / dff-edb.dk; forbrugernummer + webpinkode).
 # "wattson" = Watts On (Watts A/S app backend; Azure AD B2C refresh token),
-# used by Aalborg Forsyning for district heating.
+# used by Aalborg Forsyning (confirmed live) and other Watts On district-heating utilities.
 # ---------------------------------------------------------------------------
 CONF_BACKEND = "backend"
 BACKEND_KMD = "kmd"

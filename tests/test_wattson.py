@@ -531,10 +531,10 @@ AAL = {
     "name": "Aalborg Forsyning",
     "city": "Aalborg",
     "portal_url": "https://aalborgforsyning.dk/services/forbrug/watts-on/",
-    "status": "pending_test",
+    "status": "confirmed",
     "backend": "wattson",
     "latitude": 57.048,
-    "longitude": 9.919,
+    "longitude": 9.921,
 }
 
 
@@ -666,11 +666,54 @@ async def test_reconfigure_wattson_updates_token_and_rejects_other_account() -> 
 
 
 # ---------------------------------------------------------------- docs / privacy
-def test_utilities_json_aalborg_and_helsingor_unchanged() -> None:
+def test_utilities_json_wattson_entries_and_status() -> None:
+    from kmd_easy_energy.config_flow import _format_utility_label
+
     data = json.loads((ROOT / "custom_components/kmd_easy_energy/utilities.json").read_text())
     by_id = {u["id"]: u for u in data["utilities"]}
-    assert by_id["aalborg-forsyning"]["backend"] == "wattson"
-    assert by_id["forsyning-helsingor"]["backend"] == "kmd"
+    wattson_ids = {
+        "aalborg-forsyning",
+        "forsyning-helsingor",
+        "fjernvarme-fyn",
+        "hillerod-forsyning",
+    }
+    required = (
+        "id",
+        "name",
+        "city",
+        "portal_url",
+        "status",
+        "tier",
+        "auth_method",
+        "backend",
+        "latitude",
+        "longitude",
+        "notes",
+    )
+    for uid in wattson_ids:
+        u = by_id[uid]
+        assert set(required) <= set(u)
+        assert u["backend"] == "wattson"
+        assert isinstance(u["latitude"], (int, float)) and isinstance(u["longitude"], (int, float))
+        assert u["portal_url"].startswith("https://")
+        assert "Watts On" in u["auth_method"]
+    aalborg = by_id["aalborg-forsyning"]
+    assert aalborg["status"] == "confirmed"
+    assert aalborg["tier"] == "confirmed"
+    label = _format_utility_label(aalborg)
+    assert label.startswith("✅") and "Watts On" in label and "bekræftet" in label
+    for uid in wattson_ids - {"aalborg-forsyning"}:
+        u = by_id[uid]
+        assert u["status"] == "pending_test"
+        assert u["tier"] == "verified_portal"
+        label = _format_utility_label(u)
+        assert label.startswith("🧪") and "Watts On" in label and "afventer" in label
+    names = " ".join(u["name"].lower() for u in data["utilities"])
+    ids = " ".join(by_id)
+    assert "novafos" not in names and "novafos" not in ids
+    assert "hornbæk" not in names and "hornbaek" not in ids
+
+
 
 
 def test_translations_cover_wattson() -> None:
@@ -688,7 +731,11 @@ def test_translations_cover_wattson() -> None:
             assert "{device_id}" not in text  # braces would be HA placeholders
     da = json.loads((ROOT / "custom_components/kmd_easy_energy/translations/da.json").read_text())
     assert "Eksperimentel" in da["config"]["step"]["wattson"]["description"]
+    assert "{status_badge}" in da["config"]["step"]["wattson"]["description"]
+    assert "{status_badge}" in da["config"]["step"]["reconfigure_wattson"]["description"]
+    assert "Aalborg Forsyning" in da["config"]["step"]["wattson"]["description"]
     assert "msauth://" in da["config"]["step"]["wattson"]["description"]
+    assert "Aalborg Forsyning-varmemåler" not in da["config"]["error"]["wattson_no_heat_meter"]
 
 
 @pytest.mark.asyncio

@@ -179,19 +179,6 @@
       "notes": "Migrated to KMD Easy Energy / minForsyning."
     },
     {
-      "id": "forsyning-helsingor",
-      "name": "Forsyning Helsingør (Mit FH)",
-      "city": "Helsingør",
-      "portal_url": "https://www.fh.dk/selvbetjening",
-      "status": "pending_test",
-      "tier": "candidate",
-      "auth_method": "MitID",
-      "backend": "kmd",
-      "latitude": 56.036,
-      "longitude": 12.614,
-      "notes": "Uses Mit FH portal; listed with minForsyning."
-    },
-    {
       "id": "provas",
       "name": "Provas",
       "city": "Haderslev",
@@ -263,15 +250,57 @@
       "name": "Aalborg Forsyning",
       "city": "Aalborg",
       "portal_url": "https://aalborgforsyning.dk/services/forbrug/watts-on/",
+      "status": "confirmed",
+      "tier": "confirmed",
+      "auth_method": "Watts On-konto (browser-login, ingen MitID)",
+      "backend": "wattson",
+      "latitude": 57.048,
+      "longitude": 9.921,
+      "notes": "Watts On. Verificeret live i v0.3.2 (PR #9): heating/api/v1/devices/{device_id}/consumption/recent?newerThan=, felter En (kWh), Vol (m³) og TI/TO. Login med Watts On-konto; par først varmemåleren i appen (kundenummer + selvvalgt måleradgangskode fra Mit Aalborg Forsyning).",
+      "tariffs": []
+    },
+    {
+      "id": "forsyning-helsingor",
+      "name": "Forsyning Helsingør",
+      "city": "Helsingør",
+      "portal_url": "https://www.fh.dk/watts",
       "status": "pending_test",
       "tier": "verified_portal",
       "auth_method": "Watts On-konto (browser-login, ingen MitID)",
       "backend": "wattson",
-      "latitude": 57.048,
-      "longitude": 9.919,
-      "notes": "Watts On (eksperimentel, ikke testet live). Aalborg Forsyning viser fjernvarme i Watts On-appen (aalborgforsyning.dk/services/forbrug/watts-on). Login- og API-flow lært fra TheRealBatBro/Home-Assistant-Novafos-V2 (MIT, Novafos-vand); varme-endpoints og feltnavne er IKKE verificeret. Varmemåleren skal være tilføjet i Watts On-appen.",
+      "latitude": 56.036,
+      "longitude": 12.613,
+      "notes": "Watts On (eksperimentel, ikke testet live i denne integration). Officielt listet under 'Følg forbrug af fjernvarme' på watts.zendesk.com og fh.dk/watts (timeforbrug i kWh/m³). Gælder ikke kunder hos Hornbæk Fjernvarme. Par først varmemåleren i Watts On-appen med kundenummer + målernummer fra Mit FH. Stod tidligere som KMD-kandidat; skiftet fordi værket officielt bruger Watts On til fjernvarme.",
+      "tariffs": []
+    },
+    {
+      "id": "fjernvarme-fyn",
+      "name": "Fjernvarme Fyn",
+      "city": "Odense / Fyn",
+      "portal_url": "https://www.fjernvarmefyn.dk/spar-paa-energien/overblik/watts-on-app/",
+      "status": "pending_test",
+      "tier": "verified_portal",
+      "auth_method": "Watts On-konto (browser-login, ingen MitID)",
+      "backend": "wattson",
+      "latitude": 55.403,
+      "longitude": 10.388,
+      "notes": "Watts On (eksperimentel, ikke testet live). Verificeret på fjernvarmefyn.dk (lanceret nov. 2025). Par først varmemåleren i Watts On-appen med kundenummer + pinkode fra regningen / Administrationsservice Fyn.",
+      "tariffs": []
+    },
+    {
+      "id": "hillerod-forsyning",
+      "name": "Hillerød Forsyning",
+      "city": "Hillerød",
+      "portal_url": "https://hfors.dk/selvbetjening/se-forbrug-regninger/watts-on-din-forbrugsapp-til-vand-varme",
+      "status": "pending_test",
+      "tier": "verified_portal",
+      "auth_method": "Watts On-konto (browser-login, ingen MitID)",
+      "backend": "wattson",
+      "latitude": 55.927,
+      "longitude": 12.3,
+      "notes": "Watts On (eksperimentel, ikke testet live). Verificeret på hfors.dk for fjernvarme og vand (forbrug med 24 t forsinkelse, frem-/returtemperatur og varmeudnyttelse). Par først varmemåleren i Watts On-appen med kundenummer + målernummer.",
       "tariffs": []
     }
   ],
-  "last_updated": "2026-11-21"
+  "last_updated": "2026-11-22"
 }

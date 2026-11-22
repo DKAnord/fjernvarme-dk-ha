@@ -182,13 +182,22 @@ def _load_utilities() -> list[dict[str, Any]]:
         ]
 
 
+def _status_badge(status: str | None) -> str:
+    """Same confirmed / pending wording on KMD and Watts On setup steps."""
+    if status == "confirmed":
+        return "✅ Bekræftet (Confirmed working)"
+    return "🧪 Afventer første test (Pending initial test)"
+
+
 def _format_utility_label(u: dict[str, Any]) -> str:
     tier = u.get("tier") or ("confirmed" if u.get("status") == "confirmed" else "verified_portal")
     city = f" ({u['city']})" if u.get("city") else ""
     if utility_backend(u) == BACKEND_EFORSYNING:
         return f"🧪 {u['name']}{city} — E|Forsyning (eksperimentel)"
     if utility_backend(u) == BACKEND_WATTSON:
-        return f"🧪 {u['name']}{city} — Watts On (eksperimentel)"
+        if u.get("status") == "confirmed":
+            return f"✅ {u['name']}{city} — Watts On (bekræftet live)"
+        return f"🧪 {u['name']}{city} — Watts On (afventer 1. test)"
     if u.get("status") == "confirmed":
         return f"✅ {u['name']}{city} — Bekræftet / Confirmed"
     if tier == "candidate":
@@ -401,11 +410,7 @@ class KMDEasyEnergyConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 data=entry_data,
             )
 
-        status_badge = (
-            "✅ Bekræftet (Confirmed working)"
-            if u.get("status") == "confirmed"
-            else "🧪 Afventer første test (Pending initial test)"
-        )
+        status_badge = _status_badge(u.get("status"))
         schema = vol.Schema(
             {
                 vol.Required(CONF_PORTAL_URL, default=u.get("portal_url", "https://")): str,
@@ -538,7 +543,7 @@ class KMDEasyEnergyConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         )
 
     # ------------------------------------------------------------------
-    # Watts On (Aalborg Forsyning): browser login, paste the msauth:// redirect
+    # Watts On: browser login, paste the msauth:// redirect
     # ------------------------------------------------------------------
     def _watts_form_login(self) -> PkceLogin:
         if self._watts_login is None:
@@ -654,6 +659,7 @@ class KMDEasyEnergyConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             description_placeholders={
                 "utility_name": str(u.get("name") or "Watts On"),
                 "auth_url": login.url,
+                "status_badge": _status_badge(u.get("status")),
             },
         )
 
@@ -725,6 +731,7 @@ class KMDEasyEnergyConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             description_placeholders={
                 "utility_name": str(entry.data.get(CONF_UTILITY) or entry.title),
                 "auth_url": login.url,
+                "status_badge": _status_badge(entry.data.get(CONF_UTILITY_STATUS)),
             },
         )
 

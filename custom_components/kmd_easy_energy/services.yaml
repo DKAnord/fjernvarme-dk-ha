@@ -138,7 +138,7 @@ start_mitid_sync:
 
 sync:
   name: Sync now
-  description: Fetch new data. KMD utilities - one MitID login (same as start_mitid_sync). E|Forsyning utilities - login with consumer number and web PIN. Watts On (Aalborg Forsyning) - stored Watts On login (refresh token).
+  description: Fetch new data. KMD utilities - one MitID login (same as start_mitid_sync). E|Forsyning utilities - login with consumer number and web PIN. Watts On utilities - stored Watts On login (refresh token).
   fields:
     entry_id:
       name: Config entry ID

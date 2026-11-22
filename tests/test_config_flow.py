@@ -20,7 +20,7 @@ def test_flow_has_no_token_reauth_and_unique_id_helper() -> None:
     assert not hasattr(KMDEasyEnergyConfigFlow, "_validate_token")
     assert hasattr(KMDEasyEnergyConfigFlow, "_async_set_entry_unique_id")
     assert KMDEasyEnergyConfigFlow.VERSION == 1
-    assert KMDEasyEnergyConfigFlow.MINOR_VERSION == 2
+    assert KMDEasyEnergyConfigFlow.MINOR_VERSION == 3
     src = (ROOT / "custom_components/kmd_easy_energy/config_flow.py").read_text()
     assert "CONF_ACCESS_TOKEN" not in src
     assert "ConfigEntryAuthFailed" not in src
@@ -133,7 +133,9 @@ def test_migrate_removes_stored_token_keeps_rest() -> None:
     assert "access_token" not in kwargs["options"]
     assert kwargs["data"]["mitid_username"] == "u"
     assert kwargs["options"]["price_dkk_per_kwh"] == 0.7
-    assert kwargs["minor_version"] == 2
+    # 1.1 migrates straight through 1.2 to 1.3 in one update.
+    assert kwargs["minor_version"] == 3
+    assert hass.config_entries.async_update_entry.call_count == 1
 
 
 def test_migrate_noop_when_current_and_refuses_future() -> None:
@@ -143,7 +145,7 @@ def test_migrate_noop_when_current_and_refuses_future() -> None:
     from kmd_easy_energy import async_migrate_entry
 
     hass = MagicMock()
-    assert asyncio.run(async_migrate_entry(hass, _fake_entry({"utility_id": "x"}, minor=2))) is True
+    assert asyncio.run(async_migrate_entry(hass, _fake_entry({"utility_id": "x"}, minor=3))) is True
     hass.config_entries.async_update_entry.assert_not_called()
     future = _fake_entry({})
     future.version = 2

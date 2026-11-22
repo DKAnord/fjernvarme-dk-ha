@@ -151,7 +151,7 @@ Nogle værker bruger ikke KMD Easy Energy men **E|Forsyning** (eforsyning.dk / D
 - `sensor.<værk>_volume` — Volumen (`m³`, `device_class: water` — cirkulerende fjernvarmevand, ikke drikkevand)
 - `sensor.<værk>_return_temperature` — Returtemperatur (`°C`)
 - `sensor.<værk>_balance` — Saldo (`DKK`)
-- `sensor.<værk>_heating_degree_days_7d` — 7-dages graddage (`HDD17`) fra Open-Meteo
+- `sensor.<værk>_heating_degree_days_7d` — 7-dages graddage (`HDD17`) fra din udetemperatursensor og/eller Open-Meteo
 - `sensor.<værk>_energy_price` — Variabel varmepris (`DKK/kWh`), fra indstillinger eller offentliggjort takst
 - `sensor.<værk>_motivation_status` — Motivationstarif (`bonus` / `neutral` / `gebyr`) ud fra returtemperatur
 - `sensor.<værk>_motivation_adjustment` — Motivationsregulering (`DKK/kWh`, negativ = bonus)
@@ -185,6 +185,20 @@ Nogle værker bruger ikke KMD Easy Energy men **E|Forsyning** (eforsyning.dk / D
 - **Graddage og prognose:** kWh/HDD og et skønnet normalår (standard 3100 HDD17, kan ændres — det er *ikke* et officielt DMI 1991–2020-tal). Årsprognosen er ÅTD plus resterende skønnede graddage.
 - **Unormalt forbrug:** `binary_sensor` slår til, hvis sidste komplette døgn ligger væsentligt over samme ugedag de foregående uger, også efter HDD-justering. Du bestemmer selv, om den skal styre en notifikation.
 
+### 🌡️ Udetemperatur: egen sensor eller Open-Meteo
+
+Graddage (HDD17), kWh pr. graddag, R², prognosen og temperaturkurverne på kortet bygger på døgnmiddel-udetemperatur. Du vælger kilden under **Indstillinger → Enheder & tjenester → integrationen → Konfigurer**:
+
+1. **Egen udetemperatursensor i Home Assistant (anbefalet, lokal først).** Vælg en `sensor` med `device_class: temperature`. Døgnmidlet læses fra recorderens **langtidsstatistik** (timemiddel), så sensoren skal have `state_class: measurement` (det har de fleste vejrstationer og termometre). Integrationen læser kun, den skriver intet ekstra til databasen, og °F omregnes til °C. Et døgn tæller kun med fra sensoren, hvis der er statistik for mindst 18 af døgnets timer (i dag: mindst 6 timer for 7-dages graddagene).
+2. **Open-Meteo** (ekstern, gratis vejrtjeneste) bruges for alle dage, sensoren ikke dækker, fx historik fra før sensoren blev sat op, eller hvis du ikke har valgt nogen sensor. Open-Meteo kaldes kun for de manglende dage. Dækker sensoren alt, kaldes Open-Meteo slet ikke. Placeringen vælges i denne rækkefølge:
+   - **Egen placering**: bredde- og længdegrad i indstillingerne (lad felterne stå tomme, hvis du ikke har brug for det).
+   - **Home Assistants hjemmelokation** (Indstillinger → System → Generelt). Det er standarden.
+   - **Værkets placering** fra `utilities.json`. Den bruges kun, hvis Home Assistant ikke har en hjemmelokation (0/0).
+
+Kortet viser kilden diskret, fx *Udetemp: Udetermometer*, *Udetemp: Open-Meteo (HA-hjemmelokation)*, *Udetemp: Open-Meteo (værkets placering)* eller ved blandede kilder *Udetemp: Udetermometer fra 5. mar 2026; dage uden sensorstatistik: Open-Meteo (HA-hjemmelokation)*. Overblikssensoren har de samme oplysninger i attributterne `temp_source` (`ha_sensor` / `open_meteo_home` / `open_meteo_utility` / `open_meteo_custom` / `mixed`) og `outdoor_temp` (sensor, antal dage pr. kilde, *slags* placering). Koordinater vises aldrig og redigeres i diagnostics. Attributterne gemmes ikke i recorderen. Ændrer du kilden, genberegnes temperaturerne med det samme, uden kontakt til værket.
+
+**Opgradering (config entry 1.3):** Tidligere blev værkets koordinater kopieret ind som "din" placering, så Home Assistants hjemmelokation reelt aldrig blev brugt. Nu gemmes de kun som værksdata, og eksisterende installationer bruger automatisk HA-hjemmelokationen. Har du selv tastet andre koordinater i indstillingerne, beholdes de som egen placering. Koordinater, der blot var forudfyldt af den gamle formular (værkets placering, HA-hjemmelokationen eller standardværdien 56.15/10.10), fjernes.
+
 Download diagnostics fra integrationen, hvis du skal have support: tokens, MitID-id, kunde-/måler-id, GPS-koordinater, push-service og adresser er redigeret.
 
 ---
@@ -197,13 +211,15 @@ For the Energy dashboard, add the imported hourly statistics `kmd_easy_energy:en
 
 **E|Forsyning (experimental, untested, beta testers wanted):** utilities on eforsyning.dk (e.g. Hjørring Varmeforsyning) use a second backend with consumer number + web PIN (no MitID), automatic daily sync, daily readings (no hourly data) and the same card/sensors/statistics. The card and the entities are capability-driven, so sections without data are hidden. The protocol was studied from and reimplemented after [kpoppel/homeassistant-eforsyning](https://github.com/kpoppel/homeassistant-eforsyning) (Apache-2.0) — thank you! See NOTICE.
 
+**Outdoor temperature:** degree days and temperature lines use, in this order, an optional HA outdoor temperature sensor (daily means from the recorder's long-term statistics, local-first, read-only), then Open-Meteo (external service) for any day the sensor doesn't cover. Open-Meteo uses the location override from the options if set, otherwise the HA home location, otherwise the utility's coordinates. Config entry 1.3 stops treating the utility's coordinates as your location; explicit overrides are kept. The source is exposed as `temp_source` / `outdoor_temp` (no coordinates) and shown on the card.
+
 **Breaking for custom dashboards:** attributes `mitid_otp_code` and `mitid_qr_svg` are removed. Use the bundled card or the websocket subscription above. Setup from a tablet/PC works with MitID's default QR (both animated frames are shown on the card); only setup on the same phone as the MitID app needs one-time codes enabled in the MitID app. Phone OTP sync is verified live on Kredsløb; tablet QR and additional KMD Easy Energy utilities are open for beta testing.
 
 ---
 
 ## 🔒 Privatliv & Sikkerhed
 
-- Integrationen kommunikerer **kun direkte** mellem din Home Assistant-instans og KMD Easy Energy / NemLog-in / MitID / Open-Meteo (E|Forsyning-værker: eforsyning.dk og værkets DFF-EDB-server).
+- Integrationen kommunikerer **kun direkte** mellem din Home Assistant-instans og KMD Easy Energy / NemLog-in / MitID / Open-Meteo (E|Forsyning-værker: eforsyning.dk og værkets DFF-EDB-server). Open-Meteo får kun koordinater (egen placering, HA-hjemmelokation eller værkets placering) og kun for dage, din egen udetemperatursensor ikke dækker.
 - E|Forsyning: forbrugernummer og webpinkode gemmes i `.storage/core.config_entries` (som andre HA-integrationers adgangskoder), logges aldrig og redigeres i diagnostics. Installationens adresse og målernummer gemmes ikke i cachen.
 - MitID Bruger-ID lagres kun lokalt i Home Assistants `.storage/core.config_entries`. **Access tokens gemmes ikke**: de bruges til én synkronisering og kasseres. Et token fra en ældre version fjernes automatisk ved opgradering (config entry 1.2).
 - Forbrugsdata caches i den private fil `.storage/kmd_easy_energy.<entry_id>` — **ikke** i `/local/` / `www/`.

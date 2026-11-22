@@ -13,6 +13,13 @@ CONF_CUSTOMER_NUMBER = "customer_number"
 CONF_CUSTOMER_ID = "customer_id"
 CONF_LATITUDE = "latitude"
 CONF_LONGITUDE = "longitude"
+# Utility (værk) coordinates from utilities.json: metadata and the last-resort
+# Open-Meteo location. Only CONF_LATITUDE/CONF_LONGITUDE in *options* are an
+# explicit user override (see outdoor_temp.resolve_location).
+CONF_UTILITY_LATITUDE = "utility_latitude"
+CONF_UTILITY_LONGITUDE = "utility_longitude"
+# Optional HA outdoor temperature sensor (long-term statistics, local-first).
+CONF_OUTDOOR_TEMP_ENTITY = "outdoor_temp_entity"
 CONF_LOCATION_NAME = "location_name"
 CONF_BONUS_TEMP = "bonus_temp"
 CONF_PENALTY_TEMP = "penalty_temp"

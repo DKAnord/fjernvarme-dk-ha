@@ -30,7 +30,7 @@ from .coordinator import KMDEasyEnergyCoordinator
 from .util import store_for, unique_id_for, delete_legacy_www_cache, legacy_www_cache_paths
 
 _LOGGER = logging.getLogger(__name__)
-PLATFORMS = ["sensor", "button"]
+PLATFORMS = ["sensor", "button", "binary_sensor"]
 DEFAULT_PORTAL_URL = "https://minvarme.kredslob.dk/"
 
 

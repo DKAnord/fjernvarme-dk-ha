@@ -73,7 +73,11 @@
           "bonus_temp": "Return temp bonus threshold (°C)",
           "penalty_temp": "Return temp penalty threshold (°C)",
           "latitude": "Latitude (Open-Meteo weather)",
-          "longitude": "Longitude (Open-Meteo weather)"
+          "longitude": "Longitude (Open-Meteo weather)",
+          "price_dkk_per_kwh": "Heat price (DKK/kWh, 0 = use published default)",
+          "price_dkk_per_m3": "Volume price (DKK/m³, optional, 0 = unset)",
+          "motivation_dkk_per_kwh_per_k": "Motivation tariff (DKK/kWh/°C, 0 = published default)",
+          "normal_hdd_year": "Normal-year HDD17 (0 = 3100 estimate)"
         }
       }
     }
@@ -97,11 +101,42 @@
       },
       "heating_degree_days": {
         "name": "Heating degree days (7d)"
+      },
+      "energy_price": {
+        "name": "Heat price"
+      },
+      "motivation_status": {
+        "name": "Motivation tariff",
+        "state": {
+          "bonus": "Bonus",
+          "neutral": "Neutral",
+          "penalty": "Penalty"
+        }
+      },
+      "motivation_adjustment": {
+        "name": "Motivation adjustment"
+      },
+      "kwh_per_hdd": {
+        "name": "kWh per degree day"
+      },
+      "normalized_annual_energy": {
+        "name": "Normalised annual energy"
+      },
+      "forecast_annual_energy": {
+        "name": "Annual energy forecast"
       }
     },
     "button": {
       "sync": {
         "name": "Sync MitID"
+      }
+    },
+    "binary_sensor": {
+      "motivation_penalty": {
+        "name": "Return temperature penalty"
+      },
+      "abnormal_consumption": {
+        "name": "Abnormal consumption"
       }
     }
   }

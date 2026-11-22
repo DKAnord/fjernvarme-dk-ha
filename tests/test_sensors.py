@@ -102,3 +102,43 @@ def test_entity_translation_keys_match_strings() -> None:
     assert KMDHDDSensor(_coord(), _entry()).translation_key == "heating_degree_days"
     assert "hourly_kwh" in KMDOverviewSensor._unrecorded_attributes
     assert "meters" in KMDOverviewSensor._unrecorded_attributes
+
+
+
+def test_price_motivation_and_forecast_sensors() -> None:
+    from kmd_easy_energy.sensor import (
+        KMDEnergyPriceSensor,
+        KMDForecastAnnualSensor,
+        KMDKwhPerHddSensor,
+        KMDMotivationAdjustmentSensor,
+        KMDMotivationStatusSensor,
+        KMDNormalizedAnnualSensor,
+    )
+
+    coord = _coord(
+        {
+            "energy_price_dkk_per_kwh": 0.668,
+            "motivation_status": "bonus",
+            "motivation_dkk_per_kwh": -0.05,
+            "tariff": {"tariff_year": 2026, "source": "https://www.kredslob.dk/privat/fjernvarme/fjernvarmepriser"},
+            "degree_day": {
+                "kwh_per_hdd": 2.0,
+                "normalized_annual_kwh": 6200.0,
+                "forecast_annual_kwh": 5400.0,
+            },
+        }
+    )
+    entry = _entry()
+    price = KMDEnergyPriceSensor(coord, entry)
+    assert price.native_value == 0.668
+    assert price.translation_key == "energy_price"
+    assert price.native_unit_of_measurement == "DKK/kWh"
+    assert "kredslob.dk" in (price.extra_state_attributes["source"] or "")
+    status = KMDMotivationStatusSensor(coord, entry)
+    assert status.native_value == "bonus"
+    assert status.options == ["bonus", "neutral", "penalty"]
+    adj = KMDMotivationAdjustmentSensor(coord, entry)
+    assert adj.native_value == -0.05
+    assert KMDKwhPerHddSensor(coord, entry).native_value == 2.0
+    assert KMDNormalizedAnnualSensor(coord, entry).native_value == 6200.0
+    assert KMDForecastAnnualSensor(coord, entry).native_value == 5400.0

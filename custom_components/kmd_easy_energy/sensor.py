@@ -35,6 +35,12 @@ async def async_setup_entry(
             KMDReturnTempSensor(coordinator, entry),
             KMDBalanceSensor(coordinator, entry),
             KMDHDDSensor(coordinator, entry),
+            KMDEnergyPriceSensor(coordinator, entry),
+            KMDMotivationStatusSensor(coordinator, entry),
+            KMDMotivationAdjustmentSensor(coordinator, entry),
+            KMDKwhPerHddSensor(coordinator, entry),
+            KMDNormalizedAnnualSensor(coordinator, entry),
+            KMDForecastAnnualSensor(coordinator, entry),
         ]
     )
 
@@ -67,6 +73,11 @@ class KMDBaseSensor(CoordinatorEntity[KMDEasyEnergyCoordinator], SensorEntity):
             "hourly_m3_points",
             "hourly_temp_points",
             "settlement_period",
+            "tariff",
+            "abnormal_consumption",
+            "degree_day",
+            "daily_hdd",
+            "daily_kwh_history",
         }
     )
 
@@ -255,3 +266,141 @@ class KMDHDDSensor(KMDBaseSensor):
     def native_value(self) -> float | None:
         val = (self.coordinator.data or {}).get("hdd_7d")
         return round(float(val), 1) if val is not None else None
+
+
+
+class KMDEnergyPriceSensor(KMDBaseSensor):
+    """Variable heat price for the Energy dashboard (DKK/kWh, option or published default)."""
+
+    _attr_translation_key = "energy_price"
+    _attr_native_unit_of_measurement = "DKK/kWh"
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_suggested_display_precision = 4
+
+    @property
+    def unique_id(self) -> str:
+        return f"{self._entry.entry_id}_energy_price"
+
+    @property
+    def native_value(self) -> float | None:
+        value = (self.coordinator.data or {}).get("energy_price_dkk_per_kwh")
+        return float(value) if value is not None else None
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        tariff = (self.coordinator.data or {}).get("tariff") or {}
+        return {
+            "tariff_year": tariff.get("tariff_year"),
+            "source": tariff.get("source"),
+            "source_note": tariff.get("source_note"),
+            "volume_price_dkk_per_m3": tariff.get("price_dkk_per_m3"),
+        }
+
+
+class KMDMotivationStatusSensor(KMDBaseSensor):
+    """Afkøling vs. the utility motivation tariff: bonus, neutral or penalty."""
+
+    _attr_translation_key = "motivation_status"
+    _attr_device_class = SensorDeviceClass.ENUM
+    _attr_options = ["bonus", "neutral", "penalty"]
+
+    @property
+    def unique_id(self) -> str:
+        return f"{self._entry.entry_id}_motivation_status"
+
+    @property
+    def native_value(self) -> str | None:
+        return (self.coordinator.data or {}).get("motivation_status")
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        data = self.coordinator.data or {}
+        tariff = data.get("tariff") or {}
+        return {
+            "bonus_temp": tariff.get("bonus_temp", data.get("bonus_temp")),
+            "penalty_temp": tariff.get("penalty_temp", data.get("penalty_temp")),
+            "adjustment_dkk_per_kwh": data.get("motivation_dkk_per_kwh"),
+        }
+
+
+class KMDMotivationAdjustmentSensor(KMDBaseSensor):
+    """Motivation tariff adjustment in DKK/kWh (negative is a bonus)."""
+
+    _attr_translation_key = "motivation_adjustment"
+    _attr_native_unit_of_measurement = "DKK/kWh"
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_suggested_display_precision = 5
+
+    @property
+    def unique_id(self) -> str:
+        return f"{self._entry.entry_id}_motivation_adjustment"
+
+    @property
+    def native_value(self) -> float | None:
+        value = (self.coordinator.data or {}).get("motivation_dkk_per_kwh")
+        return float(value) if value is not None else None
+
+
+class KMDKwhPerHddSensor(KMDBaseSensor):
+    """Recent kWh per heating degree day (HDD17)."""
+
+    _attr_translation_key = "kwh_per_hdd"
+    _attr_native_unit_of_measurement = "kWh/HDD"
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_suggested_display_precision = 3
+
+    @property
+    def unique_id(self) -> str:
+        return f"{self._entry.entry_id}_kwh_per_hdd"
+
+    @property
+    def native_value(self) -> float | None:
+        value = ((self.coordinator.data or {}).get("degree_day") or {}).get("kwh_per_hdd")
+        return float(value) if value is not None else None
+
+
+class KMDNormalizedAnnualSensor(KMDBaseSensor):
+    """Degree-day-normalised annual consumption (kWh/HDD × normal-year HDD)."""
+
+    _attr_translation_key = "normalized_annual_energy"
+    _attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
+    _attr_device_class = SensorDeviceClass.ENERGY
+    _attr_state_class = SensorStateClass.TOTAL
+    _attr_suggested_display_precision = 0
+
+    @property
+    def unique_id(self) -> str:
+        return f"{self._entry.entry_id}_normalized_annual_energy"
+
+    @property
+    def native_value(self) -> float | None:
+        value = ((self.coordinator.data or {}).get("degree_day") or {}).get("normalized_annual_kwh")
+        return float(value) if value is not None else None
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        return dict((self.coordinator.data or {}).get("degree_day") or {})
+
+
+class KMDForecastAnnualSensor(KMDBaseSensor):
+    """Year forecast: year-to-date kWh plus remaining normal-year HDD × kWh/HDD."""
+
+    _attr_translation_key = "forecast_annual_energy"
+    _attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
+    _attr_device_class = SensorDeviceClass.ENERGY
+    _attr_state_class = SensorStateClass.TOTAL
+    _attr_suggested_display_precision = 0
+
+    @property
+    def unique_id(self) -> str:
+        return f"{self._entry.entry_id}_forecast_annual_energy"
+
+    @property
+    def native_value(self) -> float | None:
+        value = ((self.coordinator.data or {}).get("degree_day") or {}).get("forecast_annual_kwh")
+        return float(value) if value is not None else None
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        dd = dict((self.coordinator.data or {}).get("degree_day") or {})
+        return dd

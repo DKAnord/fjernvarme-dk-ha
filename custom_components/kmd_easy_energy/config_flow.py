@@ -30,9 +30,13 @@ from .const import (
     CONF_LONGITUDE,
     CONF_LOCATION_NAME,
     CONF_MITID_USERNAME,
+    CONF_MOTIVATION_DKK_PER_KWH_PER_K,
+    CONF_NORMAL_HDD_YEAR,
     CONF_NOTIFY_SERVICE,
     CONF_PENALTY_TEMP,
     CONF_PORTAL_URL,
+    CONF_PRICE_DKK_PER_KWH,
+    CONF_PRICE_DKK_PER_M3,
     CONF_UTILITY,
     CONF_UTILITY_ID,
     CONF_UTILITY_STATUS,
@@ -560,6 +564,22 @@ class KMDEasyEnergyOptionsFlow(config_entries.OptionsFlow):
                 vol.Optional(
                     CONF_LONGITUDE,
                     default=float(opts.get(CONF_LONGITUDE) or self.hass.config.longitude or 10.10),
+                ): vol.Coerce(float),
+                vol.Optional(
+                    CONF_PRICE_DKK_PER_KWH,
+                    default=float(opts.get(CONF_PRICE_DKK_PER_KWH) or 0.0),
+                ): vol.Coerce(float),
+                vol.Optional(
+                    CONF_PRICE_DKK_PER_M3,
+                    default=float(opts.get(CONF_PRICE_DKK_PER_M3) or 0.0),
+                ): vol.Coerce(float),
+                vol.Optional(
+                    CONF_MOTIVATION_DKK_PER_KWH_PER_K,
+                    default=float(opts.get(CONF_MOTIVATION_DKK_PER_KWH_PER_K) or 0.0),
+                ): vol.Coerce(float),
+                vol.Optional(
+                    CONF_NORMAL_HDD_YEAR,
+                    default=float(opts.get(CONF_NORMAL_HDD_YEAR) or 0.0),
                 ): vol.Coerce(float),
             }
         )

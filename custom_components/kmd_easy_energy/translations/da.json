@@ -73,7 +73,11 @@
           "bonus_temp": "Bonusgrænse returtemperatur (°C)",
           "penalty_temp": "Gebyrgrænse returtemperatur (°C)",
           "latitude": "Breddegrad (Open-Meteo vejr)",
-          "longitude": "Længdegrad (Open-Meteo vejr)"
+          "longitude": "Længdegrad (Open-Meteo vejr)",
+          "price_dkk_per_kwh": "Varmepris (kr./kWh, 0 = brug offentliggjort standard)",
+          "price_dkk_per_m3": "Volumenpris (kr./m³, valgfri, 0 = ikke sat)",
+          "motivation_dkk_per_kwh_per_k": "Motivationstarif (kr./kWh/°C, 0 = offentliggjort standard)",
+          "normal_hdd_year": "Normalår-graddage HDD17 (0 = skøn 3100)"
         }
       }
     }
@@ -97,11 +101,42 @@
       },
       "heating_degree_days": {
         "name": "Graddage (7 dage)"
+      },
+      "energy_price": {
+        "name": "Varmepris"
+      },
+      "motivation_status": {
+        "name": "Motivationstarif",
+        "state": {
+          "bonus": "Bonus",
+          "neutral": "Neutral",
+          "penalty": "Gebyr"
+        }
+      },
+      "motivation_adjustment": {
+        "name": "Motivationsregulering"
+      },
+      "kwh_per_hdd": {
+        "name": "kWh pr. graddag"
+      },
+      "normalized_annual_energy": {
+        "name": "Normalår-korrigeret årsforbrug"
+      },
+      "forecast_annual_energy": {
+        "name": "Årsprognose (kWh)"
       }
     },
     "button": {
       "sync": {
         "name": "Synkroniser MitID"
+      }
+    },
+    "binary_sensor": {
+      "motivation_penalty": {
+        "name": "Gebyr for returtemperatur"
+      },
+      "abnormal_consumption": {
+        "name": "Unormalt forbrug"
       }
     }
   }

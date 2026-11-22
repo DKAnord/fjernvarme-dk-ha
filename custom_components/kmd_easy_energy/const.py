@@ -11,6 +11,9 @@ CONF_UTILITY_STATUS = "utility_status"
 CONF_PORTAL_URL = "portal_url"
 CONF_CUSTOMER_NUMBER = "customer_number"
 CONF_CUSTOMER_ID = "customer_id"
+# Selected district-heating kundeforhold + measurement point (KMD / MF2).
+CONF_MEASUREMENT_POINT_ID = "measurement_point_id"
+CONF_KMD_SUPPLY = "kmd_supply"
 CONF_LATITUDE = "latitude"
 CONF_LONGITUDE = "longitude"
 # Utility (værk) coordinates from utilities.json: metadata and the last-resort

@@ -229,7 +229,7 @@ async def test_sync_401_is_login_error_and_keeps_cache(tmp_path: Path) -> None:
     coord.async_set_updated_data = MagicMock()
     err = ClientResponseError(MagicMock(), (), status=401, message="Unauthorized")
     fake_client = MagicMock()
-    fake_client.get_active_meters = AsyncMock(side_effect=err)
+    fake_client.discover_accounts = AsyncMock(side_effect=err)
     with patch.object(coord, "_make_client", return_value=fake_client):
         with pytest.raises(KMDLoginError):
             await coord.async_sync_with_token("fake")
@@ -245,7 +245,7 @@ async def test_sync_transient_http_error_is_plain_error(tmp_path: Path) -> None:
     coord, *_ = make_coordinator(tmp_path)
     err = ClientResponseError(MagicMock(), (), status=502, message="Bad Gateway")
     fake_client = MagicMock()
-    fake_client.get_active_meters = AsyncMock(side_effect=err)
+    fake_client.discover_accounts = AsyncMock(side_effect=err)
     with patch.object(coord, "_make_client", return_value=fake_client):
         with pytest.raises(RuntimeError) as exc:
             await coord.async_sync_with_token("fake")

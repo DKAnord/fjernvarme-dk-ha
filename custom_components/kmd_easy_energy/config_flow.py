@@ -54,6 +54,8 @@ from .const import (
     CONF_EF_SUPPLIER_ID,
     CONF_EF_USERNAME,
     CONF_CUSTOMER_ID,
+    CONF_KMD_SUPPLY,
+    CONF_MEASUREMENT_POINT_ID,
     CONF_LATITUDE,
     CONF_LONGITUDE,
     CONF_OUTDOOR_TEMP_ENTITY,
@@ -287,6 +289,31 @@ def _notify_service_selector(hass: Any, current: str = "") -> SelectSelector:
             custom_value=True,
         )
     )
+
+
+
+def _kmd_supply_options(hass: Any, entry: config_entries.ConfigEntry) -> list[SelectOptionDict]:
+    """Heat-meter choices from the last sync (labels have no addresses or ids)."""
+    entry_id = getattr(entry, "entry_id", None)
+    domain_data = (getattr(hass, "data", {}) or {}).get(DOMAIN) or {}
+    coordinator = domain_data.get(entry_id) if entry_id else None
+    data = (getattr(coordinator, "data", None) or {}) if coordinator is not None else {}
+    meters = ((data.get("kmd_supplies") or {}).get("meters") or [])
+    heat = [m for m in meters if isinstance(m, dict) and m.get("kind") == "heat" and m.get("key")]
+    choices = heat or [
+        m
+        for m in meters
+        if isinstance(m, dict) and m.get("kind") not in ("electricity", "water") and m.get("key")
+    ]
+    options: list[SelectOptionDict] = []
+    for i, meter in enumerate(choices, 1):
+        units = ", ".join(str(u) for u in (meter.get("units") or []) if u)
+        idx = meter.get("customer_index") or "?"
+        label = f"🔥 Varme · kundeforhold {idx} · måler {i}"
+        if units:
+            label += f" ({units})"
+        options.append(SelectOptionDict(value=str(meter["key"]), label=label))
+    return options
 
 
 class KMDEasyEnergyConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
@@ -868,6 +895,18 @@ class KMDEasyEnergyOptionsFlow(config_entries.OptionsFlow):
         if user_input is not None:
             cleaned, error = _clean_outdoor_options(user_input)
             if error is None:
+                supply = str(cleaned.get(CONF_KMD_SUPPLY) or "").strip()
+                if supply:
+                    from .kmd_supply import parse_supply_key
+
+                    cleaned[CONF_KMD_SUPPLY] = supply
+                    cid, mp = parse_supply_key(supply)
+                    if cid:
+                        cleaned[CONF_CUSTOMER_ID] = cid
+                    if mp:
+                        cleaned[CONF_MEASUREMENT_POINT_ID] = mp
+                else:
+                    cleaned.pop(CONF_KMD_SUPPLY, None)
                 return self.async_create_entry(title="", data=cleaned)
             errors["base"] = error
 
@@ -952,6 +991,24 @@ class KMDEasyEnergyOptionsFlow(config_entries.OptionsFlow):
                     ): vol.All(vol.Coerce(int), vol.Range(min=0, max=23)),
                 }
             )
+        if backend == BACKEND_KMD:
+            supply_opts = _kmd_supply_options(self.hass, self.config_entry)
+            if supply_opts:
+                current_supply = str(opts.get(CONF_KMD_SUPPLY) or "")
+                values = {o["value"] for o in supply_opts}
+                default_supply = current_supply if current_supply in values else supply_opts[0]["value"]
+                schema = schema.extend(
+                    {
+                        vol.Optional(
+                            CONF_KMD_SUPPLY,
+                            default=default_supply,
+                        ): SelectSelector(
+                            SelectSelectorConfig(
+                                options=supply_opts, mode=SelectSelectorMode.DROPDOWN
+                            )
+                        ),
+                    }
+                )
         if backend == BACKEND_WATTSON:
             schema = schema.extend(
                 {

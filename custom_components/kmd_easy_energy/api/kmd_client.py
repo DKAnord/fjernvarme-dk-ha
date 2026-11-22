@@ -65,6 +65,7 @@ class KMDClient:
         self._customer_number = customer_number.strip() if customer_number else None
         self._referer = referer.strip() if referer else None
         self._extra_headers = dict(extra_headers) if extra_headers else {}
+        self._profile: dict[str, Any] | None = None
 
     def _headers(self) -> dict[str, str]:
         headers = {
@@ -81,30 +82,39 @@ class KMDClient:
             headers["Customer-Number"] = self._customer_number
         return headers
 
+    def set_customer(self, customer_id: str | None, customer_number: str | None) -> None:
+        """Select a kundeforhold for subsequent API calls (Customer-Id / Customer-Number)."""
+        self._customer_id = customer_id.strip() if customer_id else None
+        self._customer_number = customer_number.strip() if customer_number else None
+
     async def get_profile(self) -> dict[str, Any]:
-        """GET /api/profile/get – populates customer id/number if present."""
+        """GET /api/profile/get.
+
+        If the profile lists exactly one kundeforhold and none is already
+        selected, that customer is applied. Several relationships are left
+        unselected — the caller must pick the district-heating one.
+        """
+        from ..kmd_supply import customer_identity, extract_customers
+
         url = f"{KMD_API_BASE}/api/profile/get"
         async with self._session.get(url, headers=self._headers()) as resp:
             resp.raise_for_status()
             data = await resp.json()
-            if isinstance(data, dict):
-                customers = data.get("Customers") or data.get("customers") or []
-                if customers and isinstance(customers[0], dict):
-                    c = customers[0]
-                    _LOGGER.info("KMD Customers[0] keys: %s", sorted(c.keys()))
-                    low = {str(k).lower(): v for k, v in c.items()}
-                    cid = low.get("customerid") or low.get("id")
-                    cnum = low.get("customernumber") or low.get("customerno") or low.get("number")
-                    if cid:
-                        self._customer_id = str(cid)
-                    if cnum:
-                        self._customer_number = str(cnum)
+            self._profile = data if isinstance(data, dict) else None
+            customers = extract_customers(data if isinstance(data, dict) else {})
+            if customers:
+                _LOGGER.info(
+                    "KMD profile kundeforhold=%d, first keys=%s",
+                    len(customers),
+                    sorted(customers[0].keys()),
+                )
+            if len(customers) == 1 and not self._customer_id and not self._customer_number:
+                cid, cnum = customer_identity(customers[0])
+                self.set_customer(cid, cnum)
             return data
 
-    async def get_active_meters(self) -> list[dict[str, Any]]:
-        """POST /api/meter/customerActiveMeters with IncludeUnits."""
-        if not self._customer_id or not self._customer_number:
-            await self.get_profile()
+    async def _fetch_active_meters(self) -> list[dict[str, Any]]:
+        """POST /api/meter/customerActiveMeters with the current customer headers."""
         url = f"{KMD_API_BASE}/api/meter/customerActiveMeters"
         hdrs = self._headers()
         async with self._session.post(url, headers=hdrs, json={"IncludeUnits": True}) as resp:
@@ -117,6 +127,74 @@ class KMDClient:
             resp.raise_for_status()
             data = await resp.json()
             return data if isinstance(data, list) else data.get("Meters") or data.get("meters") or []
+
+    async def get_active_meters(self) -> list[dict[str, Any]]:
+        """Meters for the currently selected kundeforhold (or the token default)."""
+        if not self._customer_id or not self._customer_number:
+            await self.get_profile()
+        return await self._fetch_active_meters()
+
+    async def discover_accounts(self) -> list[dict[str, Any]]:
+        """List every kundeforhold from the profile and fetch its meters.
+
+        Logs only counts and kinds of type-field names — never addresses,
+        names, customer numbers or meter identifiers.
+        """
+        from ..kmd_supply import classify_kmd_meter, customer_identity, extract_customers
+
+        profile = self._profile if self._profile is not None else await self.get_profile()
+        customers = extract_customers(profile if isinstance(profile, dict) else {})
+        accounts: list[dict[str, Any]] = []
+        if customers:
+            for idx, customer in enumerate(customers, 1):
+                cid, cnum = customer_identity(customer)
+                self.set_customer(cid, cnum)
+                try:
+                    meters = await self._fetch_active_meters()
+                except Exception as err:  # noqa: BLE001
+                    _LOGGER.warning("KMD meters for kundeforhold %s failed: %s", idx, err)
+                    meters = []
+                kinds = sorted(
+                    {classify_kmd_meter(m) for m in meters if isinstance(m, dict)}
+                )
+                unit_names = sorted(
+                    {
+                        str(u.get("Name") or "")
+                        for m in meters if isinstance(m, dict)
+                        for u in (m.get("Units") or [])
+                        if isinstance(u, dict) and u.get("Name")
+                    }
+                )
+                _LOGGER.info(
+                    "KMD kundeforhold %s/%s: meters=%d kinds=%s units=%s",
+                    idx,
+                    len(customers),
+                    len(meters),
+                    kinds,
+                    unit_names,
+                )
+                accounts.append(
+                    {
+                        "customer": customer,
+                        "customer_index": idx,
+                        "customer_id": cid,
+                        "customer_number": cnum,
+                        "meters": meters,
+                    }
+                )
+            return accounts
+
+        meters = await self._fetch_active_meters()
+        _LOGGER.info("KMD profile had no kundeforhold list; meters=%d", len(meters))
+        return [
+            {
+                "customer": {},
+                "customer_index": 1,
+                "customer_id": self._customer_id,
+                "customer_number": self._customer_number,
+                "meters": meters,
+            }
+        ]
 
     async def get_consumption_timeseries(
         self,

@@ -50,7 +50,10 @@ class FakeSession:
         key = f"{method.upper()} {path.split('?')[0]}"
         if key not in self.handlers:
             raise AssertionError(f"unexpected {key}; known={list(self.handlers)}")
-        return self.handlers[key]
+        handler = self.handlers[key]
+        if callable(handler):
+            return handler(method, url, **kwargs)
+        return handler
 
     def get(self, url: str, **kwargs) -> FakeResp:
         return self._handle("GET", url, **kwargs)
@@ -160,3 +163,87 @@ def test_local_day_utc_bounds_cet() -> None:
     )
     assert start_s.isoformat() == "2026-03-28T23:00:00+00:00"
     assert end_s.isoformat() == "2026-03-29T22:00:00+00:00"
+
+
+@pytest.mark.asyncio
+async def test_profile_with_two_kundeforhold_does_not_select_first() -> None:
+    session = FakeSession()
+    session.set(
+        "GET",
+        "/api/profile/get",
+        FakeResp(
+            200,
+            {
+                "Customers": [
+                    {"CustomerId": "cust-el-synth", "CustomerNumber": "cn-el"},
+                    {"CustomerId": "cust-heat-synth", "CustomerNumber": "cn-heat"},
+                ]
+            },
+        ),
+    )
+    client = KMDClient(session, "tok", referer="https://example.invalid/")
+    data = await client.get_profile()
+    assert len(data["Customers"]) == 2
+    assert client._customer_id is None
+    assert client._customer_number is None
+
+
+@pytest.mark.asyncio
+async def test_discover_accounts_fetches_meters_per_kundeforhold() -> None:
+    session = FakeSession()
+    session.set(
+        "GET",
+        "/api/profile/get",
+        FakeResp(
+            200,
+            {
+                "Customers": [
+                    {"CustomerId": "cust-el-synth", "CustomerNumber": "cn-el"},
+                    {"CustomerId": "cust-heat-synth", "CustomerNumber": "cn-heat"},
+                ]
+            },
+        ),
+    )
+
+    def meters_resp(method, url, **kwargs):
+        headers = (kwargs.get("headers") or {})
+        cid = headers.get("Customer-Id")
+        if cid == "cust-el-synth":
+            body = [
+                {
+                    "MeasurementPointId": "mp-el-synth",
+                    "Type": "El",
+                    "TypeCode": "E17",
+                    "Units": [{"Name": "kWh"}],
+                }
+            ]
+        elif cid == "cust-heat-synth":
+            body = [
+                {
+                    "MeasurementPointId": "mp-heat-synth",
+                    "Type": "Varme",
+                    "Units": [{"Name": "kWh"}, {"Name": "m3"}],
+                },
+                {
+                    "MeasurementPointId": "mp-water-synth",
+                    "Type": "Vand",
+                    "Units": [{"Name": "m3"}],
+                },
+            ]
+        else:
+            raise AssertionError(f"unexpected Customer-Id {cid}")
+        return FakeResp(200, body)
+
+    session.set("POST", "/api/meter/customerActiveMeters", meters_resp)
+    client = KMDClient(session, "tok", referer="https://example.invalid/")
+    accounts = await client.discover_accounts()
+    assert len(accounts) == 2
+    assert accounts[0]["customer_id"] == "cust-el-synth"
+    assert accounts[0]["meters"][0]["Type"] == "El"
+    assert accounts[1]["customer_id"] == "cust-heat-synth"
+    assert [m["Type"] for m in accounts[1]["meters"]] == ["Varme", "Vand"]
+    # Two meter POSTs, each with the matching customer header.
+    meter_calls = [c for c in session.calls if c[0] == "POST"]
+    assert len(meter_calls) == 2
+    assert meter_calls[0][2]["headers"]["Customer-Id"] == "cust-el-synth"
+    assert meter_calls[1][2]["headers"]["Customer-Id"] == "cust-heat-synth"

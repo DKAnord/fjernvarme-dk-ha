@@ -59,7 +59,7 @@
       "backend": "kmd",
       "latitude": 56.139,
       "longitude": 9.158,
-      "notes": "Official KMD Easy Energy / minForsyning portal."
+      "notes": "Min Forsyning 2 (minforsyning-2.kmd.dk, plant 464). Uses the shared MF2 OIDC client, not Kredsløb's plugin client. Live login not yet confirmed."
     },
     {
       "id": "struer-energi",

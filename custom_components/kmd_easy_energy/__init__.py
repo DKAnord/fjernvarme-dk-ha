@@ -10,6 +10,7 @@ from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, ServiceCall
+from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
 
 from .const import (
     CONF_BONUS_TEMP,
@@ -26,9 +27,10 @@ from .const import (
     DOMAIN,
 )
 from .coordinator import KMDEasyEnergyCoordinator
+from .util import store_for, unique_id_for, delete_legacy_www_cache, legacy_www_cache_paths
 
 _LOGGER = logging.getLogger(__name__)
-PLATFORMS = ["sensor", "button"]
+PLATFORMS = ["sensor", "button", "binary_sensor"]
 DEFAULT_PORTAL_URL = "https://minvarme.kredslob.dk/"
 
 
@@ -148,11 +150,41 @@ async def _async_setup_services(hass: HomeAssistant) -> None:
         coord: KMDEasyEnergyCoordinator = hass.data[DOMAIN][entry.entry_id]
         await coord.async_set_setup_state(False)
 
+    async def handle_start_mitid_sync(call: ServiceCall) -> None:
+        entry = _pick_entry(call.data.get("entry_id"))
+        if not entry and call.data.get("utility_id"):
+            want = str(call.data["utility_id"]).strip().lower()
+            entry = next(
+                (
+                    e
+                    for e in hass.config_entries.async_entries(DOMAIN)
+                    if str(e.data.get(CONF_UTILITY_ID, "")).strip().lower() == want
+                ),
+                None,
+            )
+        if not entry:
+            _LOGGER.error("No config entry found for kmd_easy_energy.start_mitid_sync")
+            return
+        coord: KMDEasyEnergyCoordinator = hass.data[DOMAIN][entry.entry_id]
+        await coord.async_start_mitid_sync(
+            mitid_username=(
+                str(call.data["mitid_username"]).strip()
+                if call.data.get("mitid_username")
+                else None
+            ),
+            notify_service=(
+                str(call.data["notify_service"]).strip()
+                if call.data.get("notify_service") is not None
+                else None
+            ),
+        )
+
     for svc_name, handler in (
         ("update_token", handle_update_token),
         ("refresh", handle_refresh),
         ("configure_utility", handle_configure_utility),
         ("reset_setup", handle_reset_setup),
+        ("start_mitid_sync", handle_start_mitid_sync),
     ):
         if not hass.services.has_service(DOMAIN, svc_name):
             hass.services.async_register(DOMAIN, svc_name, handler)
@@ -186,10 +218,43 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             entry.data.get(CONF_UTILITY_ID),
         )
     )
+    if not entry.unique_id:
+        hass.config_entries.async_update_entry(
+            entry,
+            unique_id=unique_id_for(
+                entry.data.get(CONF_UTILITY_ID),
+                entry.data.get(CONF_PORTAL_URL) or portal_url,
+            ),
+        )
+
     coordinator = KMDEasyEnergyCoordinator(hass, entry, portal_url=portal_url)
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = coordinator
 
-    await coordinator.async_config_entry_first_refresh()
+    await coordinator.async_initialize_cache()
+    try:
+        await coordinator.async_config_entry_first_refresh()
+    except ConfigEntryAuthFailed:
+        if coordinator.has_usable_cache:
+            _LOGGER.warning(
+                "KMD token rejected; using cached data and starting reauth for %s",
+                entry.title,
+            )
+            coordinator.last_update_success = True
+            coordinator.async_set_updated_data(coordinator.data)
+            entry.async_start_reauth(hass)
+        else:
+            raise
+    except ConfigEntryNotReady:
+        if coordinator.has_usable_cache:
+            _LOGGER.warning(
+                "KMD API unavailable at startup; using cached data for %s",
+                entry.title,
+            )
+            coordinator.last_update_success = True
+            coordinator.async_set_updated_data(coordinator.data)
+        else:
+            raise
+
     await _async_setup_services(hass)
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     return True
@@ -202,6 +267,20 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         domain_data = hass.data.get(DOMAIN, {})
         domain_data.pop(entry.entry_id, None)
         if not domain_data:
-            for svc_name in ("update_token", "refresh", "configure_utility", "reset_setup"):
+            for svc_name in (
+                "update_token",
+                "refresh",
+                "configure_utility",
+                "reset_setup",
+                "start_mitid_sync",
+            ):
                 hass.services.async_remove(DOMAIN, svc_name)
     return unload_ok
+
+
+async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Clean private storage and leftover public www/ cache files."""
+    store = store_for(hass, entry.entry_id)
+    await store.async_remove()
+    paths = legacy_www_cache_paths(hass, entry.data.get(CONF_UTILITY_ID))
+    await hass.async_add_executor_job(delete_legacy_www_cache, paths)

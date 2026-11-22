@@ -30,14 +30,19 @@ from .const import (
     CONF_LONGITUDE,
     CONF_LOCATION_NAME,
     CONF_MITID_USERNAME,
+    CONF_MOTIVATION_DKK_PER_KWH_PER_K,
+    CONF_NORMAL_HDD_YEAR,
     CONF_NOTIFY_SERVICE,
     CONF_PENALTY_TEMP,
     CONF_PORTAL_URL,
+    CONF_PRICE_DKK_PER_KWH,
+    CONF_PRICE_DKK_PER_M3,
     CONF_UTILITY,
     CONF_UTILITY_ID,
     CONF_UTILITY_STATUS,
     DOMAIN,
 )
+from .util import unique_id_for
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -84,6 +89,45 @@ def _format_utility_label(u: dict[str, Any]) -> str:
     return f"🧪 {u['name']}{city} — Afventer 1. test / Pending test"
 
 
+def _notify_service_selector(hass: Any, current: str = "") -> SelectSelector:
+    """Build a dropdown selector of available Home Assistant notify services."""
+    services_map: dict[str, Any] = {}
+    try:
+        all_services = hass.services.async_services() if hass and hasattr(hass, "services") else {}
+        if isinstance(all_services, dict):
+            raw_notify = all_services.get("notify") or {}
+            if isinstance(raw_notify, dict):
+                services_map = raw_notify
+    except Exception:  # noqa: BLE001
+        services_map = {}
+
+    excluded = {"persistent_notification", "send_message", "notify"}
+    names = [str(k) for k in services_map if str(k) not in excluded]
+    mobile = sorted(n for n in names if n.startswith("mobile_app_"))
+    other = sorted(n for n in names if not n.startswith("mobile_app_"))
+
+    options: list[SelectOptionDict] = [
+        SelectOptionDict(value="", label="— Ingen mobil-push / None —"),
+    ]
+    for svc in mobile:
+        friendly = svc[len("mobile_app_") :].replace("_", " ").title()
+        options.append(SelectOptionDict(value=svc, label=f"📱 {friendly} ({svc})"))
+    for svc in other:
+        options.append(SelectOptionDict(value=svc, label=f"🔔 {svc}"))
+
+    cur = str(current or "").replace("notify.", "").strip()
+    if cur and cur not in names:
+        options.append(SelectOptionDict(value=cur, label=cur))
+
+    return SelectSelector(
+        SelectSelectorConfig(
+            options=options,
+            mode=SelectSelectorMode.DROPDOWN,
+            custom_value=True,
+        )
+    )
+
+
 class KMDEasyEnergyConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Handle a 2-step config flow for KMD Easy Energy."""
 
@@ -91,6 +135,12 @@ class KMDEasyEnergyConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     def __init__(self) -> None:
         self._selected_utility: dict[str, Any] = dict(CUSTOM_UTILITY)
+
+    async def _async_set_entry_unique_id(
+        self, utility_id: str | None, portal_url: str | None
+    ) -> None:
+        await self.async_set_unique_id(unique_id_for(utility_id, portal_url))
+        self._abort_if_unique_id_configured()
 
     @staticmethod
     @callback
@@ -166,6 +216,9 @@ class KMDEasyEnergyConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     entry_data[CONF_CUSTOMER_ID] = client._customer_id or customer_id
                 if client._customer_number:
                     entry_data[CONF_CUSTOMER_NUMBER] = client._customer_number
+                await self._async_set_entry_unique_id(
+                    entry_data.get(CONF_UTILITY_ID), entry_data.get(CONF_PORTAL_URL)
+                )
                 return self.async_create_entry(
                     title=entry_data[CONF_UTILITY],
                     data=entry_data,
@@ -244,6 +297,9 @@ class KMDEasyEnergyConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         entry_data[CONF_CUSTOMER_ID] = client._customer_id or customer_id
                     if client._customer_number:
                         entry_data[CONF_CUSTOMER_NUMBER] = client._customer_number
+                    await self._async_set_entry_unique_id(
+                        entry_data.get(CONF_UTILITY_ID), entry_data.get(CONF_PORTAL_URL)
+                    )
                     return self.async_create_entry(
                         title=entry_data[CONF_UTILITY],
                         data=entry_data,
@@ -251,6 +307,9 @@ class KMDEasyEnergyConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             else:
                 if customer_id:
                     entry_data[CONF_CUSTOMER_ID] = customer_id
+                await self._async_set_entry_unique_id(
+                    entry_data.get(CONF_UTILITY_ID), entry_data.get(CONF_PORTAL_URL)
+                )
                 return self.async_create_entry(
                     title=entry_data[CONF_UTILITY],
                     data=entry_data,
@@ -265,7 +324,7 @@ class KMDEasyEnergyConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             {
                 vol.Required(CONF_PORTAL_URL, default=u.get("portal_url", "https://")): str,
                 vol.Optional(CONF_MITID_USERNAME, default=""): str,
-                vol.Optional(CONF_NOTIFY_SERVICE, default=""): str,
+                vol.Optional(CONF_NOTIFY_SERVICE, default=""): _notify_service_selector(self.hass),
                 vol.Optional(CONF_ACCESS_TOKEN, default=""): str,
                 vol.Optional(CONF_CUSTOMER_ID, default=""): str,
                 vol.Optional(CONF_LOCATION_NAME, default=u.get("city", "")): str,
@@ -340,8 +399,10 @@ class KMDEasyEnergyConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 ): str,
                 vol.Optional(
                     CONF_NOTIFY_SERVICE,
-                    default=current_data.get(CONF_NOTIFY_SERVICE, ""),
-                ): str,
+                    default=str(current_data.get(CONF_NOTIFY_SERVICE, "")).replace("notify.", "").strip(),
+                ): _notify_service_selector(
+                    self.hass, str(current_data.get(CONF_NOTIFY_SERVICE, ""))
+                ),
                 vol.Optional(CONF_ACCESS_TOKEN, default=""): str,
                 vol.Optional(
                     CONF_CUSTOMER_ID,
@@ -362,6 +423,153 @@ class KMDEasyEnergyConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 "portal_url": str(current_data.get(CONF_PORTAL_URL, "https://minvarme.kredslob.dk/")),
             },
         )
+
+
+    async def async_step_reauth(self, entry_data: dict[str, Any]) -> FlowResult:
+        """Start reauth when the KMD Bearer token is rejected."""
+        return await self.async_step_reauth_confirm()
+
+    async def async_step_reauth_confirm(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Paste a fresh token or start a native MitID login."""
+        errors: dict[str, str] = {}
+        entry = self._get_reauth_entry()
+        current = {**entry.data, **entry.options}
+        utility_name = str(current.get(CONF_UTILITY) or entry.title or "KMD Easy Energy")
+
+        if user_input is not None:
+            token = (user_input.get(CONF_ACCESS_TOKEN) or "").strip()
+            mitid_username = (user_input.get(CONF_MITID_USERNAME) or "").strip()
+            notify_service = (user_input.get(CONF_NOTIFY_SERVICE) or "").strip()
+            start_mitid = bool(user_input.get("start_mitid"))
+            portal_url = (
+                user_input.get(CONF_PORTAL_URL)
+                or current.get(CONF_PORTAL_URL)
+                or ""
+            ).strip()
+            customer_id = (user_input.get(CONF_CUSTOMER_ID) or current.get(CONF_CUSTOMER_ID) or "").strip()
+
+            updates: dict[str, Any] = {CONF_PORTAL_URL: portal_url}
+            if mitid_username:
+                updates[CONF_MITID_USERNAME] = mitid_username
+            if notify_service:
+                updates[CONF_NOTIFY_SERVICE] = notify_service
+            if customer_id:
+                updates[CONF_CUSTOMER_ID] = customer_id
+
+            if token:
+                ok, client = await self._validate_token(token, customer_id, portal_url)
+                if not ok:
+                    errors["base"] = "invalid_auth"
+                else:
+                    updates[CONF_ACCESS_TOKEN] = token
+                    if client._customer_id or customer_id:
+                        updates[CONF_CUSTOMER_ID] = client._customer_id or customer_id
+                    if client._customer_number:
+                        updates[CONF_CUSTOMER_NUMBER] = client._customer_number
+                    return self.async_update_reload_and_abort(entry, data_updates=updates)
+
+            elif start_mitid:
+                if mitid_username or notify_service or portal_url:
+                    self.hass.config_entries.async_update_entry(
+                        entry, data={**entry.data, **updates}
+                    )
+                coord = (self.hass.data.get(DOMAIN) or {}).get(entry.entry_id)
+                if coord is None:
+                    errors["base"] = "mitid_unavailable"
+                else:
+                    await coord.async_start_mitid_sync(
+                        mitid_username=mitid_username or None,
+                        notify_service=notify_service if notify_service else None,
+                    )
+                    return await self.async_step_reauth_mitid()
+            else:
+                errors["base"] = "token_or_mitid_required"
+
+        schema = vol.Schema(
+            {
+                vol.Required(
+                    CONF_PORTAL_URL,
+                    default=current.get(CONF_PORTAL_URL, "https://minvarme.kredslob.dk/"),
+                ): str,
+                vol.Optional(
+                    CONF_MITID_USERNAME,
+                    default=current.get(CONF_MITID_USERNAME, ""),
+                ): str,
+                vol.Optional(
+                    CONF_NOTIFY_SERVICE,
+                    default=str(current.get(CONF_NOTIFY_SERVICE, "")).replace("notify.", "").strip(),
+                ): _notify_service_selector(
+                    self.hass, str(current.get(CONF_NOTIFY_SERVICE, ""))
+                ),
+                vol.Optional(CONF_ACCESS_TOKEN, default=""): str,
+                vol.Optional(
+                    CONF_CUSTOMER_ID,
+                    default=current.get(CONF_CUSTOMER_ID, ""),
+                ): str,
+                vol.Optional("start_mitid", default=False): bool,
+            }
+        )
+        return self.async_show_form(
+            step_id="reauth_confirm",
+            data_schema=schema,
+            errors=errors,
+            description_placeholders={
+                "utility_name": utility_name,
+                "portal_url": str(current.get(CONF_PORTAL_URL, "")),
+            },
+        )
+
+    async def async_step_reauth_mitid(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Wait for the in-progress MitID flow.
+
+        The 4-digit code is shown in a persistent notification and on the
+        Lovelace card via a bus event — not in entity state or the recorder.
+        The optional otp_hint placeholder is only rendered in this transient
+        config-flow form.
+        """
+        entry = self._get_reauth_entry()
+        coord = (self.hass.data.get(DOMAIN) or {}).get(entry.entry_id)
+        if coord is None:
+            return self.async_abort(reason="mitid_unavailable")
+
+        otp_hint = coord.mitid_otp_code or "—"
+        sync_state = coord.sync_state or "starting"
+        sync_message = coord.sync_message or (
+            "Åbn MitID-appen og godkend. Tryk på Send for at opdatere status."
+        )
+
+        if user_input is not None:
+            if sync_state == "error":
+                return self.async_show_form(
+                    step_id="reauth_mitid",
+                    data_schema=vol.Schema({}),
+                    errors={"base": "mitid_failed"},
+                    description_placeholders={
+                        "sync_message": sync_message,
+                        "otp_hint": otp_hint,
+                        "sync_state": sync_state,
+                    },
+                )
+            if sync_state == "idle" and (
+                coord.entry.data.get(CONF_ACCESS_TOKEN)
+                or entry.data.get(CONF_ACCESS_TOKEN)
+            ):
+                return self.async_update_reload_and_abort(entry, data_updates={})
+
+        return self.async_show_form(
+            step_id="reauth_mitid",
+            data_schema=vol.Schema({}),
+            description_placeholders={
+                "sync_message": sync_message,
+                "otp_hint": otp_hint,
+                "sync_state": sync_state,
+            },
+        )
+
 
 
 class KMDEasyEnergyOptionsFlow(config_entries.OptionsFlow):
@@ -385,6 +593,12 @@ class KMDEasyEnergyOptionsFlow(config_entries.OptionsFlow):
                     default=opts.get(CONF_LOCATION_NAME, ""),
                 ): str,
                 vol.Optional(
+                    CONF_NOTIFY_SERVICE,
+                    default=str(opts.get(CONF_NOTIFY_SERVICE, "")).replace("notify.", "").strip(),
+                ): _notify_service_selector(
+                    self.hass, str(opts.get(CONF_NOTIFY_SERVICE, ""))
+                ),
+                vol.Optional(
                     CONF_BONUS_TEMP,
                     default=float(opts.get(CONF_BONUS_TEMP, 30.0)),
                 ): vol.Coerce(float),
@@ -399,6 +613,22 @@ class KMDEasyEnergyOptionsFlow(config_entries.OptionsFlow):
                 vol.Optional(
                     CONF_LONGITUDE,
                     default=float(opts.get(CONF_LONGITUDE) or self.hass.config.longitude or 10.10),
+                ): vol.Coerce(float),
+                vol.Optional(
+                    CONF_PRICE_DKK_PER_KWH,
+                    default=float(opts.get(CONF_PRICE_DKK_PER_KWH) or 0.0),
+                ): vol.Coerce(float),
+                vol.Optional(
+                    CONF_PRICE_DKK_PER_M3,
+                    default=float(opts.get(CONF_PRICE_DKK_PER_M3) or 0.0),
+                ): vol.Coerce(float),
+                vol.Optional(
+                    CONF_MOTIVATION_DKK_PER_KWH_PER_K,
+                    default=float(opts.get(CONF_MOTIVATION_DKK_PER_KWH_PER_K) or 0.0),
+                ): vol.Coerce(float),
+                vol.Optional(
+                    CONF_NORMAL_HDD_YEAR,
+                    default=float(opts.get(CONF_NORMAL_HDD_YEAR) or 0.0),
                 ): vol.Coerce(float),
             }
         )

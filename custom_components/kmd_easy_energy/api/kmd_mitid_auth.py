@@ -24,6 +24,7 @@ import qrcode.image.svg
 from bs4 import BeautifulSoup
 
 from ..mitid_browserclient.BrowserClient import BrowserClient
+from ..util import redact_url
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -341,7 +342,11 @@ class KMDMitIDAuthenticator:
         _LOGGER.info("Post-MitID: posting completion to NemLog-in")
         r_comp = self.session.post(NEMLOGIN_URL, data=params, timeout=self.timeout)
         r_comp.raise_for_status()
-        _LOGGER.info("Post-MitID: NemLog-in response status=%s url=%s", r_comp.status_code, r_comp.url[:100])
+        _LOGGER.debug(
+            "Post-MitID: NemLog-in response status=%s url=%s",
+            r_comp.status_code,
+            redact_url(r_comp.url)[:160],
+        )
 
         # Handle multiple identities if NemLog-in presents /loginoption
         if "/loginoption" in r_comp.url:
@@ -368,7 +373,11 @@ class KMDMitIDAuthenticator:
                 timeout=self.timeout,
             )
             r_comp.raise_for_status()
-            _LOGGER.info("Post-MitID: /loginoption response status=%s url=%s", r_comp.status_code, r_comp.url[:100])
+            _LOGGER.debug(
+                "Post-MitID: /loginoption response status=%s url=%s",
+                r_comp.status_code,
+                redact_url(r_comp.url)[:160],
+            )
 
         # Multi-hop <form> submission loop (NemLog-in -> idpproxy -> identity.kmd.dk -> easy-energy-identity)
         cur = r_comp
@@ -390,13 +399,20 @@ class KMDMitIDAuthenticator:
                 if inp.get("name")
             }
             cur = self.session.post(action_url, data=payload, timeout=self.timeout)
-            _LOGGER.info("Post-MitID form hop %d -> %s (status=%s)", hop + 1, action_url[:100], cur.status_code)
+            _LOGGER.debug(
+                "Post-MitID form hop %d -> %s (status=%s)",
+                hop + 1,
+                redact_url(action_url)[:160],
+                cur.status_code,
+            )
             if not self.session.redirect_handler.oidc_code and cur.status_code >= 400:
                 cur.raise_for_status()
 
         oidc_code = self.session.redirect_handler.oidc_code
         if not oidc_code:
-            raise RuntimeError(f"OIDC authorization code not returned (last url={cur.url[:120]})")
+            raise RuntimeError(
+                f"OIDC authorization code not returned (last url={redact_url(cur.url)[:160]})"
+            )
 
         tok_resp = self.session.post(
             f"{IDENTITY_BASE}/oidc/token",

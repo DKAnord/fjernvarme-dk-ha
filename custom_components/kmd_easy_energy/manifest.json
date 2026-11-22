@@ -1,16 +1,27 @@
 {
   "domain": "kmd_easy_energy",
   "name": "Fjernvarme (KMD Easy Energy)",
-  "categories": ["energy"],
-  "codeowners": ["@DKAnord"],
+  "after_dependencies": [
+    "recorder"
+  ],
+  "categories": [
+    "energy"
+  ],
+  "codeowners": [
+    "@DKAnord"
+  ],
   "config_flow": true,
   "documentation": "https://github.com/DKAnord/kmd-fjernvarme-ha",
+  "integration_type": "service",
   "iot_class": "cloud_polling",
   "issue_tracker": "https://github.com/DKAnord/kmd-fjernvarme-ha/issues",
+  "loggers": [
+    "custom_components.kmd_easy_energy"
+  ],
   "requirements": [
     "beautifulsoup4>=4.12.0",
     "pycryptodome>=3.19.0",
     "qrcode>=7.4.2"
   ],
-  "version": "0.2.1"
+  "version": "0.3.0"
 }

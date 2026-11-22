@@ -3,7 +3,7 @@
  * Zero external dependencies, Shadow DOM, responsive, interactive tooltips, DA/EN i18n.
  */
 (() => {
-  const VER = "0.2.1";
+  const VER = "0.3.0";
   const MONTHS = ["Jan", "Feb", "Mar", "Apr", "Maj", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Dec"];
   const DAYS_IN_MONTH = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
   const isLeapYear = (y) => (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0;
@@ -163,13 +163,43 @@
       return null;
     }
 
+    _subscribeMitid(hass) {
+      if (this._unsubMitid || !hass?.connection?.subscribeEvents) return;
+      this._unsubMitid = hass.connection.subscribeEvents((ev) => {
+        const d = ev.data || {};
+        const st = this._resolveEntity();
+        const entryId = st?.attributes?.entry_id;
+        const utilId = st?.attributes?.utility_id || this._config?.utility_id;
+        if (d.entry_id && entryId && d.entry_id !== entryId) return;
+        if (!d.entry_id && d.utility_id && utilId && d.utility_id !== utilId) return;
+        this._mitidOtp = d.otp_code || "";
+        this._mitidQr = d.qr_svg || "";
+        if (d.sync_state === "idle" || d.sync_state === "error") {
+          if (d.sync_state === "idle") {
+            this._mitidOtp = "";
+            this._mitidQr = "";
+          }
+        }
+        this._lastSig = null;
+        this._render();
+      }, "kmd_easy_energy_mitid_challenge");
+    }
+
+    disconnectedCallback() {
+      const unsub = this._unsubMitid;
+      this._unsubMitid = null;
+      if (typeof unsub === "function") unsub();
+      else if (unsub && typeof unsub.then === "function") unsub.then((fn) => fn && fn());
+    }
+
     set hass(hass) {
       this._hass = hass;
+      this._subscribeMitid(hass);
       const st = this._resolveEntity();
       const statusEnt = this._config?.status_entity;
       const syncSt = statusEnt ? (hass?.states?.[statusEnt]?.state || "") : "";
       const sig = st
-        ? `${st.entity_id}|${st.state}|${st.attributes?.updated || ""}|${st.attributes?.hourly?.days_averaged || ""}|${st.attributes?.daily?.latest_complete}|${st.attributes?.token_expired}|${st.attributes?.initial_setup_complete}|${st.attributes?.utility_id || ""}|${st.attributes?.sync_state || ""}|${st.attributes?.sync_message || ""}|${st.attributes?.mitid_otp_code || ""}|${Boolean(st.attributes?.mitid_qr_svg)}|${syncSt}`
+        ? `${st.entity_id}|${st.state}|${st.attributes?.updated || ""}|${st.attributes?.hourly?.days_averaged || ""}|${st.attributes?.daily?.latest_complete}|${st.attributes?.token_expired}|${st.attributes?.initial_setup_complete}|${st.attributes?.utility_id || ""}|${st.attributes?.entry_id || ""}|${st.attributes?.sync_state || ""}|${st.attributes?.sync_message || ""}|${this._mitidOtp || ""}|${Boolean(this._mitidQr)}|${syncSt}`
         : "none";
       if (sig === this._lastSig) return;
       this._lastSig = sig;
@@ -549,11 +579,30 @@
       const nativeSyncMsg = a.sync_message || "";
       const syncMsg = nativeSyncMsg || (legacySyncMsg && legacySyncMsg !== "unknown" && legacySyncMsg !== "unavailable" ? legacySyncMsg : "");
       const hasSyncMsg = Boolean(syncMsg);
-      const otpCode = a.mitid_otp_code || "";
-      const qrSvg = a.mitid_qr_svg || "";
+      const otpCode = this._mitidOtp || "";
+      const qrSvg = this._mitidQr || "";
       const hasMitidUser = Boolean(a.has_mitid_username);
       const mitidMasked = a.mitid_username_masked || "";
-      const notifySvc = this._wizNotify ?? (a.notify_service || "");
+      const notifySvc = String(this._wizNotify ?? (a.notify_service || "")).replace(/^notify\./, "").trim();
+      const rawNotify = Object.keys(this._hass?.services?.notify || {})
+        .filter((s) => !["persistent_notification", "send_message", "notify"].includes(s));
+      const mobileNotify = rawNotify.filter((s) => s.startsWith("mobile_app_")).sort();
+      const otherNotify = rawNotify.filter((s) => !s.startsWith("mobile_app_")).sort();
+      const allNotifyIds = [...mobileNotify, ...otherNotify];
+      const isCustomNotify = Boolean(this._wizNotifyCustom) || (Boolean(notifySvc) && !allNotifyIds.includes(notifySvc));
+      const fmtMobileLabel = (s) => `📱 ${s.slice("mobile_app_".length).replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())} (${s})`;
+      const mobileNotifyOpts = mobileNotify
+        .map((s) => `<option value="${esc(s)}" ${!isCustomNotify && s === notifySvc ? "selected" : ""}>${esc(fmtMobileLabel(s))}</option>`).join("");
+      const otherNotifyOpts = otherNotify
+        .map((s) => `<option value="${esc(s)}" ${!isCustomNotify && s === notifySvc ? "selected" : ""}>🔔 ${esc(s)}</option>`).join("");
+      const notifySelectHtml = `
+        <select id="notifySel" aria-label="Select notify service">
+          <option value="" ${!isCustomNotify && !notifySvc ? "selected" : ""}>— Ingen mobil-push (kun notifikation i HA) —</option>
+          ${mobileNotifyOpts ? `<optgroup label="📱 Telefoner (Home Assistant App)">${mobileNotifyOpts}</optgroup>` : ""}
+          ${otherNotifyOpts ? `<optgroup label="🔔 Øvrige notify-tjenester">${otherNotifyOpts}</optgroup>` : ""}
+          <option value="__custom__" ${isCustomNotify ? "selected" : ""}>✏️ Andet (indtast manuelt)…</option>
+        </select>
+        ${isCustomNotify ? `<input id="notifyInput" value="${esc(notifySvc)}" placeholder="f.eks. mobile_app_min_telefon" style="margin-top:6px" />` : ""}`;
       const tokenExpired = Boolean(a.token_expired);
       const hasData = Boolean(
         st && (Object.keys(ann).length > 0 || Object.keys(mon).length > 0 || Object.keys(dy.days || {}).length > 0)
@@ -799,7 +848,7 @@
                 <input id="mitidUserInput" value="${esc(this._wizMitidUser || "")}" placeholder="${hasMitidUser ? `Gemt i HA (${esc(mitidMasked)}) — udfyld kun for at ændre` : "Indtast dit MitID Bruger-ID"}" />
               </label>
               <label class="ob-field">Mobil Push-service (valgfri, til kode på telefon)
-                <input id="notifyInput" value="${esc(notifySvc)}" placeholder="f.eks. mobile_app_min_telefon" />
+                ${notifySelectHtml}
               </label>
             </div>
             <div class="ob-step">2. Forbind med 1-klik MitID-synkronisering (Anbefalet — 100% i Home Assistant)</div>
@@ -1028,13 +1077,17 @@
         });
       }
       const readWizPayload = (startSync, completeSetup) => {
+        const notifySelEl = this.shadowRoot.getElementById("notifySel");
+        const notifyVal = notifySelEl && notifySelEl.value !== "__custom__"
+          ? notifySelEl.value.trim()
+          : (this.shadowRoot.getElementById("notifyInput")?.value?.trim() ?? notifySvc);
         const p = {
           utility_id: this._selectedUtilId || activeUtilId,
           portal_url: this.shadowRoot.getElementById("portalUrlInput")?.value?.trim() || wizPortalUrl,
           location_name: this.shadowRoot.getElementById("locInput")?.value?.trim() ?? wizLocation,
           bonus_temp: Number(this.shadowRoot.getElementById("bonusInput")?.value ?? wizBonus),
           penalty_temp: Number(this.shadowRoot.getElementById("penaltyInput")?.value ?? wizPenalty),
-          notify_service: this.shadowRoot.getElementById("notifyInput")?.value?.trim() ?? notifySvc,
+          notify_service: notifyVal,
           start_sync: startSync,
           complete_setup: completeSetup,
         };
@@ -1042,6 +1095,18 @@
         if (mu) p.mitid_username = mu;
         return p;
       };
+      const notifySel = this.shadowRoot.getElementById("notifySel");
+      if (notifySel) {
+        notifySel.addEventListener("change", (ev) => {
+          if (ev.target.value === "__custom__") {
+            this._wizNotifyCustom = true;
+          } else {
+            this._wizNotifyCustom = false;
+            this._wizNotify = ev.target.value;
+          }
+          this._render();
+        });
+      }
       [
         ["mitidUserInput", "_wizMitidUser"],
         ["portalUrlInput", "_wizPortalUrl"],
@@ -1101,16 +1166,24 @@
       }
       const triggerSync = () => {
         if (!this._hass) return;
-        const nativeBtn = `button.${activeUtilId.replace(/-/g, "_")}_sync`;
-        const btnEnt =
-          cfg.sync_button_entity ||
-          (this._hass.states[nativeBtn] ? nativeBtn : null);
-        if (btnEnt && btnEnt.startsWith("button.")) {
-          this._hass.callService("button", "press", { entity_id: btnEnt });
-        } else if (btnEnt && btnEnt.startsWith("input_button.")) {
-          this._hass.callService("input_button", "press", { entity_id: btnEnt });
+        const payload = {};
+        if (a.entry_id) payload.entry_id = a.entry_id;
+        else if (activeUtilId) payload.utility_id = activeUtilId;
+        const customBtn = cfg.sync_button_entity;
+        if (customBtn && customBtn.startsWith("button.")) {
+          this._hass.callService("button", "press", { entity_id: customBtn });
+          return;
+        }
+        if (customBtn && customBtn.startsWith("input_button.")) {
+          this._hass.callService("input_button", "press", { entity_id: customBtn });
+          return;
+        }
+        // Prefer the domain service (looks up the entry by id / utility_id) so
+        // entity_id slugs like "envafors_sk_forsyning" cannot miss the button.
+        if (tokenExpired || !hasData) {
+          this._hass.callService("kmd_easy_energy", "start_mitid_sync", payload);
         } else {
-          this._hass.callService("kmd_easy_energy", "refresh", {});
+          this._hass.callService("kmd_easy_energy", "refresh", payload);
         }
       };
       const syncBtn = this.shadowRoot.getElementById("syncBtn");

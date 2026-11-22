@@ -108,3 +108,30 @@ reset_setup:
       required: false
       selector:
         text:
+
+start_mitid_sync:
+  name: Start MitID sync
+  description: Start the built-in MitID login to refresh the access token.
+  fields:
+    entry_id:
+      name: Config entry ID
+      description: Optional – defaults to the first entry
+      required: false
+      selector:
+        text:
+    utility_id:
+      name: Utility ID
+      description: Optional alternative to entry_id (e.g. kredslob)
+      required: false
+      selector:
+        text:
+    mitid_username:
+      name: MitID User ID
+      required: false
+      selector:
+        text:
+    notify_service:
+      name: Mobile notify service
+      required: false
+      selector:
+        text:

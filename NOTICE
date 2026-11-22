@@ -1,0 +1,19 @@
+This repository vendors a copy of MitID-BrowserClient for offline MitID
+authentication inside Home Assistant:
+
+  https://github.com/Hundter/MitID-BrowserClient
+
+Copyright (c) 2024 Hundter
+Licensed under the MIT License.
+
+The vendored copy lives in:
+  custom_components/kmd_easy_energy/mitid_browserclient/
+
+The full MIT license text is at:
+  custom_components/kmd_easy_energy/mitid_browserclient/LICENSE
+
+CLI helpers (Helpers.py) and example login flows from the upstream project
+are not included; only BrowserClient and CustomSRP are used at runtime.
+
+This project is not affiliated with or endorsed by MitID, NemLog-in,
+Digitaliseringsstyrelsen, KMD, or any district-heating utility.

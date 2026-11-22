@@ -1,0 +1,162 @@
+"""KMDClient against a mock aiohttp session (no real network)."""
+
+from __future__ import annotations
+
+from datetime import datetime
+from unittest.mock import MagicMock
+
+import pytest
+from aiohttp import ClientResponseError
+
+from kmd_easy_energy.api.kmd_client import KMDClient
+from kmd_easy_energy.const import KMD_API_BASE
+
+
+class FakeResp:
+    def __init__(self, status: int, data, headers=None) -> None:
+        self.status = status
+        self._data = data
+        self.headers = headers or {}
+        self.request_info = MagicMock()
+        self.history = ()
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *exc):
+        return False
+
+    def raise_for_status(self):
+        if self.status >= 400:
+            raise ClientResponseError(
+                self.request_info, self.history, status=self.status, message="error"
+            )
+
+    async def json(self):
+        return self._data
+
+
+class FakeSession:
+    def __init__(self) -> None:
+        self.calls: list[tuple[str, str, dict]] = []
+        self.handlers: dict[str, FakeResp] = {}
+
+    def set(self, method: str, suffix: str, resp: FakeResp) -> None:
+        self.handlers[f"{method.upper()} {suffix}"] = resp
+
+    def _handle(self, method: str, url: str, **kwargs) -> FakeResp:
+        self.calls.append((method, url, kwargs))
+        path = url[len(KMD_API_BASE) :] if url.startswith(KMD_API_BASE) else url
+        key = f"{method.upper()} {path.split('?')[0]}"
+        if key not in self.handlers:
+            raise AssertionError(f"unexpected {key}; known={list(self.handlers)}")
+        return self.handlers[key]
+
+    def get(self, url: str, **kwargs) -> FakeResp:
+        return self._handle("GET", url, **kwargs)
+
+    def post(self, url: str, **kwargs) -> FakeResp:
+        return self._handle("POST", url, **kwargs)
+
+
+@pytest.mark.asyncio
+async def test_get_profile_populates_customer_headers() -> None:
+    session = FakeSession()
+    session.set(
+        "GET",
+        "/api/profile/get",
+        FakeResp(
+            200,
+            {"Customers": [{"CustomerId": "cid-1", "CustomerNumber": "cn-9"}]},
+        ),
+    )
+    client = KMDClient(session, "tok", referer="https://minvarme.kredslob.dk/")
+    data = await client.get_profile()
+    assert data["Customers"][0]["CustomerId"] == "cid-1"
+    assert client._customer_id == "cid-1"
+    assert client._customer_number == "cn-9"
+    auth = session.calls[0][2]["headers"]["Authorization"]
+    assert auth == "Bearer tok"
+
+
+@pytest.mark.asyncio
+async def test_active_meters_include_units_and_401() -> None:
+    session = FakeSession()
+    session.set(
+        "POST",
+        "/api/meter/customerActiveMeters",
+        FakeResp(401, {"error": "expired"}),
+    )
+    client = KMDClient(session, "tok", customer_id="c", customer_number="n")
+    with pytest.raises(ClientResponseError) as err:
+        await client.get_active_meters()
+    assert err.value.status == 401
+    body = session.calls[0][2]["json"]
+    assert body == {"IncludeUnits": True}
+
+
+@pytest.mark.asyncio
+async def test_consumption_payload_shape() -> None:
+    session = FakeSession()
+    session.set(
+        "POST",
+        "/api/consumption/consumptionTimeSeries",
+        FakeResp(200, {"Series": [{"Data": [{"DateFrom": "2026-11-01T00:00:00Z", "Value": 1, "IsComplete": True}]}]}),
+    )
+    client = KMDClient(session, "tok", customer_id="c", customer_number="n")
+    unit = {"Id": 1, "Name": "kWh", "Decimals": 0}
+    await client.get_consumption_timeseries(
+        "inst", "mp", unit, 3, datetime(2026, 11, 1), datetime(2026, 11, 2)
+    )
+    payload = session.calls[0][2]["json"]
+    assert payload["IncludeUnits"] if "IncludeUnits" in payload else True
+    assert payload["PriceData"] is False
+    assert payload["ZoomLevel"] == 3
+    assert payload["InstallationId"] == "inst"
+    assert payload["DateFrom"].endswith("Z")
+
+
+@pytest.mark.asyncio
+async def test_balance_and_settlement_endpoints() -> None:
+    session = FakeSession()
+    session.set("GET", "/api/balancestatement/getbalance", FakeResp(200, {"Balance": 10.5}))
+    session.set(
+        "GET",
+        "/api/customer/getcurrentsettlementperiod",
+        FakeResp(200, {"DateFrom": "2026-01-01", "DateTo": "2026-12-31"}),
+    )
+    client = KMDClient(session, "tok", customer_id="c", customer_number="n")
+    assert (await client.get_balance())["Balance"] == 10.5
+    sp = await client.get_current_settlement_period()
+    assert sp["DateFrom"].startswith("2026")
+
+
+def test_format_api_dt_naive_and_aware() -> None:
+    from datetime import datetime, timezone
+    from zoneinfo import ZoneInfo
+
+    from kmd_easy_energy.api.kmd_client import _format_api_dt
+
+    naive = datetime(2026, 11, 1)
+    assert _format_api_dt(naive) == "2026-11-01T00:00:00.000Z"
+    # 00:00 Europe/Copenhagen on 1 Nov 2026 is 23:00 UTC on 31 Oct (CET, UTC+1)
+    local_midnight = datetime(2026, 11, 1, 0, 0, tzinfo=ZoneInfo("Europe/Copenhagen"))
+    assert _format_api_dt(local_midnight) == "2026-10-31T23:00:00.000Z"
+    assert _format_api_dt(datetime(2026, 11, 1, 0, 0, tzinfo=timezone.utc)) == "2026-11-01T00:00:00.000Z"
+
+
+def test_local_day_utc_bounds_cet() -> None:
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    from kmd_easy_energy.api.kmd_client import _local_day_utc_bounds
+
+    start, end = _local_day_utc_bounds(datetime(2026, 11, 1))
+    assert start.isoformat() == "2026-10-31T23:00:00+00:00"
+    assert end.isoformat() == "2026-11-01T23:00:00+00:00"
+    # DST-aware: 29 Mar 2026 is the CET->CEST transition in Denmark
+    start_s, end_s = _local_day_utc_bounds(
+        datetime(2026, 3, 29, tzinfo=ZoneInfo("Europe/Copenhagen"))
+    )
+    assert start_s.isoformat() == "2026-03-28T23:00:00+00:00"
+    assert end_s.isoformat() == "2026-03-29T22:00:00+00:00"

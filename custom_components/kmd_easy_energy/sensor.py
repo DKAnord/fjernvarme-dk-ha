@@ -35,6 +35,12 @@ async def async_setup_entry(
             KMDReturnTempSensor(coordinator, entry),
             KMDBalanceSensor(coordinator, entry),
             KMDHDDSensor(coordinator, entry),
+            KMDEnergyPriceSensor(coordinator, entry),
+            KMDMotivationStatusSensor(coordinator, entry),
+            KMDMotivationAdjustmentSensor(coordinator, entry),
+            KMDKwhPerHddSensor(coordinator, entry),
+            KMDNormalizedAnnualSensor(coordinator, entry),
+            KMDForecastAnnualSensor(coordinator, entry),
         ]
     )
 
@@ -43,6 +49,37 @@ class KMDBaseSensor(CoordinatorEntity[KMDEasyEnergyCoordinator], SensorEntity):
     """Base entity for KMD Easy Energy sensors."""
 
     _attr_has_entity_name = True
+    # Belt-and-suspenders: these keys must never hit the recorder even if
+    # a future change reintroduces them on attributes.
+    _unrecorded_attributes = frozenset(
+        {
+            "mitid_otp_code",
+            "mitid_qr_svg",
+            "annual",
+            "monthly",
+            "daily",
+            "hourly",
+            "hourly_kwh",
+            "hourly_m3",
+            "hourly_temp",
+            "return_temp",
+            "weather",
+            "insights",
+            "forecast",
+            "billing",
+            "meters",
+            "available_units",
+            "hourly_kwh_points",
+            "hourly_m3_points",
+            "hourly_temp_points",
+            "settlement_period",
+            "tariff",
+            "abnormal_consumption",
+            "degree_day",
+            "daily_hdd",
+            "daily_kwh_history",
+        }
+    )
 
     def __init__(self, coordinator: KMDEasyEnergyCoordinator, entry: ConfigEntry) -> None:
         super().__init__(coordinator)
@@ -64,7 +101,7 @@ def _sum_complete(series: list[dict[str, Any]] | None) -> float | None:
 class KMDOverviewSensor(KMDBaseSensor):
     """Full dashboard sensor exposing annual/monthly/daily/hourly/weather/insights/billing."""
 
-    _attr_name = "Overview"
+    _attr_translation_key = "overview"
     _attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
     _attr_device_class = SensorDeviceClass.ENERGY
     _attr_state_class = SensorStateClass.TOTAL
@@ -99,10 +136,9 @@ class KMDOverviewSensor(KMDBaseSensor):
             "has_mitid_username": bool(data.get("has_mitid_username", False)),
             "mitid_username_masked": data.get("mitid_username_masked", ""),
             "notify_service": data.get("notify_service", ""),
+            "entry_id": data.get("entry_id") or self._entry.entry_id,
             "sync_state": data.get("sync_state", "idle"),
             "sync_message": data.get("sync_message", ""),
-            "mitid_otp_code": data.get("mitid_otp_code"),
-            "mitid_qr_svg": data.get("mitid_qr_svg"),
             "annual": data.get("annual") or {},
             "monthly": data.get("monthly") or {},
             "daily": data.get("daily") or {},
@@ -118,7 +154,7 @@ class KMDOverviewSensor(KMDBaseSensor):
 
 
 class KMDEnergySensor(KMDBaseSensor):
-    _attr_name = "Energy"
+    _attr_translation_key = "energy"
     _attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
     _attr_device_class = SensorDeviceClass.ENERGY
     _attr_state_class = SensorStateClass.TOTAL_INCREASING
@@ -159,9 +195,11 @@ class KMDEnergySensor(KMDBaseSensor):
 
 
 class KMDVolumeSensor(KMDBaseSensor):
-    _attr_name = "Volume"
+    # Circulating district-heating water volume (m³), not drinking water.
+    # WATER is used so the entity can be added on the Energy dashboard volume track.
+    _attr_translation_key = "volume"
     _attr_native_unit_of_measurement = UnitOfVolume.CUBIC_METERS
-    _attr_device_class = SensorDeviceClass.VOLUME
+    _attr_device_class = SensorDeviceClass.WATER
     _attr_state_class = SensorStateClass.TOTAL_INCREASING
 
     @property
@@ -174,7 +212,7 @@ class KMDVolumeSensor(KMDBaseSensor):
 
 
 class KMDReturnTempSensor(KMDBaseSensor):
-    _attr_name = "Return temperature"
+    _attr_translation_key = "return_temperature"
     _attr_native_unit_of_measurement = UnitOfTemperature.CELSIUS
     _attr_device_class = SensorDeviceClass.TEMPERATURE
     _attr_state_class = SensorStateClass.MEASUREMENT
@@ -197,7 +235,7 @@ class KMDReturnTempSensor(KMDBaseSensor):
 
 
 class KMDBalanceSensor(KMDBaseSensor):
-    _attr_name = "Balance"
+    _attr_translation_key = "balance"
     _attr_native_unit_of_measurement = "DKK"
     _attr_device_class = SensorDeviceClass.MONETARY
     _attr_state_class = None
@@ -216,7 +254,7 @@ class KMDBalanceSensor(KMDBaseSensor):
 
 
 class KMDHDDSensor(KMDBaseSensor):
-    _attr_name = "Heating degree days (7d)"
+    _attr_translation_key = "heating_degree_days"
     _attr_native_unit_of_measurement = "°C·d"
     _attr_state_class = SensorStateClass.MEASUREMENT
 
@@ -228,3 +266,141 @@ class KMDHDDSensor(KMDBaseSensor):
     def native_value(self) -> float | None:
         val = (self.coordinator.data or {}).get("hdd_7d")
         return round(float(val), 1) if val is not None else None
+
+
+
+class KMDEnergyPriceSensor(KMDBaseSensor):
+    """Variable heat price for the Energy dashboard (DKK/kWh, option or published default)."""
+
+    _attr_translation_key = "energy_price"
+    _attr_native_unit_of_measurement = "DKK/kWh"
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_suggested_display_precision = 4
+
+    @property
+    def unique_id(self) -> str:
+        return f"{self._entry.entry_id}_energy_price"
+
+    @property
+    def native_value(self) -> float | None:
+        value = (self.coordinator.data or {}).get("energy_price_dkk_per_kwh")
+        return float(value) if value is not None else None
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        tariff = (self.coordinator.data or {}).get("tariff") or {}
+        return {
+            "tariff_year": tariff.get("tariff_year"),
+            "source": tariff.get("source"),
+            "source_note": tariff.get("source_note"),
+            "volume_price_dkk_per_m3": tariff.get("price_dkk_per_m3"),
+        }
+
+
+class KMDMotivationStatusSensor(KMDBaseSensor):
+    """Afkøling vs. the utility motivation tariff: bonus, neutral or penalty."""
+
+    _attr_translation_key = "motivation_status"
+    _attr_device_class = SensorDeviceClass.ENUM
+    _attr_options = ["bonus", "neutral", "penalty"]
+
+    @property
+    def unique_id(self) -> str:
+        return f"{self._entry.entry_id}_motivation_status"
+
+    @property
+    def native_value(self) -> str | None:
+        return (self.coordinator.data or {}).get("motivation_status")
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        data = self.coordinator.data or {}
+        tariff = data.get("tariff") or {}
+        return {
+            "bonus_temp": tariff.get("bonus_temp", data.get("bonus_temp")),
+            "penalty_temp": tariff.get("penalty_temp", data.get("penalty_temp")),
+            "adjustment_dkk_per_kwh": data.get("motivation_dkk_per_kwh"),
+        }
+
+
+class KMDMotivationAdjustmentSensor(KMDBaseSensor):
+    """Motivation tariff adjustment in DKK/kWh (negative is a bonus)."""
+
+    _attr_translation_key = "motivation_adjustment"
+    _attr_native_unit_of_measurement = "DKK/kWh"
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_suggested_display_precision = 5
+
+    @property
+    def unique_id(self) -> str:
+        return f"{self._entry.entry_id}_motivation_adjustment"
+
+    @property
+    def native_value(self) -> float | None:
+        value = (self.coordinator.data or {}).get("motivation_dkk_per_kwh")
+        return float(value) if value is not None else None
+
+
+class KMDKwhPerHddSensor(KMDBaseSensor):
+    """Recent kWh per heating degree day (HDD17)."""
+
+    _attr_translation_key = "kwh_per_hdd"
+    _attr_native_unit_of_measurement = "kWh/HDD"
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_suggested_display_precision = 3
+
+    @property
+    def unique_id(self) -> str:
+        return f"{self._entry.entry_id}_kwh_per_hdd"
+
+    @property
+    def native_value(self) -> float | None:
+        value = ((self.coordinator.data or {}).get("degree_day") or {}).get("kwh_per_hdd")
+        return float(value) if value is not None else None
+
+
+class KMDNormalizedAnnualSensor(KMDBaseSensor):
+    """Degree-day-normalised annual consumption (kWh/HDD × normal-year HDD)."""
+
+    _attr_translation_key = "normalized_annual_energy"
+    _attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
+    _attr_device_class = SensorDeviceClass.ENERGY
+    _attr_state_class = SensorStateClass.TOTAL
+    _attr_suggested_display_precision = 0
+
+    @property
+    def unique_id(self) -> str:
+        return f"{self._entry.entry_id}_normalized_annual_energy"
+
+    @property
+    def native_value(self) -> float | None:
+        value = ((self.coordinator.data or {}).get("degree_day") or {}).get("normalized_annual_kwh")
+        return float(value) if value is not None else None
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        return dict((self.coordinator.data or {}).get("degree_day") or {})
+
+
+class KMDForecastAnnualSensor(KMDBaseSensor):
+    """Year forecast: year-to-date kWh plus remaining normal-year HDD × kWh/HDD."""
+
+    _attr_translation_key = "forecast_annual_energy"
+    _attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
+    _attr_device_class = SensorDeviceClass.ENERGY
+    _attr_state_class = SensorStateClass.TOTAL
+    _attr_suggested_display_precision = 0
+
+    @property
+    def unique_id(self) -> str:
+        return f"{self._entry.entry_id}_forecast_annual_energy"
+
+    @property
+    def native_value(self) -> float | None:
+        value = ((self.coordinator.data or {}).get("degree_day") or {}).get("forecast_annual_kwh")
+        return float(value) if value is not None else None
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        dd = dict((self.coordinator.data or {}).get("degree_day") or {})
+        return dd

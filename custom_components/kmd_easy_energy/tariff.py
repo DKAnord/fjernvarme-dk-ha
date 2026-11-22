@@ -1,0 +1,142 @@
+"""Resolve option-based district-heating prices, with published defaults when known."""
+
+from __future__ import annotations
+
+import json
+import logging
+from dataclasses import dataclass
+from datetime import date
+from pathlib import Path
+from typing import Any
+
+from homeassistant.config_entries import ConfigEntry
+
+from .const import (
+    CONF_BONUS_TEMP,
+    CONF_MOTIVATION_DKK_PER_KWH_PER_K,
+    CONF_NORMAL_HDD_YEAR,
+    CONF_PENALTY_TEMP,
+    CONF_PRICE_DKK_PER_KWH,
+    CONF_PRICE_DKK_PER_M3,
+    CONF_UTILITY_ID,
+)
+from .insights import DEFAULT_NORMAL_HDD_YEAR, copenhagen_today
+
+_LOGGER = logging.getLogger(__name__)
+
+_UTILITIES_PATH = Path(__file__).parent / "utilities.json"
+_UTILITIES_CACHE: list[dict[str, Any]] | None = None
+
+
+@dataclass(frozen=True)
+class ResolvedTariff:
+    """Effective prices after options override published defaults."""
+
+    price_dkk_per_kwh: float | None
+    price_dkk_per_m3: float | None
+    motivation_dkk_per_kwh_per_k: float | None
+    bonus_temp: float
+    penalty_temp: float
+    normal_hdd_year: float
+    tariff_year: int
+    source: str | None
+    source_note: str | None
+    utility_id: str
+
+
+def load_utilities() -> list[dict[str, Any]]:
+    """Load bundled utilities.json (cached for the process lifetime)."""
+    global _UTILITIES_CACHE
+    if _UTILITIES_CACHE is not None:
+        return _UTILITIES_CACHE
+    try:
+        data = json.loads(_UTILITIES_PATH.read_text(encoding="utf-8"))
+        _UTILITIES_CACHE = list(data.get("utilities") or [])
+    except (OSError, json.JSONDecodeError) as err:
+        _LOGGER.warning("Could not load utilities.json: %s", err)
+        _UTILITIES_CACHE = []
+    return _UTILITIES_CACHE
+
+
+def published_tariff(
+    utility_id: str,
+    year: int,
+    utilities: list[dict[str, Any]] | None = None,
+) -> dict[str, Any] | None:
+    """Return the bundled tariff dict for utility/year, if one was published."""
+    utilities = utilities if utilities is not None else load_utilities()
+    match = next((u for u in utilities if u.get("id") == utility_id), None)
+    if not match:
+        return None
+    tariffs = match.get("tariffs") or []
+    exact = next((t for t in tariffs if int(t.get("year") or 0) == year), None)
+    if exact:
+        return exact
+    # Prefer the latest year that is not in the future relative to `year`.
+    past = [t for t in tariffs if int(t.get("year") or 0) <= year]
+    if not past:
+        return None
+    return max(past, key=lambda t: int(t.get("year") or 0))
+
+
+def _opt_float(entry: ConfigEntry, key: str, default: float | None = None) -> float | None:
+    raw = entry.options.get(key)
+    if raw is None:
+        raw = entry.data.get(key)
+    if raw is None or raw == "":
+        return default
+    try:
+        value = float(raw)
+    except (TypeError, ValueError):
+        return default
+    return value
+
+
+def resolve_tariff(
+    entry: ConfigEntry,
+    *,
+    today: date | None = None,
+    utilities: list[dict[str, Any]] | None = None,
+) -> ResolvedTariff:
+    """Options override published defaults; zero/empty option means "use default"."""
+    today = today or copenhagen_today()
+    utility_id = str(entry.data.get(CONF_UTILITY_ID) or "kredslob")
+    published = published_tariff(utility_id, today.year, utilities)
+
+    def _pick(option_key: str, published_key: str) -> float | None:
+        option = _opt_float(entry, option_key, None)
+        if option is not None and option > 0:
+            return option
+        if published and published.get(published_key) is not None:
+            try:
+                value = float(published[published_key])
+            except (TypeError, ValueError):
+                return None
+            return value if value > 0 else None
+        return None
+
+    bonus = _opt_float(entry, CONF_BONUS_TEMP, None)
+    penalty = _opt_float(entry, CONF_PENALTY_TEMP, None)
+    if bonus is None:
+        bonus = float((published or {}).get("bonus_temp") or 30.0)
+    if penalty is None:
+        penalty = float((published or {}).get("penalty_temp") or 40.0)
+
+    normal = _opt_float(entry, CONF_NORMAL_HDD_YEAR, None)
+    if normal is None or normal <= 0:
+        normal = float((published or {}).get("normal_hdd_year") or DEFAULT_NORMAL_HDD_YEAR)
+
+    return ResolvedTariff(
+        price_dkk_per_kwh=_pick(CONF_PRICE_DKK_PER_KWH, "price_dkk_per_kwh"),
+        price_dkk_per_m3=_pick(CONF_PRICE_DKK_PER_M3, "price_dkk_per_m3"),
+        motivation_dkk_per_kwh_per_k=_pick(
+            CONF_MOTIVATION_DKK_PER_KWH_PER_K, "motivation_dkk_per_kwh_per_k"
+        ),
+        bonus_temp=bonus,
+        penalty_temp=penalty,
+        normal_hdd_year=normal,
+        tariff_year=int((published or {}).get("year") or today.year),
+        source=(published or {}).get("source"),
+        source_note=(published or {}).get("source_note"),
+        utility_id=utility_id,
+    )

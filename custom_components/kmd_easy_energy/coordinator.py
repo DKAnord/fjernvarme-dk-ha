@@ -5,11 +5,9 @@ from __future__ import annotations
 import asyncio
 import calendar
 import datetime as dt_mod
-import json
 import logging
 import math
 from datetime import datetime, timedelta
-from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
 
@@ -17,6 +15,7 @@ import aiohttp
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.util import dt as dt_util
@@ -39,13 +38,37 @@ from .const import (
     CONF_UTILITY_ID,
     CONF_UTILITY_STATUS,
     DOMAIN,
+    EVENT_MITID_CHALLENGE,
+    TOKEN_WARN_AGE,
+    UPDATE_INTERVAL,
 )
+from .insights import (
+    compact_hourly_point,
+    copenhagen_today,
+    daily_hdd_from_temps,
+    daily_kwh_from_history,
+    detect_abnormal_consumption,
+    forecast_annual,
+    kwh_per_hdd,
+    merge_hourly_points,
+    motivation_dkk_per_kwh,
+    motivation_status,
+)
+from .statistics import import_hourly_statistics
+from .tariff import load_utilities, resolve_tariff
+from .util import (
+    cache_has_sensor_data,
+    delete_legacy_www_cache,
+    legacy_www_cache_paths,
+    read_legacy_www_cache,
+    sanitize_cache,
+    store_for,
+)
+
 
 _LOGGER = logging.getLogger(__name__)
 
-UPDATE_INTERVAL = timedelta(minutes=30)
 HDD_BASE = 17.0  # °C – common Danish district heating base
-TOKEN_WARN_AGE = timedelta(minutes=40)
 
 M_KEYS = ["Jan", "Feb", "Mar", "Apr", "Maj", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Dec"]
 M_FULL = [
@@ -66,34 +89,6 @@ def _parse_iso_dt(value: str | None) -> datetime | None:
         return None
 
 
-def _read_cache_sync(
-    cache_path: Path, legacy_cache_path: Path, seed_path: Path | None
-) -> dict[str, Any]:
-    candidates = [cache_path, legacy_cache_path]
-    if seed_path is not None:
-        candidates.append(seed_path)
-    for p in candidates:
-        try:
-            if p.exists() and p.stat().st_size > 0:
-                data = json.loads(p.read_text(encoding="utf-8"))
-                if isinstance(data, dict):
-                    return data
-        except Exception as err:  # noqa: BLE001
-            _LOGGER.debug("Could not read %s: %s", p, err)
-    return {}
-
-
-def _write_cache_sync(cache_path: Path, state: dict[str, Any]) -> None:
-    try:
-        cache_path.parent.mkdir(parents=True, exist_ok=True)
-        cache_path.write_text(
-            json.dumps(state, ensure_ascii=False, indent=2),
-            encoding="utf-8",
-        )
-    except Exception as err:  # noqa: BLE001
-        _LOGGER.warning("Could not write cache %s: %s", cache_path, err)
-
-
 def _compute_weather_and_insights(
     state: dict[str, Any], daily_temp: dict[str, float]
 ) -> dict[str, Any]:
@@ -109,20 +104,20 @@ def _compute_weather_and_insights(
         mon_hdd[ym] = mon_hdd.get(ym, 0.0) + max(0.0, HDD_BASE - t)
 
     monthly_avg_t = {ym: round(sum(vs) / len(vs), 1) for ym, vs in sorted(mon_t.items())}
-    cur_yr = str(dt_mod.date.today().year)
-    prev_yr = str(dt_mod.date.today().year - 1)
+    cur_yr = str(copenhagen_today().year)
+    prev_yr = str(copenhagen_today().year - 1)
     compact_m_temp = {
         ym: v
         for ym, v in monthly_avg_t.items()
         if ym.startswith((prev_yr + "-", cur_yr + "-"))
     }
-    recent_d_temp = dict(sorted(daily_temp.items())[-35:])
+    recent_d_temp = dict(sorted(daily_temp.items())[-120:])
     weather = {"monthly_temp": compact_m_temp, "daily_temp": recent_d_temp}
 
     pairs: list[tuple[float, float]] = []
     summer_vals: list[float] = []
     yr_totals: dict[str, dict[str, Any]] = {}
-    cur_ym = dt_mod.date.today().strftime("%Y-%m")
+    cur_ym = copenhagen_today().strftime("%Y-%m")
     for y, mmap in (state.get("monthly") or {}).items():
         if not isinstance(mmap, dict):
             continue
@@ -165,6 +160,22 @@ def _compute_weather_and_insights(
     return {"weather": weather, "insights": insights}
 
 
+
+def date_offset_months(day: dt_mod.date, months: int) -> dt_mod.date:
+    """Shift a date by a whole number of months, keeping day=1 for the result."""
+    year = day.year
+    month = day.month + months
+    while month <= 0:
+        month += 12
+        year -= 1
+    while month > 12:
+        month -= 12
+        year += 1
+    return dt_mod.date(year, month, 1)
+
+
+
+
 class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     """Coordinator holding the KMD client and fetching energy + weather data."""
 
@@ -174,16 +185,21 @@ class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         entry: ConfigEntry,
         portal_url: str = "https://minvarme.kredslob.dk/",
     ) -> None:
-        super().__init__(hass, _LOGGER, name=DOMAIN, update_interval=UPDATE_INTERVAL)
+        super().__init__(
+            hass,
+            _LOGGER,
+            name=DOMAIN,
+            update_interval=UPDATE_INTERVAL,
+            config_entry=entry,
+        )
         self.entry = entry
         self._portal_url = portal_url
         self.client: KMDClient | None = None
         self._token_obtained: datetime | None = None
         utility_id = str(entry.data.get(CONF_UTILITY_ID, "kredslob")).strip() or "kredslob"
         self._utility_id = utility_id
-        self._cache_path = Path(hass.config.path(f"www/varme/kmd_easy_energy_cache_{utility_id}.json"))
-        self._legacy_cache_path = Path(hass.config.path("www/varme/kmd_easy_energy_cache.json"))
-        self._seed_path = Path(hass.config.path("www/varme/data.json")) if utility_id == "kredslob" else None
+        self._store = store_for(hass, entry.entry_id)
+        self._legacy_paths = legacy_www_cache_paths(hass, utility_id)
         self._initial_setup_complete: bool | None = None
         self.sync_state: str = "idle"
         self.sync_message: str = ""
@@ -209,6 +225,74 @@ class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         else:
             self.client = None
 
+
+    @property
+    def has_usable_cache(self) -> bool:
+        """Whether current/cached coordinator data can drive sensors."""
+        return cache_has_sensor_data(self.data)
+
+    async def async_initialize_cache(self) -> dict[str, Any]:
+        """Load private store, migrate leftover www/ caches, and preload self.data."""
+        state = await self._store.async_load()
+        if not state:
+            legacy = await self.hass.async_add_executor_job(
+                read_legacy_www_cache, self._legacy_paths
+            )
+            if legacy:
+                state = sanitize_cache(legacy)
+                await self._store.async_save(state)
+                await self.hass.async_add_executor_job(
+                    delete_legacy_www_cache, self._legacy_paths
+                )
+            else:
+                state = {}
+                await self.hass.async_add_executor_job(
+                    delete_legacy_www_cache, self._legacy_paths
+                )
+        state = sanitize_cache(state or {})
+        state.update(self._base_meta())
+        if self._initial_setup_complete is None:
+            has_token = bool(self.entry.data.get(CONF_ACCESS_TOKEN))
+            self._initial_setup_complete = bool(
+                state.get(
+                    "initial_setup_complete",
+                    has_token or cache_has_sensor_data(state),
+                )
+            )
+        state["initial_setup_complete"] = self._initial_setup_complete
+        self.data = state
+        return state
+
+    async def _async_load_cache(self) -> dict[str, Any]:
+        if self.data:
+            return dict(self.data)
+        state = await self._store.async_load()
+        return sanitize_cache(state or {})
+
+    async def _async_save_cache(self, state: dict[str, Any]) -> None:
+        await self._store.async_save(sanitize_cache(state))
+
+    async def async_remove_storage(self) -> None:
+        """Delete private store and any leftover public cache files."""
+        await self._store.async_remove()
+        await self.hass.async_add_executor_job(
+            delete_legacy_www_cache, self._legacy_paths
+        )
+
+    def _fire_mitid_event(self) -> None:
+        """Publish a transient MitID challenge (not stored on entities)."""
+        self.hass.bus.async_fire(
+            EVENT_MITID_CHALLENGE,
+            {
+                "entry_id": self.entry.entry_id,
+                "utility_id": self._utility_id,
+                "sync_state": self.sync_state,
+                "sync_message": self.sync_message,
+                "otp_code": self.mitid_otp_code,
+                "qr_svg": self.mitid_qr_svg,
+            },
+        )
+
     async def _fetch_open_meteo_7d(self, lat: float, lon: float) -> float | None:
         session = async_get_clientsession(self.hass)
         url = (
@@ -226,7 +310,7 @@ class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
     async def _fetch_open_meteo_archive(self, lat: float, lon: float) -> dict[str, float]:
         session = async_get_clientsession(self.hass)
-        end_dt = (dt_mod.date.today() - dt_mod.timedelta(days=1)).isoformat()
+        end_dt = (copenhagen_today() - dt_mod.timedelta(days=1)).isoformat()
         url = (
             "https://archive-api.open-meteo.com/v1/archive"
             f"?latitude={lat}&longitude={lon}"
@@ -283,23 +367,197 @@ class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "has_mitid_username": bool(mitid_user),
             "mitid_username_masked": masked_user,
             "notify_service": notify_svc,
+            "entry_id": self.entry.entry_id,
             "sync_state": self.sync_state,
             "sync_message": self.sync_message,
-            "mitid_otp_code": self.mitid_otp_code,
-            "mitid_qr_svg": self.mitid_qr_svg,
         }
 
-    async def _async_update_data(self) -> dict[str, Any]:
-        state = await self.hass.async_add_executor_job(
-            _read_cache_sync, self._cache_path, self._legacy_cache_path, self._seed_path
+
+    async def _async_backfill_history(
+        self,
+        state: dict[str, Any],
+        mp: dict[str, Any],
+        kwh_unit: dict[str, Any] | None,
+        m3_unit: dict[str, Any] | None,
+        today: dt_mod.date,
+    ) -> None:
+        """Extend daily/hourly history without hammering the API.
+
+        Daily series (ZoomLevel=2) for this year and last year are fetched at
+        most once per Copenhagen day. Hourly history is extended by at most two
+        additional past months per day, so a full year of Energy-dashboard
+        backfill appears gradually.
+        """
+        if not self.client:
+            return
+        inst = mp.get("InstallationId")
+        point = mp.get("MeasurementPointId")
+        if not inst or not point:
+            return
+
+        today_s = today.isoformat()
+        if state.get("daily_history_fetched_on") != today_s and kwh_unit:
+            history = dict(state.get("daily_kwh_history") or {})
+            for year in (today.year - 1, today.year):
+                raw = await self.client.get_consumption_timeseries(
+                    inst,
+                    point,
+                    kwh_unit,
+                    2,
+                    datetime(year, 1, 1),
+                    datetime(year, 12, 31),
+                )
+                series = raw.get("Series") or []
+                rows = (series[0] or {}).get("Data") or [] if series else []
+                for item in rows:
+                    if not item.get("IsComplete") and not item.get("Value"):
+                        continue
+                    df = str(item.get("DateFrom") or "")[:10]
+                    if len(df) == 10 and item.get("Value") is not None:
+                        history[df] = float(item["Value"])
+            state["daily_kwh_history"] = history
+            state["daily_history_fetched_on"] = today_s
+
+        if state.get("hourly_backfill_fetched_on") == today_s:
+            return
+
+        existing = merge_hourly_points(state.get("hourly_kwh") or [])
+        covered_months: set[tuple[int, int]] = set()
+        for item in existing:
+            dt = None
+            try:
+                from .insights import parse_iso_dt, hour_start_local
+
+                parsed = parse_iso_dt(str(item.get("DateFrom") or ""))
+                if parsed:
+                    loc = hour_start_local(parsed)
+                    covered_months.add((loc.year, loc.month))
+            except Exception:  # noqa: BLE001
+                continue
+
+        # Walk backwards from last month; fill up to two months not yet covered.
+        cursor = (today.replace(day=1) - dt_mod.timedelta(days=1)).replace(day=1)
+        end_limit = date_offset_months(today, -12)
+        filled = 0
+        while cursor >= end_limit and filled < 2:
+            key = (cursor.year, cursor.month)
+            month_end = datetime(cursor.year, cursor.month, calendar.monthrange(cursor.year, cursor.month)[1]) + timedelta(days=1)
+            month_start = datetime(cursor.year, cursor.month, 1)
+            if key not in covered_months:
+                if kwh_unit:
+                    series = await self.client.get_hourly_with_fallback(
+                        inst, point, kwh_unit, month_start, month_end
+                    )
+                    state["hourly_kwh"] = merge_hourly_points(
+                        state.get("hourly_kwh") or [],
+                        [p for x in series if (p := compact_hourly_point(x))],
+                    )
+                if m3_unit:
+                    series = await self.client.get_hourly_with_fallback(
+                        inst, point, m3_unit, month_start, month_end
+                    )
+                    state["hourly_m3"] = merge_hourly_points(
+                        state.get("hourly_m3") or [],
+                        [p for x in series if (p := compact_hourly_point(x))],
+                    )
+                filled += 1
+            cursor = (cursor - dt_mod.timedelta(days=1)).replace(day=1)
+        state["hourly_backfill_fetched_on"] = today_s
+        state["hourly_kwh_points"] = len(state.get("hourly_kwh") or [])
+
+    def _enrich_derived(self, state: dict[str, Any]) -> None:
+        """Attach tariff, motivation, forecast and leak flags to coordinator data."""
+        from dataclasses import asdict
+
+        tariff = resolve_tariff(self.entry)
+        state["tariff"] = asdict(tariff)
+        state["energy_price_dkk_per_kwh"] = tariff.price_dkk_per_kwh
+        state["volume_price_dkk_per_m3"] = tariff.price_dkk_per_m3
+
+        # Current return temperature: same rule as KMDReturnTempSensor
+        return_temp: float | None = None
+        if state.get("has_direct_temp"):
+            series = state.get("hourly_temp") or []
+            complete = [p for p in series if p.get("IsComplete") and p.get("Value") is not None]
+            if complete:
+                return_temp = float(complete[-1]["Value"])
+        if return_temp is None:
+            rt_ann = (state.get("return_temp") or {}).get("annual") or {}
+            yr_s = str(copenhagen_today().year)
+            if yr_s in rt_ann and rt_ann[yr_s] is not None:
+                return_temp = float(rt_ann[yr_s])
+        state["motivation_status"] = motivation_status(
+            return_temp, tariff.bonus_temp, tariff.penalty_temp
         )
+        state["motivation_dkk_per_kwh"] = motivation_dkk_per_kwh(
+            return_temp,
+            tariff.bonus_temp,
+            tariff.penalty_temp,
+            tariff.motivation_dkk_per_kwh_per_k,
+        )
+
+        today = copenhagen_today()
+        daily_kwh = daily_kwh_from_history(
+            state.get("daily_kwh_history"),
+            (state.get("daily") or {}).get("days"),
+            today.replace(day=1),
+        )
+        weather = state.get("weather") or {}
+        daily_hdd = daily_hdd_from_temps(weather.get("daily_temp"))
+        state["daily_hdd"] = {d.isoformat(): v for d, v in daily_hdd.items()}
+
+        insights = dict(state.get("insights") or {})
+        window_kwh_hdd = kwh_per_hdd(daily_kwh, daily_hdd, end=today - dt_mod.timedelta(days=1))
+        yearly = insights.get("kwh_per_hdd") or {}
+        if isinstance(yearly, dict) and yearly:
+            # Prefer the latest complete-year figure when the short window is thin.
+            latest_year = yearly.get(str(today.year)) or yearly.get(str(today.year - 1))
+        else:
+            latest_year = None
+        kph = window_kwh_hdd or (float(latest_year) if latest_year is not None else None)
+        ytd = (state.get("annual") or {}).get(str(today.year))
+        if ytd is None:
+            # Sum history for the current year when the annual map is empty.
+            ytd_sum = sum(v for d, v in daily_kwh.items() if d.year == today.year)
+            ytd = round(ytd_sum, 2) if ytd_sum else None
+        forecast = forecast_annual(ytd, kph, tariff.normal_hdd_year, today)
+        state["degree_day"] = forecast
+        if forecast.get("forecast_annual_kwh") is not None and tariff.price_dkk_per_kwh:
+            state["degree_day"]["forecast_annual_dkk"] = round(
+                float(forecast["forecast_annual_kwh"]) * tariff.price_dkk_per_kwh, 0
+            )
+
+        # Leak/abnormal: last complete day (yesterday, or latest complete daily).
+        target = today - dt_mod.timedelta(days=1)
+        daily_obj = state.get("daily") or {}
+        if daily_obj.get("latest_date") and daily_obj.get("latest_complete"):
+            try:
+                latest = dt_mod.date.fromisoformat(str(daily_obj["latest_date"])[:10])
+                if latest < today:
+                    target = latest
+            except ValueError:
+                pass
+        state["abnormal_consumption"] = detect_abnormal_consumption(
+            daily_kwh, daily_hdd, target
+        )
+
+    async def _async_update_data(self) -> dict[str, Any]:
+        state = await self._async_load_cache()
+        await self.hass.async_add_executor_job(load_utilities)
         if self._initial_setup_complete is None:
-            self._initial_setup_complete = bool(state.get("initial_setup_complete", True))
+            has_token = bool(self.entry.data.get(CONF_ACCESS_TOKEN))
+            self._initial_setup_complete = bool(
+                state.get(
+                    "initial_setup_complete",
+                    has_token or cache_has_sensor_data(state),
+                )
+            )
         state.update(self._base_meta())
         state["initial_setup_complete"] = self._initial_setup_complete
 
         if not self.client:
             state["token_expired"] = True
+            self._enrich_derived(state)
             return state
 
         if self._token_obtained and dt_util.utcnow() - self._token_obtained > TOKEN_WARN_AGE:
@@ -409,6 +667,13 @@ class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 if days:
                     vals = list(days.values())
                     stat_vals = complete_vals or vals
+                    history = dict(state.get("daily_kwh_history") or {})
+                    for d_num, val in days.items():
+                        try:
+                            history[f"{yr}-{mo:02d}-{int(d_num):02d}"] = val
+                        except (TypeError, ValueError):
+                            continue
+                    state["daily_kwh_history"] = history
                     state["daily"] = {
                         "month": f"{M_FULL[mo - 1]} {yr}",
                         "days": days,
@@ -430,6 +695,10 @@ class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                         complete_day_dts[-1] + timedelta(days=1),
                     )
                     state["hourly_kwh_points"] = len(h_series)
+                    state["hourly_kwh"] = merge_hourly_points(
+                        state.get("hourly_kwh") or [],
+                        [p for x in h_series if (p := compact_hourly_point(x))],
+                    )
                     valid_day_isos = {d.date().isoformat() for d in complete_day_dts}
                     by_day: dict[str, dict[int, list[float]]] = {}
                     for x in h_series:
@@ -490,8 +759,12 @@ class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
             if m3_unit:
                 start_mo = datetime(yr, mo, 1)
-                state["hourly_m3"] = await self.client.get_hourly_with_fallback(
+                m3_series = await self.client.get_hourly_with_fallback(
                     mp["InstallationId"], mp["MeasurementPointId"], m3_unit, start_mo, datetime(yr, mo, last_dom) + timedelta(days=1)
+                )
+                state["hourly_m3"] = merge_hourly_points(
+                    state.get("hourly_m3") or [],
+                    [p for x in m3_series if (p := compact_hourly_point(x))],
                 )
             if temp_unit:
                 start_mo = datetime(yr, mo, 1)
@@ -554,30 +827,72 @@ class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 or self.hass.config.longitude
             )
             if lat is not None and lon is not None:
-                try:
-                    state["hdd_7d"] = await self._fetch_open_meteo_7d(float(lat), float(lon))
-                except Exception as err:  # noqa: BLE001
-                    _LOGGER.warning("Optional Open-Meteo 7d failed: %s", err)
-                try:
-                    daily_temp = await self._fetch_open_meteo_archive(float(lat), float(lon))
-                    computed = _compute_weather_and_insights(state, daily_temp)
-                    state["weather"] = computed["weather"]
-                    state["insights"] = computed["insights"]
-                except Exception as err:  # noqa: BLE001
-                    _LOGGER.warning("Optional Open-Meteo archive failed: %s", err)
+                today = copenhagen_today().isoformat()
+                if state.get("weather_7d_fetched_on") == today and state.get("hdd_7d") is not None:
+                    _LOGGER.debug("Skipping Open-Meteo 7d (already fetched %s)", today)
+                else:
+                    try:
+                        state["hdd_7d"] = await self._fetch_open_meteo_7d(float(lat), float(lon))
+                        state["weather_7d_fetched_on"] = today
+                    except Exception as err:  # noqa: BLE001
+                        _LOGGER.warning("Optional Open-Meteo 7d failed: %s", err)
+                if state.get("weather_archive_fetched_on") == today and state.get("weather"):
+                    _LOGGER.debug("Skipping Open-Meteo archive (already fetched %s)", today)
+                else:
+                    try:
+                        daily_temp = await self._fetch_open_meteo_archive(float(lat), float(lon))
+                        computed = _compute_weather_and_insights(state, daily_temp)
+                        state["weather"] = computed["weather"]
+                        state["insights"] = computed["insights"]
+                        state["weather_archive_fetched_on"] = today
+                    except Exception as err:  # noqa: BLE001
+                        _LOGGER.warning("Optional Open-Meteo archive failed: %s", err)
 
-            await self.hass.async_add_executor_job(_write_cache_sync, self._cache_path, state)
+            try:
+                await self._async_backfill_history(
+                    state, mp, kwh_unit, m3_unit, copenhagen_today(now_local)
+                )
+            except Exception as err:  # noqa: BLE001
+                _LOGGER.warning("Optional history backfill failed: %s", err)
+
+            self._enrich_derived(state)
+            try:
+                imported = import_hourly_statistics(self.hass, self.entry, state)
+                if imported["energy"] or imported["volume"]:
+                    state["statistics_imported_on"] = copenhagen_today(now_local).isoformat()
+                    state["statistics_imported"] = imported
+            except Exception as err:  # noqa: BLE001
+                _LOGGER.warning("Optional Energy statistics import failed: %s", err)
+
+            await self._async_save_cache(state)
             return state
         except aiohttp.ClientResponseError as err:
             if err.status in (401, 403):
                 _LOGGER.warning(
-                    "KMD API returned HTTP %s (token likely expired); serving cached state",
+                    "KMD API returned HTTP %s (token expired or rejected)",
                     err.status,
                 )
                 state["token_expired"] = True
+                state.update(self._base_meta())
+                self.data = state
+                raise ConfigEntryAuthFailed(
+                    "KMD access token expired or was rejected (HTTP "
+                    f"{err.status}). Paste a new token or start MitID login."
+                ) from err
+            if cache_has_sensor_data(state):
+                _LOGGER.warning(
+                    "KMD API HTTP %s; serving cached state", err.status
+                )
                 return state
             raise UpdateFailed(f"KMD API HTTP {err.status}: {err.message}") from err
+        except ConfigEntryAuthFailed:
+            raise
         except Exception as err:  # noqa: BLE001
+            if cache_has_sensor_data(state) or cache_has_sensor_data(self.data):
+                _LOGGER.warning("KMD update failed (%s); serving cached state", err)
+                cached = state if cache_has_sensor_data(state) else dict(self.data or {})
+                cached.update(self._base_meta())
+                return cached
             raise UpdateFailed(str(err)) from err
 
     async def async_update_token(
@@ -609,14 +924,7 @@ class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 self._portal_url = str(meta_updates[CONF_PORTAL_URL]).strip()
             if meta_updates.get(CONF_UTILITY_ID):
                 self._utility_id = str(meta_updates[CONF_UTILITY_ID]).strip()
-                self._cache_path = Path(
-                    self.hass.config.path(f"www/varme/kmd_easy_energy_cache_{self._utility_id}.json")
-                )
-                self._seed_path = (
-                    Path(self.hass.config.path("www/varme/data.json"))
-                    if self._utility_id == "kredslob"
-                    else None
-                )
+                self._legacy_paths = legacy_www_cache_paths(self.hass, self._utility_id)
             self.hass.config_entries.async_update_entry(self.entry, data=data)
             self._build_client()
 
@@ -626,15 +934,10 @@ class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             self.sync_message = ""
             self.mitid_otp_code = None
             self.mitid_qr_svg = None
-        state = dict(
-            self.data
-            or await self.hass.async_add_executor_job(
-                _read_cache_sync, self._cache_path, self._legacy_cache_path, self._seed_path
-            )
-        )
+        state = dict(self.data or await self._async_load_cache())
         state.update(self._base_meta())
         state["initial_setup_complete"] = complete
-        await self.hass.async_add_executor_job(_write_cache_sync, self._cache_path, state)
+        await self._async_save_cache(state)
         self.async_set_updated_data(state)
         if complete and self.client:
             await self.async_request_refresh()
@@ -655,6 +958,37 @@ class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if self._initial_setup_complete is not None:
             cur["initial_setup_complete"] = self._initial_setup_complete
         self.async_set_updated_data(cur)
+        self._fire_mitid_event()
+
+    def _mitid_notification_id(self) -> str:
+        return f"{DOMAIN}_mitid_{self.entry.entry_id}"
+
+    async def _async_mitid_notification(self, message: str) -> None:
+        """Show a transient persistent notification (code only in the body, not the title)."""
+        try:
+            await self.hass.services.async_call(
+                "persistent_notification",
+                "create",
+                {
+                    "title": "MitID-godkendelse",
+                    "message": message,
+                    "notification_id": self._mitid_notification_id(),
+                },
+                blocking=False,
+            )
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.debug("persistent_notification.create failed: %s", err)
+
+    async def _async_dismiss_mitid_notification(self) -> None:
+        try:
+            await self.hass.services.async_call(
+                "persistent_notification",
+                "dismiss",
+                {"notification_id": self._mitid_notification_id()},
+                blocking=False,
+            )
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.debug("persistent_notification.dismiss failed: %s", err)
 
     async def _async_notify(self, notify_svc: str, title: str, message: str) -> None:
         if not notify_svc:
@@ -713,7 +1047,7 @@ class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         )
 
     async def _async_run_mitid_flow(self, username: str, notify_svc: str) -> None:
-        auth = KMDMitIDAuthenticator()
+        auth = await self.hass.async_add_executor_job(KMDMitIDAuthenticator)
         util_name = str(self.entry.data.get(CONF_UTILITY) or self.entry.title or "KMD Easy Energy")
         try:
             self._push_sync_ui("starting", "Starter MitID-login (100% i Home Assistant)…")
@@ -735,21 +1069,27 @@ class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     code = str(res["otp_code"])
                     self._push_sync_ui(
                         "otp_ready",
-                        f"Indtast 4-cifret kode i MitID-appen: {code}",
+                        "Indtast 4-cifret kode i MitID-appen (se notifikation eller dashboard-kortet).",
                         otp_code=code,
+                    )
+                    await self._async_mitid_notification(
+                        f"Indtast engangskoden {code} i MitID-appen og godkend."
                     )
                     if not otp_notified:
                         await self._async_notify(
                             notify_svc,
-                            f"🔑 MitID kode: {code}",
+                            "🔑 MitID-kode klar",
                             f"Indtast de 4 cifre ({code}) i MitID-appen og godkend.",
                         )
                         otp_notified = True
                 elif st == "qr_ready" and res.get("qr_svg"):
                     self._push_sync_ui(
                         "qr_ready",
-                        "Scan QR-koden på skærmen med MitID-appen (eller skift til Engangskoder i appen)",
+                        "Scan QR-koden på Fjernvarme-kortet med MitID-appen (eller skift til Engangskoder i appen).",
                         qr_svg=str(res["qr_svg"]),
+                    )
+                    await self._async_mitid_notification(
+                        "Scan QR-koden på Fjernvarme-kortet med MitID-appen, eller skift til engangskoder i appen."
                     )
                 elif st == "verified":
                     self._push_sync_ui("verified", "Kode/QR godkendt — bekræft i MitID-appen…")
@@ -767,6 +1107,8 @@ class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             self.sync_message = ""
             self.mitid_otp_code = None
             self.mitid_qr_svg = None
+            self._fire_mitid_event()
+            await self._async_dismiss_mitid_notification()
             await self.async_update_token(access_token)
             await self._async_notify(notify_svc, f"✅ {util_name} opdateret", "Fjernvarmedata er hentet.")
         except Exception as err:  # noqa: BLE001

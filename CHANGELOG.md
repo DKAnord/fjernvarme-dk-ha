@@ -2,7 +2,54 @@
 
 Alle væsentlige ændringer i **Fjernvarme (KMD Easy Energy) – HA Connector & Dashboard** dokumenteres her.
 
+## [0.3.0] - 2026-11-22
+
+### Sikkerhed og privatliv
+- Forbrugscache skrives nu til Home Assistants private `.storage` (`kmd_easy_energy.<entry_id>`), ikke til den uautentificerede `www/`-mappe (`/local/varme/...`).
+- Eksisterende `www/varme/kmd_easy_energy_cache*.json` migreres automatisk og slettes bagefter. Filen `www/varme/data.json` bruges ikke længere som seed.
+- MitID-engangskode og QR-kode lægges ikke længere på sensorattributter (og dermed ikke i recorder). De vises via et midlertidigt `kmd_easy_energy_mitid_challenge`-event, en persistent_notification og (valgfrit) push, hvor koden kun står i beskeden — aldrig i titlen.
+- URL'er med `code=` / tokens redigeres i logs og logges på DEBUG.
+- `async_remove_entry` rydder privat storage og eventuelle efterladte `www/`-cachefiler.
+
+### Opførsel
+- HTTP 401/403 rejser `ConfigEntryAuthFailed` og starter reauth-flowet (`reauth_confirm` / `reauth_mitid`), hvor man kan indsætte et token eller starte MitID. Har integrationen cache, bliver sensorerne stående med sidste kendte værdier.
+- Hvis første opdatering fejler midlertidigt, men der findes cache, indlæses integrationen med cachen i stedet for at fejle opsætningen (`ConfigEntryNotReady` kun uden cache).
+- Open-Meteo-arkivet hentes højst én gang i døgnet (Europe/Copenhagen).
+- Config flow sætter `unique_id` pr. værk, så det samme værk ikke kan tilføjes to gange. Eksisterende entries migreres ved opstart.
+- Ny tjeneste `kmd_easy_energy.start_mitid_sync` (bruges af dashboard-kortet i stedet for at gætte `button.*_sync`).
+- Volumen-sensoren bruger `device_class: water` (cirkulerende fjernvarmevand i m³, ikke drikkevand), så den kan tilføjes på Energy-dashboardets volumen-spor.
+- `requests` er tilføjet som eksplicit krav i manifestet. Den døde `UPDATE_INTERVAL`-konstant bruges nu som 30-minutters coordinator-interval.
+
+### Energy-dashboard, tarif og danske indsigtssensorer
+- Timeværdier (kWh og m³) importeres som eksterne statistikker (`kmd_easy_energy:energy_<entry>` / `:volume_<entry>`) via `async_add_external_statistics`, så Energy-dashboardet kan tilbagefylde rigtige timer i stedet for at bruge måned-til-dato-sensorerne. Historikken udvides gradvist med op til to tidligere måneder pr. døgn.
+- Valgfri varmepris i kr./kWh (og ev. kr./m³) i indstillingerne. For Kredsløb er standarden den offentliggjorte takst for indeværende kalenderår (2026: 0,6680 kr./kWh, 2027: 0,7175 kr./kWh, motivation 0,010 / 0,01075 kr./kWh/°C) fra [Kredsløbs prisside](https://www.kredslob.dk/privat/fjernvarme/fjernvarmepriser). Øvrige værker har ingen opfundet standard — brugeren indtaster selv. Der gættes ikke på en m³-pris.
+- Sensorer for motivationstarif (bonus/neutral/gebyr og kr./kWh-regulering), kWh pr. graddag, normalår-korrigeret årsforbrug og årsprognose. `binary_sensor` for gebyr-returtemperatur og unormalt forbrug (samme ugedag, HDD-justeret). Integrationen opretter **ingen** notifikationer eller automatiseringer for lækage-flaget.
+- Open-Meteo 7-dages HDD hentes højst én gang i døgnet (Europe/Copenhagen), ligesom arkivet.
+
+### Integration og pakning
+- Entitetsnavne bruger `translation_key` med dansk og engelsk (volumen hedder tydeligt fjernvarmevand).
+- Ny diagnostics-platform, der redigerer tokens, MitID-brugernavn, kunde-/måler-id og adresser. Store serier er kun talt, ikke dumpet.
+- Vendoret MitID BrowserClient har LICENSE (MIT, © 2024 Hundter) og et root-`NOTICE`. Død `Helpers.py` er fjernet (Aula-flowet var allerede væk i 0.2.1).
+- Manifest: `integration_type: service` og `loggers`. `hacs.json`: `render_readme` og minimum HA **2024.12.0** (reauth-helpers). hassfest-action er pinned i stedet for `@master`.
+- Forberedte brand-ikoner og instruktion til en PR mod [home-assistant/brands](https://github.com/home-assistant/brands) ligger i `docs/home-assistant-brands/` — selve PR'en er et maintainer-valg.
+
+Versionen forbliver **0.3.0** (ikke 0.4.0): 0.3.0 er endnu ikke udgivet, så al den nye funktionalitet samles i ét uudgivet hop oven på 0.2.1.
+
+Bygger videre på **v0.2.1** (CET-timehentning, spidstime-grafer, fjernet Aula-script).
+
+### Bemærk (brudende for tilpassede dashboards)
+- Attributterne `mitid_otp_code` og `mitid_qr_svg` er fjernet. Brug det medfølgende kort 0.3.0, eller lyt til eventet `kmd_easy_energy_mitid_challenge`.
+
+## [0.2.1] - 2026-11-22
+
+### Ændret
+- Timehenting i `kmd_client.py` bruger nu Europe/Copenhagen midnat (UTC-bounds) og falder tilbage til dag-for-dag, hvis enkelte timer mangler i flerdages-svar.
+- Timeprofilen (MTD) gennemsnitliggør pr. time pr. dag og ignorerer punkter uden for de komplette dage.
+- Dashboard-kortet (`0.2.1`): bedre graf-læsbarhed og automatisk spidstime-detektion.
+- Fjernet død Aula-login-kode (`mitid_browserclient/login_flows/aula.py`).
+
 ## [0.2.0] - 2026-11-22
+
 
 ### Tilføjet
 - **100% lokal MitID-godkendelse i Home Assistant (ren Python):** OIDC PKCE + NemLog-in + MitID SRP (`BrowserClient` + `UrllibSession`) uden behov for Chromium eller ekstern add-on.

@@ -42,6 +42,20 @@ from .const import (
     TOKEN_WARN_AGE,
     UPDATE_INTERVAL,
 )
+from .insights import (
+    compact_hourly_point,
+    copenhagen_today,
+    daily_hdd_from_temps,
+    daily_kwh_from_history,
+    detect_abnormal_consumption,
+    forecast_annual,
+    kwh_per_hdd,
+    merge_hourly_points,
+    motivation_dkk_per_kwh,
+    motivation_status,
+)
+from .statistics import import_hourly_statistics
+from .tariff import resolve_tariff
 from .util import (
     cache_has_sensor_data,
     delete_legacy_www_cache,
@@ -90,20 +104,20 @@ def _compute_weather_and_insights(
         mon_hdd[ym] = mon_hdd.get(ym, 0.0) + max(0.0, HDD_BASE - t)
 
     monthly_avg_t = {ym: round(sum(vs) / len(vs), 1) for ym, vs in sorted(mon_t.items())}
-    cur_yr = str(dt_mod.date.today().year)
-    prev_yr = str(dt_mod.date.today().year - 1)
+    cur_yr = str(copenhagen_today().year)
+    prev_yr = str(copenhagen_today().year - 1)
     compact_m_temp = {
         ym: v
         for ym, v in monthly_avg_t.items()
         if ym.startswith((prev_yr + "-", cur_yr + "-"))
     }
-    recent_d_temp = dict(sorted(daily_temp.items())[-35:])
+    recent_d_temp = dict(sorted(daily_temp.items())[-120:])
     weather = {"monthly_temp": compact_m_temp, "daily_temp": recent_d_temp}
 
     pairs: list[tuple[float, float]] = []
     summer_vals: list[float] = []
     yr_totals: dict[str, dict[str, Any]] = {}
-    cur_ym = dt_mod.date.today().strftime("%Y-%m")
+    cur_ym = copenhagen_today().strftime("%Y-%m")
     for y, mmap in (state.get("monthly") or {}).items():
         if not isinstance(mmap, dict):
             continue
@@ -144,6 +158,22 @@ def _compute_weather_and_insights(
         "kwh_per_hdd": kwh_per_hdd,
     }
     return {"weather": weather, "insights": insights}
+
+
+
+def date_offset_months(day: dt_mod.date, months: int) -> dt_mod.date:
+    """Shift a date by a whole number of months, keeping day=1 for the result."""
+    year = day.year
+    month = day.month + months
+    while month <= 0:
+        month += 12
+        year -= 1
+    while month > 12:
+        month -= 12
+        year += 1
+    return dt_mod.date(year, month, 1)
+
+
 
 
 class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
@@ -280,7 +310,7 @@ class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
     async def _fetch_open_meteo_archive(self, lat: float, lon: float) -> dict[str, float]:
         session = async_get_clientsession(self.hass)
-        end_dt = (dt_mod.date.today() - dt_mod.timedelta(days=1)).isoformat()
+        end_dt = (copenhagen_today() - dt_mod.timedelta(days=1)).isoformat()
         url = (
             "https://archive-api.open-meteo.com/v1/archive"
             f"?latitude={lat}&longitude={lon}"
@@ -342,6 +372,175 @@ class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "sync_message": self.sync_message,
         }
 
+
+    async def _async_backfill_history(
+        self,
+        state: dict[str, Any],
+        mp: dict[str, Any],
+        kwh_unit: dict[str, Any] | None,
+        m3_unit: dict[str, Any] | None,
+        today: dt_mod.date,
+    ) -> None:
+        """Extend daily/hourly history without hammering the API.
+
+        Daily series (ZoomLevel=2) for this year and last year are fetched at
+        most once per Copenhagen day. Hourly history is extended by at most two
+        additional past months per day, so a full year of Energy-dashboard
+        backfill appears gradually.
+        """
+        if not self.client:
+            return
+        inst = mp.get("InstallationId")
+        point = mp.get("MeasurementPointId")
+        if not inst or not point:
+            return
+
+        today_s = today.isoformat()
+        if state.get("daily_history_fetched_on") != today_s and kwh_unit:
+            history = dict(state.get("daily_kwh_history") or {})
+            for year in (today.year - 1, today.year):
+                raw = await self.client.get_consumption_timeseries(
+                    inst,
+                    point,
+                    kwh_unit,
+                    2,
+                    datetime(year, 1, 1),
+                    datetime(year, 12, 31),
+                )
+                series = raw.get("Series") or []
+                rows = (series[0] or {}).get("Data") or [] if series else []
+                for item in rows:
+                    if not item.get("IsComplete") and not item.get("Value"):
+                        continue
+                    df = str(item.get("DateFrom") or "")[:10]
+                    if len(df) == 10 and item.get("Value") is not None:
+                        history[df] = float(item["Value"])
+            state["daily_kwh_history"] = history
+            state["daily_history_fetched_on"] = today_s
+
+        if state.get("hourly_backfill_fetched_on") == today_s:
+            return
+
+        existing = merge_hourly_points(state.get("hourly_kwh") or [])
+        covered_months: set[tuple[int, int]] = set()
+        for item in existing:
+            dt = None
+            try:
+                from .insights import parse_iso_dt, hour_start_local
+
+                parsed = parse_iso_dt(str(item.get("DateFrom") or ""))
+                if parsed:
+                    loc = hour_start_local(parsed)
+                    covered_months.add((loc.year, loc.month))
+            except Exception:  # noqa: BLE001
+                continue
+
+        # Walk backwards from last month; fill up to two months not yet covered.
+        cursor = (today.replace(day=1) - dt_mod.timedelta(days=1)).replace(day=1)
+        end_limit = date_offset_months(today, -12)
+        filled = 0
+        while cursor >= end_limit and filled < 2:
+            key = (cursor.year, cursor.month)
+            month_end = datetime(cursor.year, cursor.month, calendar.monthrange(cursor.year, cursor.month)[1]) + timedelta(days=1)
+            month_start = datetime(cursor.year, cursor.month, 1)
+            if key not in covered_months:
+                if kwh_unit:
+                    series = await self.client.get_hourly_with_fallback(
+                        inst, point, kwh_unit, month_start, month_end
+                    )
+                    state["hourly_kwh"] = merge_hourly_points(
+                        state.get("hourly_kwh") or [],
+                        [p for x in series if (p := compact_hourly_point(x))],
+                    )
+                if m3_unit:
+                    series = await self.client.get_hourly_with_fallback(
+                        inst, point, m3_unit, month_start, month_end
+                    )
+                    state["hourly_m3"] = merge_hourly_points(
+                        state.get("hourly_m3") or [],
+                        [p for x in series if (p := compact_hourly_point(x))],
+                    )
+                filled += 1
+            cursor = (cursor - dt_mod.timedelta(days=1)).replace(day=1)
+        state["hourly_backfill_fetched_on"] = today_s
+        state["hourly_kwh_points"] = len(state.get("hourly_kwh") or [])
+
+    def _enrich_derived(self, state: dict[str, Any]) -> None:
+        """Attach tariff, motivation, forecast and leak flags to coordinator data."""
+        from dataclasses import asdict
+
+        tariff = resolve_tariff(self.entry)
+        state["tariff"] = asdict(tariff)
+        state["energy_price_dkk_per_kwh"] = tariff.price_dkk_per_kwh
+        state["volume_price_dkk_per_m3"] = tariff.price_dkk_per_m3
+
+        # Current return temperature: same rule as KMDReturnTempSensor
+        return_temp: float | None = None
+        if state.get("has_direct_temp"):
+            series = state.get("hourly_temp") or []
+            complete = [p for p in series if p.get("IsComplete") and p.get("Value") is not None]
+            if complete:
+                return_temp = float(complete[-1]["Value"])
+        if return_temp is None:
+            rt_ann = (state.get("return_temp") or {}).get("annual") or {}
+            yr_s = str(copenhagen_today().year)
+            if yr_s in rt_ann and rt_ann[yr_s] is not None:
+                return_temp = float(rt_ann[yr_s])
+        state["motivation_status"] = motivation_status(
+            return_temp, tariff.bonus_temp, tariff.penalty_temp
+        )
+        state["motivation_dkk_per_kwh"] = motivation_dkk_per_kwh(
+            return_temp,
+            tariff.bonus_temp,
+            tariff.penalty_temp,
+            tariff.motivation_dkk_per_kwh_per_k,
+        )
+
+        today = copenhagen_today()
+        daily_kwh = daily_kwh_from_history(
+            state.get("daily_kwh_history"),
+            (state.get("daily") or {}).get("days"),
+            today.replace(day=1),
+        )
+        weather = state.get("weather") or {}
+        daily_hdd = daily_hdd_from_temps(weather.get("daily_temp"))
+        state["daily_hdd"] = {d.isoformat(): v for d, v in daily_hdd.items()}
+
+        insights = dict(state.get("insights") or {})
+        window_kwh_hdd = kwh_per_hdd(daily_kwh, daily_hdd, end=today - dt_mod.timedelta(days=1))
+        yearly = insights.get("kwh_per_hdd") or {}
+        if isinstance(yearly, dict) and yearly:
+            # Prefer the latest complete-year figure when the short window is thin.
+            latest_year = yearly.get(str(today.year)) or yearly.get(str(today.year - 1))
+        else:
+            latest_year = None
+        kph = window_kwh_hdd or (float(latest_year) if latest_year is not None else None)
+        ytd = (state.get("annual") or {}).get(str(today.year))
+        if ytd is None:
+            # Sum history for the current year when the annual map is empty.
+            ytd_sum = sum(v for d, v in daily_kwh.items() if d.year == today.year)
+            ytd = round(ytd_sum, 2) if ytd_sum else None
+        forecast = forecast_annual(ytd, kph, tariff.normal_hdd_year, today)
+        state["degree_day"] = forecast
+        if forecast.get("forecast_annual_kwh") is not None and tariff.price_dkk_per_kwh:
+            state["degree_day"]["forecast_annual_dkk"] = round(
+                float(forecast["forecast_annual_kwh"]) * tariff.price_dkk_per_kwh, 0
+            )
+
+        # Leak/abnormal: last complete day (yesterday, or latest complete daily).
+        target = today - dt_mod.timedelta(days=1)
+        daily_obj = state.get("daily") or {}
+        if daily_obj.get("latest_date") and daily_obj.get("latest_complete"):
+            try:
+                latest = dt_mod.date.fromisoformat(str(daily_obj["latest_date"])[:10])
+                if latest < today:
+                    target = latest
+            except ValueError:
+                pass
+        state["abnormal_consumption"] = detect_abnormal_consumption(
+            daily_kwh, daily_hdd, target
+        )
+
     async def _async_update_data(self) -> dict[str, Any]:
         state = await self._async_load_cache()
         if self._initial_setup_complete is None:
@@ -357,6 +556,7 @@ class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         if not self.client:
             state["token_expired"] = True
+            self._enrich_derived(state)
             return state
 
         if self._token_obtained and dt_util.utcnow() - self._token_obtained > TOKEN_WARN_AGE:
@@ -466,6 +666,13 @@ class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 if days:
                     vals = list(days.values())
                     stat_vals = complete_vals or vals
+                    history = dict(state.get("daily_kwh_history") or {})
+                    for d_num, val in days.items():
+                        try:
+                            history[f"{yr}-{mo:02d}-{int(d_num):02d}"] = val
+                        except (TypeError, ValueError):
+                            continue
+                    state["daily_kwh_history"] = history
                     state["daily"] = {
                         "month": f"{M_FULL[mo - 1]} {yr}",
                         "days": days,
@@ -487,6 +694,10 @@ class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                         complete_day_dts[-1] + timedelta(days=1),
                     )
                     state["hourly_kwh_points"] = len(h_series)
+                    state["hourly_kwh"] = merge_hourly_points(
+                        state.get("hourly_kwh") or [],
+                        [p for x in h_series if (p := compact_hourly_point(x))],
+                    )
                     valid_day_isos = {d.date().isoformat() for d in complete_day_dts}
                     by_day: dict[str, dict[int, list[float]]] = {}
                     for x in h_series:
@@ -547,8 +758,12 @@ class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
             if m3_unit:
                 start_mo = datetime(yr, mo, 1)
-                state["hourly_m3"] = await self.client.get_hourly_with_fallback(
+                m3_series = await self.client.get_hourly_with_fallback(
                     mp["InstallationId"], mp["MeasurementPointId"], m3_unit, start_mo, datetime(yr, mo, last_dom) + timedelta(days=1)
+                )
+                state["hourly_m3"] = merge_hourly_points(
+                    state.get("hourly_m3") or [],
+                    [p for x in m3_series if (p := compact_hourly_point(x))],
                 )
             if temp_unit:
                 start_mo = datetime(yr, mo, 1)
@@ -611,11 +826,15 @@ class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 or self.hass.config.longitude
             )
             if lat is not None and lon is not None:
-                try:
-                    state["hdd_7d"] = await self._fetch_open_meteo_7d(float(lat), float(lon))
-                except Exception as err:  # noqa: BLE001
-                    _LOGGER.warning("Optional Open-Meteo 7d failed: %s", err)
-                today = dt_util.now().astimezone(ZoneInfo("Europe/Copenhagen")).date().isoformat()
+                today = copenhagen_today().isoformat()
+                if state.get("weather_7d_fetched_on") == today and state.get("hdd_7d") is not None:
+                    _LOGGER.debug("Skipping Open-Meteo 7d (already fetched %s)", today)
+                else:
+                    try:
+                        state["hdd_7d"] = await self._fetch_open_meteo_7d(float(lat), float(lon))
+                        state["weather_7d_fetched_on"] = today
+                    except Exception as err:  # noqa: BLE001
+                        _LOGGER.warning("Optional Open-Meteo 7d failed: %s", err)
                 if state.get("weather_archive_fetched_on") == today and state.get("weather"):
                     _LOGGER.debug("Skipping Open-Meteo archive (already fetched %s)", today)
                 else:
@@ -627,6 +846,22 @@ class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                         state["weather_archive_fetched_on"] = today
                     except Exception as err:  # noqa: BLE001
                         _LOGGER.warning("Optional Open-Meteo archive failed: %s", err)
+
+            try:
+                await self._async_backfill_history(
+                    state, mp, kwh_unit, m3_unit, copenhagen_today(now_local)
+                )
+            except Exception as err:  # noqa: BLE001
+                _LOGGER.warning("Optional history backfill failed: %s", err)
+
+            self._enrich_derived(state)
+            try:
+                imported = import_hourly_statistics(self.hass, self.entry, state)
+                if imported["energy"] or imported["volume"]:
+                    state["statistics_imported_on"] = copenhagen_today(now_local).isoformat()
+                    state["statistics_imported"] = imported
+            except Exception as err:  # noqa: BLE001
+                _LOGGER.warning("Optional Energy statistics import failed: %s", err)
 
             await self._async_save_cache(state)
             return state

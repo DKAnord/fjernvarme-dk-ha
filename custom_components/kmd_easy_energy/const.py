@@ -18,6 +18,10 @@ CONF_BONUS_TEMP = "bonus_temp"
 CONF_PENALTY_TEMP = "penalty_temp"
 CONF_MITID_USERNAME = "mitid_username"
 CONF_NOTIFY_SERVICE = "notify_service"
+CONF_PRICE_DKK_PER_KWH = "price_dkk_per_kwh"
+CONF_PRICE_DKK_PER_M3 = "price_dkk_per_m3"
+CONF_MOTIVATION_DKK_PER_KWH_PER_K = "motivation_dkk_per_kwh_per_k"
+CONF_NORMAL_HDD_YEAR = "normal_hdd_year"
 
 # KMD plugin API
 KMD_API_BASE = "https://easy-energy-plugin-api.kmd.dk"

@@ -10,7 +10,29 @@
       "auth_method": "MitID",
       "latitude": 56.153,
       "longitude": 10.106,
-      "notes": "Confirmed working live against easy-energy-plugin-api.kmd.dk (monthly, daily, hourly kWh, settlement forecast, balance)."
+      "notes": "Confirmed working live against easy-energy-plugin-api.kmd.dk (monthly, daily, hourly kWh, settlement forecast, balance).",
+      "tariffs": [
+        {
+          "year": 2026,
+          "price_dkk_per_kwh": 0.668,
+          "price_dkk_per_m3": null,
+          "motivation_dkk_per_kwh_per_k": 0.01,
+          "bonus_temp": 30.0,
+          "penalty_temp": 40.0,
+          "source": "https://www.kredslob.dk/privat/fjernvarme/fjernvarmepriser",
+          "source_note": "Kredsløb standard (ikke Vejlby-rabat), kr. inkl. moms. 0,6680 kr/kWh og 0,010 kr/kWh/°C er 2026-taksten på Kredsløbs prisside (Forbrugsbidrag 668 kr/MWh). Bekræftet af uafhængig aflæsning af takstbladet."
+        },
+        {
+          "year": 2027,
+          "price_dkk_per_kwh": 0.7175,
+          "price_dkk_per_m3": null,
+          "motivation_dkk_per_kwh_per_k": 0.01075,
+          "bonus_temp": 30.0,
+          "penalty_temp": 40.0,
+          "source": "https://www.kredslob.dk/privat/fjernvarme/fjernvarmepriser",
+          "source_note": "Kredsløb standard (ikke Vejlby-rabat), kr. inkl. moms. Offentliggjort som gældende 1. januar–31. december 2027: 0,7175 kr/kWh og 0,01075 kr/kWh/°C (bonus under 30 °C, gebyr over 40 °C)."
+        }
+      ]
     },
     {
       "id": "galten-varmevaerk",
@@ -80,7 +102,7 @@
       "status": "pending_test",
       "tier": "verified_portal",
       "auth_method": "MitID",
-      "latitude": 56.360,
+      "latitude": 56.36,
       "longitude": 8.616,
       "notes": "Uses minForsyning with MitID or email login."
     },
@@ -92,8 +114,8 @@
       "status": "pending_test",
       "tier": "verified_portal",
       "auth_method": "MitID",
-      "latitude": 55.100,
-      "longitude": 14.700,
+      "latitude": 55.1,
+      "longitude": 14.7,
       "notes": "Explicit minForsyning portal with MitID or email login."
     },
     {
@@ -104,7 +126,7 @@
       "status": "pending_test",
       "tier": "verified_portal",
       "auth_method": "MitID",
-      "latitude": 55.680,
+      "latitude": 55.68,
       "longitude": 11.089,
       "notes": "Min Forsyning portal with MitID login for heat and water."
     },
@@ -141,7 +163,7 @@
       "tier": "candidate",
       "auth_method": "MitID",
       "latitude": 54.938,
-      "longitude": 10.710,
+      "longitude": 10.71,
       "notes": "Migrated to KMD Easy Energy / minForsyning."
     },
     {
@@ -189,7 +211,7 @@
       "tier": "candidate",
       "auth_method": "MitID",
       "latitude": 55.862,
-      "longitude": 9.850,
+      "longitude": 9.85,
       "notes": "MinForsyning portal with KMD activation."
     },
     {

@@ -26,7 +26,7 @@ class KMDSyncButton(CoordinatorEntity[KMDEasyEnergyCoordinator], ButtonEntity):
     """1-tap native MitID sync button for KMD Easy Energy."""
 
     _attr_has_entity_name = True
-    _attr_name = "Sync"
+    _attr_translation_key = "sync"
     _attr_icon = "mdi:cloud-refresh"
 
     def __init__(self, coordinator: KMDEasyEnergyCoordinator, entry: ConfigEntry) -> None:

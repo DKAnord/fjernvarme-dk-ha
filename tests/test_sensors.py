@@ -49,6 +49,8 @@ def test_energy_and_overview_classes() -> None:
     assert overview.native_value == 1234.0
     assert overview.unique_id == "test-entry_overview"
     assert energy.unique_id == "test-entry_energy"
+    assert energy.translation_key == "energy"
+    assert overview.translation_key == "overview"
 
 
 def test_volume_uses_water_device_class() -> None:
@@ -57,6 +59,7 @@ def test_volume_uses_water_device_class() -> None:
     assert sensor.state_class == SensorStateClass.TOTAL_INCREASING
     assert sensor.native_unit_of_measurement == UnitOfVolume.CUBIC_METERS
     assert sensor.native_value == 1.2
+    assert sensor.translation_key == "volume"
 
 
 def test_return_temp_and_balance_classes() -> None:
@@ -77,3 +80,25 @@ def test_overview_attributes_exclude_otp_and_qr() -> None:
     assert attrs["annual"]["2026"] == 1234.0
     assert "mitid_otp_code" in KMDOverviewSensor._unrecorded_attributes
     assert "mitid_qr_svg" in KMDOverviewSensor._unrecorded_attributes
+
+
+def test_entity_translation_keys_match_strings() -> None:
+    import json
+    from pathlib import Path
+
+    strings = json.loads(
+        (Path(__file__).resolve().parents[1] / "custom_components/kmd_easy_energy/strings.json").read_text()
+    )
+    da = json.loads(
+        (Path(__file__).resolve().parents[1] / "custom_components/kmd_easy_energy/translations/da.json").read_text()
+    )
+    assert set(strings["entity"]["sensor"]) == set(da["entity"]["sensor"])
+    assert set(strings["entity"]["button"]) == set(da["entity"]["button"])
+    assert "fjernvarmevand" in da["entity"]["sensor"]["volume"]["name"]
+    from kmd_easy_energy.button import KMDSyncButton
+    from kmd_easy_energy.sensor import KMDHDDSensor
+
+    assert KMDSyncButton(_coord(), _entry()).translation_key == "sync"
+    assert KMDHDDSensor(_coord(), _entry()).translation_key == "heating_degree_days"
+    assert "hourly_kwh" in KMDOverviewSensor._unrecorded_attributes
+    assert "meters" in KMDOverviewSensor._unrecorded_attributes

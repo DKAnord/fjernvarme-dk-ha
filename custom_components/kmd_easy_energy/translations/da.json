@@ -77,5 +77,32 @@
         }
       }
     }
+  },
+  "entity": {
+    "sensor": {
+      "overview": {
+        "name": "Overblik"
+      },
+      "energy": {
+        "name": "Energi"
+      },
+      "volume": {
+        "name": "Volumen (fjernvarmevand)"
+      },
+      "return_temperature": {
+        "name": "Returtemperatur"
+      },
+      "balance": {
+        "name": "Saldo"
+      },
+      "heating_degree_days": {
+        "name": "Graddage (7 dage)"
+      }
+    },
+    "button": {
+      "sync": {
+        "name": "Synkroniser MitID"
+      }
+    }
   }
 }

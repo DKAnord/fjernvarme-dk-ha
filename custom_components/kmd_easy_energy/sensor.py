@@ -53,15 +53,20 @@ class KMDBaseSensor(CoordinatorEntity[KMDEasyEnergyCoordinator], SensorEntity):
             "monthly",
             "daily",
             "hourly",
+            "hourly_kwh",
+            "hourly_m3",
+            "hourly_temp",
             "return_temp",
             "weather",
             "insights",
             "forecast",
             "billing",
+            "meters",
             "available_units",
             "hourly_kwh_points",
             "hourly_m3_points",
             "hourly_temp_points",
+            "settlement_period",
         }
     )
 
@@ -85,7 +90,7 @@ def _sum_complete(series: list[dict[str, Any]] | None) -> float | None:
 class KMDOverviewSensor(KMDBaseSensor):
     """Full dashboard sensor exposing annual/monthly/daily/hourly/weather/insights/billing."""
 
-    _attr_name = "Overview"
+    _attr_translation_key = "overview"
     _attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
     _attr_device_class = SensorDeviceClass.ENERGY
     _attr_state_class = SensorStateClass.TOTAL
@@ -138,7 +143,7 @@ class KMDOverviewSensor(KMDBaseSensor):
 
 
 class KMDEnergySensor(KMDBaseSensor):
-    _attr_name = "Energy"
+    _attr_translation_key = "energy"
     _attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
     _attr_device_class = SensorDeviceClass.ENERGY
     _attr_state_class = SensorStateClass.TOTAL_INCREASING
@@ -181,7 +186,7 @@ class KMDEnergySensor(KMDBaseSensor):
 class KMDVolumeSensor(KMDBaseSensor):
     # Circulating district-heating water volume (m³), not drinking water.
     # WATER is used so the entity can be added on the Energy dashboard volume track.
-    _attr_name = "Volume"
+    _attr_translation_key = "volume"
     _attr_native_unit_of_measurement = UnitOfVolume.CUBIC_METERS
     _attr_device_class = SensorDeviceClass.WATER
     _attr_state_class = SensorStateClass.TOTAL_INCREASING
@@ -196,7 +201,7 @@ class KMDVolumeSensor(KMDBaseSensor):
 
 
 class KMDReturnTempSensor(KMDBaseSensor):
-    _attr_name = "Return temperature"
+    _attr_translation_key = "return_temperature"
     _attr_native_unit_of_measurement = UnitOfTemperature.CELSIUS
     _attr_device_class = SensorDeviceClass.TEMPERATURE
     _attr_state_class = SensorStateClass.MEASUREMENT
@@ -219,7 +224,7 @@ class KMDReturnTempSensor(KMDBaseSensor):
 
 
 class KMDBalanceSensor(KMDBaseSensor):
-    _attr_name = "Balance"
+    _attr_translation_key = "balance"
     _attr_native_unit_of_measurement = "DKK"
     _attr_device_class = SensorDeviceClass.MONETARY
     _attr_state_class = None
@@ -238,7 +243,7 @@ class KMDBalanceSensor(KMDBaseSensor):
 
 
 class KMDHDDSensor(KMDBaseSensor):
-    _attr_name = "Heating degree days (7d)"
+    _attr_translation_key = "heating_degree_days"
     _attr_native_unit_of_measurement = "°C·d"
     _attr_state_class = SensorStateClass.MEASUREMENT
 

@@ -77,5 +77,32 @@
         }
       }
     }
+  },
+  "entity": {
+    "sensor": {
+      "overview": {
+        "name": "Overview"
+      },
+      "energy": {
+        "name": "Energy"
+      },
+      "volume": {
+        "name": "Volume (district heating water)"
+      },
+      "return_temperature": {
+        "name": "Return temperature"
+      },
+      "balance": {
+        "name": "Balance"
+      },
+      "heating_degree_days": {
+        "name": "Heating degree days (7d)"
+      }
+    },
+    "button": {
+      "sync": {
+        "name": "Sync MitID"
+      }
+    }
   }
 }

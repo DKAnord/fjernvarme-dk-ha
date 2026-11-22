@@ -20,6 +20,21 @@ Alle væsentlige ændringer i **Fjernvarme (KMD Easy Energy) – HA Connector & 
 - Volumen-sensoren bruger `device_class: water` (cirkulerende fjernvarmevand i m³, ikke drikkevand), så den kan tilføjes på Energy-dashboardets volumen-spor.
 - `requests` er tilføjet som eksplicit krav i manifestet. Den døde `UPDATE_INTERVAL`-konstant bruges nu som 30-minutters coordinator-interval.
 
+### Energy-dashboard, tarif og danske indsigtssensorer
+- Timeværdier (kWh og m³) importeres som eksterne statistikker (`kmd_easy_energy:energy_<entry>` / `:volume_<entry>`) via `async_add_external_statistics`, så Energy-dashboardet kan tilbagefylde rigtige timer i stedet for at bruge måned-til-dato-sensorerne. Historikken udvides gradvist med op til to tidligere måneder pr. døgn.
+- Valgfri varmepris i kr./kWh (og ev. kr./m³) i indstillingerne. For Kredsløb er standarden den offentliggjorte takst for indeværende kalenderår (2026: 0,6680 kr./kWh, 2027: 0,7175 kr./kWh, motivation 0,010 / 0,01075 kr./kWh/°C) fra [Kredsløbs prisside](https://www.kredslob.dk/privat/fjernvarme/fjernvarmepriser). Øvrige værker har ingen opfundet standard — brugeren indtaster selv. Der gættes ikke på en m³-pris.
+- Sensorer for motivationstarif (bonus/neutral/gebyr og kr./kWh-regulering), kWh pr. graddag, normalår-korrigeret årsforbrug og årsprognose. `binary_sensor` for gebyr-returtemperatur og unormalt forbrug (samme ugedag, HDD-justeret). Integrationen opretter **ingen** notifikationer eller automatiseringer for lækage-flaget.
+- Open-Meteo 7-dages HDD hentes højst én gang i døgnet (Europe/Copenhagen), ligesom arkivet.
+
+### Integration og pakning
+- Entitetsnavne bruger `translation_key` med dansk og engelsk (volumen hedder tydeligt fjernvarmevand).
+- Ny diagnostics-platform, der redigerer tokens, MitID-brugernavn, kunde-/måler-id og adresser. Store serier er kun talt, ikke dumpet.
+- Vendoret MitID BrowserClient har LICENSE (MIT, © 2024 Hundter) og et root-`NOTICE`. Død `Helpers.py` er fjernet (Aula-flowet var allerede væk i 0.2.1).
+- Manifest: `integration_type: service` og `loggers`. `hacs.json`: `render_readme` og minimum HA **2024.12.0** (reauth-helpers). hassfest-action er pinned i stedet for `@master`.
+- Forberedte brand-ikoner og instruktion til en PR mod [home-assistant/brands](https://github.com/home-assistant/brands) ligger i `docs/home-assistant-brands/` — selve PR'en er et maintainer-valg.
+
+Versionen forbliver **0.3.0** (ikke 0.4.0): 0.3.0 er endnu ikke udgivet, så al den nye funktionalitet samles i ét uudgivet hop oven på 0.2.1.
+
 Bygger videre på **v0.2.1** (CET-timehentning, spidstime-grafer, fjernet Aula-script).
 
 ### Bemærk (brudende for tilpassede dashboards)

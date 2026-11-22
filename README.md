@@ -82,6 +82,14 @@ Log ind med **MitID direkte i Home Assistant** i ren Python (OIDC PKCE + NemLog-
 - `sensor.<værk>_return_temperature` — Returtemperatur (`°C`)
 - `sensor.<værk>_balance` — Saldo (`DKK`)
 - `sensor.<værk>_heating_degree_days_7d` — 7-dages graddage (`HDD17`) fra Open-Meteo
+- `sensor.<værk>_energy_price` — Variabel varmepris (`DKK/kWh`), fra indstillinger eller offentliggjort takst
+- `sensor.<værk>_motivation_status` — Motivationstarif (`bonus` / `neutral` / `gebyr`) ud fra returtemperatur
+- `sensor.<værk>_motivation_adjustment` — Motivationsregulering (`DKK/kWh`, negativ = bonus)
+- `sensor.<værk>_kwh_per_hdd` — kWh pr. graddag (HDD17)
+- `sensor.<værk>_normalized_annual_energy` — Normalår-korrigeret årsforbrug (kWh)
+- `sensor.<værk>_forecast_annual_energy` — Årsprognose (ÅTD + resterende normalår-HDD × kWh/HDD)
+- `binary_sensor.<værk>_motivation_penalty` — Til, når returtemperaturen er i gebyrzonen
+- `binary_sensor.<værk>_abnormal_consumption` — Til ved unormalt døgnforbrug (samme ugedag, HDD-justeret). Ingen automatisk notifikation.
 - `button.<værk>_sync` — 1-klik knap til at starte MitID-synkronisering
 
 ### Tjenester (`services.yaml`)
@@ -93,6 +101,29 @@ Log ind med **MitID direkte i Home Assistant** i ren Python (OIDC PKCE + NemLog-
 
 ---
 
+## ⚡ Energy-dashboard, priser og danske indsigter
+
+- **Timehistorik til Energy-dashboardet:** Integrationen importerer eksterne statistikker `kmd_easy_energy:energy_<entry_id>` (kWh) og `kmd_easy_energy:volume_<entry_id>` (m³). Tilføj **disse** under Indstillinger → Dashboards → Energi — ikke måned-til-dato-sensorerne `sensor.*_energy` / `sensor.*_overview`, som nulstilles hver måned.
+- Historikken for indeværende måned kommer med det samme; ældre måneder hentes gradvist (op til to pr. døgn), så API'et ikke overbelastes.
+- **Varmepris:** Indstillinger → integrationen → Valgfrit: kr./kWh, ev. kr./m³, motivationstarif (kr./kWh/°C) og normalår-graddage. For **Kredsløb** udfyldes kWh-pris og motivation automatisk fra den offentliggjorte takst for kalenderåret ([prisside](https://www.kredslob.dk/privat/fjernvarme/fjernvarmepriser)). Sæt 0 for at bruge standarden. Andre værker har ingen indbygget pris — den skal tastes. Kredsløb afregner varme i kWh, så m³-pris er ikke udfyldt på forhånd.
+- **Motivationstarif / afkøling:** Bonus under 30 °C, gebyr over 40 °C (kan ændres). Sensorerne viser status og kr./kWh-regulering.
+- **Graddage og prognose:** kWh/HDD og et skønnet normalår (standard 3100 HDD17, kan ændres — det er *ikke* et officielt DMI 1991–2020-tal). Årsprognosen er ÅTD plus resterende skønnede graddage.
+- **Unormalt forbrug:** `binary_sensor` slår til, hvis sidste komplette døgn ligger væsentligt over samme ugedag de foregående uger, også efter HDD-justering. Du bestemmer selv, om den skal styre en notifikation.
+
+Download diagnostics fra integrationen, hvis du skal have support: tokens, MitID-id, kunde-/måler-id og adresser er redigeret.
+
+---
+
+## 🇬🇧 English notes (new in 0.3.0)
+
+This is a Denmark-only Home Assistant integration for district heating on the KMD Easy Energy platform. Version **0.3.0** (unreleased, based on v0.2.1) moves the usage cache to private `.storage`, keeps MitID OTP/QR off sensor attributes (use event `kmd_easy_energy_mitid_challenge` or the bundled card), starts reauth on 401/403, and can set up from cache after a transient first-refresh failure.
+
+For the Energy dashboard, add the imported hourly statistics `kmd_easy_energy:energy_<entry>` / `:volume_<entry>`, not the month-to-date entities. Heat price (DKK/kWh) is an option; Kredsløb defaults come from the [official price page](https://www.kredslob.dk/privat/fjernvarme/fjernvarmepriser) for the current year. Motivation tariff, degree-day forecast and an abnormal-consumption binary sensor are included; the integration never sends leak notifications on its own.
+
+**Breaking for custom dashboards:** attributes `mitid_otp_code` and `mitid_qr_svg` are removed. Use card 0.3.0 or the event above. Not tested live with MitID / a real Kredsløb account in this change set.
+
+---
+
 ## 🔒 Privatliv & Sikkerhed
 
 - Integrationen kommunikerer **kun direkte** mellem din Home Assistant-instans og KMD Easy Energy / NemLog-in / MitID / Open-Meteo.
@@ -101,3 +132,4 @@ Log ind med **MitID direkte i Home Assistant** i ren Python (OIDC PKCE + NemLog-
 - MitID-engangskode og QR vises midlertidigt i en notifikation og på dashboard-kortet. De gemmes **ikke** på sensorattributter og havner derfor ikke i historikken. Eventuelle push-beskeder har koden i *brødteksten*, aldrig i titlen.
 - Når tokenet udløber (~45–60 min), beder Home Assistant om gen-login (indsæt token eller start MitID). Sensorerne bliver stående på sidste cachede værdier, hvis de findes.
 - Den valgfrie feedback-knap til GitHub åbner kun en forudfyldt kladde i din browser uden personoplysninger, tokens, kundenumre eller forbrugstal.
+- **Diagnostics** (Indstillinger → integrationen → Download diagnostics) redigerer access tokens, MitID-brugernavn, kunde- og måler-id'er og adresser. Store forbrugsserier er kun talt, ikke inkluderet.

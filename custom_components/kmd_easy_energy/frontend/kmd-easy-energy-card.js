@@ -103,7 +103,8 @@
       pending_grp: "🧪 Afventer første test (Pending Initial Test)",
       login_btn: "🔑 Log ind på værk ↗",
       sync_btn: "🔄 Synkroniser",
-      sync_expired: "⚠️ Token udløbet · Log ind",
+      last_sync: "Sidst synkroniseret",
+      never_synced: "Ikke synkroniseret endnu",
       kpi_ytd: "🔥 Forbrug",
       kpi_ret: "🌡️ Returtemperatur",
       kpi_fc: "📉 Prognose",
@@ -120,7 +121,8 @@
       pending_grp: "🧪 Pending Initial Test",
       login_btn: "🔑 Utility Login ↗",
       sync_btn: "🔄 Sync",
-      sync_expired: "⚠️ Token expired · Login",
+      last_sync: "Last synced",
+      never_synced: "Not synced yet",
       kpi_ytd: "🔥 Consumption",
       kpi_ret: "🌡️ Return temp",
       kpi_fc: "📉 Forecast",
@@ -163,33 +165,67 @@
       return null;
     }
 
+    // Live MitID challenge (4-digit OTP or both animated QR frames) via the
+    // integration's own websocket subscription "kmd_easy_energy/mitid/subscribe".
+    // Works for non-admin users (wall tablets) and never touches the event bus /
+    // recorder. The bus event kmd_easy_energy_mitid_challenge only carries status.
     _subscribeMitid(hass) {
-      if (this._unsubMitid || !hass?.connection?.subscribeEvents) return;
-      this._unsubMitid = hass.connection.subscribeEvents((ev) => {
-        const d = ev.data || {};
+      if (this._unsubMitid || !hass?.connection?.subscribeMessage) return;
+      const onMsg = (d) => {
+        d = d || {};
         const st = this._resolveEntity();
         const entryId = st?.attributes?.entry_id;
         const utilId = st?.attributes?.utility_id || this._config?.utility_id;
         if (d.entry_id && entryId && d.entry_id !== entryId) return;
         if (!d.entry_id && d.utility_id && utilId && d.utility_id !== utilId) return;
         this._mitidOtp = d.otp_code || "";
-        this._mitidQr = d.qr_svg || "";
-        if (d.sync_state === "idle" || d.sync_state === "error") {
-          if (d.sync_state === "idle") {
-            this._mitidOtp = "";
-            this._mitidQr = "";
-          }
-        }
+        const frames = Array.isArray(d.qr_frames) ? d.qr_frames.filter(Boolean) : [];
+        this._mitidQrFrames = frames;
+        this._mitidQr = frames[0] || "";
+        this._mitidQrIdx = 0;
         this._lastSig = null;
         this._render();
-      }, "kmd_easy_energy_mitid_challenge");
+        this._syncQrAnimation();
+      };
+      const p = hass.connection.subscribeMessage(onMsg, { type: "kmd_easy_energy/mitid/subscribe" });
+      this._unsubMitid = p;
+      if (p && typeof p.catch === "function") {
+        p.catch((err) => {
+          console.warn("kmd-easy-energy-card: MitID live subscription failed", err);
+          this._unsubMitid = null;
+        });
+      }
+    }
+
+    // MitID's QR is animated: two frames (each half of the channel binding) that
+    // the MitID app must both see. Alternate them every second by swapping only
+    // the <img> src, so the card is not re-rendered on every frame.
+    _syncQrAnimation() {
+      const frames = this._mitidQrFrames || [];
+      if (frames.length < 2) {
+        if (this._qrTimer) { clearInterval(this._qrTimer); this._qrTimer = null; }
+        return;
+      }
+      if (this._qrTimer) return;
+      this._qrTimer = setInterval(() => {
+        const fr = this._mitidQrFrames || [];
+        if (fr.length < 2) { clearInterval(this._qrTimer); this._qrTimer = null; return; }
+        this._mitidQrIdx = ((this._mitidQrIdx || 0) + 1) % fr.length;
+        const img = this.shadowRoot && this.shadowRoot.getElementById("mitidQrImg");
+        if (img) img.src = this._qrDataUrl(fr[this._mitidQrIdx]);
+      }, 1000);
+    }
+
+    _qrDataUrl(svg) {
+      return `data:image/svg+xml;utf8,${encodeURIComponent(svg || "")}`;
     }
 
     disconnectedCallback() {
       const unsub = this._unsubMitid;
       this._unsubMitid = null;
+      if (this._qrTimer) { clearInterval(this._qrTimer); this._qrTimer = null; }
       if (typeof unsub === "function") unsub();
-      else if (unsub && typeof unsub.then === "function") unsub.then((fn) => fn && fn());
+      else if (unsub && typeof unsub.then === "function") unsub.then((fn) => fn && fn()).catch(() => {});
     }
 
     set hass(hass) {
@@ -199,7 +235,7 @@
       const statusEnt = this._config?.status_entity;
       const syncSt = statusEnt ? (hass?.states?.[statusEnt]?.state || "") : "";
       const sig = st
-        ? `${st.entity_id}|${st.state}|${st.attributes?.updated || ""}|${st.attributes?.hourly?.days_averaged || ""}|${st.attributes?.daily?.latest_complete}|${st.attributes?.token_expired}|${st.attributes?.initial_setup_complete}|${st.attributes?.utility_id || ""}|${st.attributes?.entry_id || ""}|${st.attributes?.sync_state || ""}|${st.attributes?.sync_message || ""}|${this._mitidOtp || ""}|${Boolean(this._mitidQr)}|${syncSt}`
+        ? `${st.entity_id}|${st.state}|${st.attributes?.updated || ""}|${st.attributes?.hourly?.days_averaged || ""}|${st.attributes?.daily?.latest_complete}|${st.attributes?.last_sync || ""}|${st.attributes?.sync_reminder}|${st.attributes?.days_since_sync}|${st.attributes?.initial_setup_complete}|${st.attributes?.utility_id || ""}|${st.attributes?.entry_id || ""}|${st.attributes?.sync_state || ""}|${st.attributes?.sync_message || ""}|${this._mitidOtp || ""}|${Boolean(this._mitidQr)}|${syncSt}`
         : "none";
       if (sig === this._lastSig) return;
       this._lastSig = sig;
@@ -544,15 +580,20 @@
         ? `${hddEntries[hddEntries.length - 1][0]} ligger på ${fmtDec(hddEntries[hddEntries.length - 1][1], 2)} kWh/HDD mod ${fmtDec(hddEntries[hddEntries.length - 2][1], 2)} i ${hddEntries[hddEntries.length - 2][0]}:`
         : "Vejrkorrigeret rumvarme-forbrug pr. graddag:";
 
-      const uDate = a.updated ? new Date(a.updated) : null;
+      // Session-based sync: "Sidst synkroniseret" = last MitID sync (no background polling).
+      const lastSyncRaw = a.last_sync || a.updated || "";
+      const uDate = lastSyncRaw ? new Date(lastSyncRaw) : null;
       const validU = uDate && !Number.isNaN(uDate.getTime());
       const isToday = validU && uDate.toDateString() === now.toDateString();
       const hhmm = validU ? `${String(uDate.getHours()).padStart(2, "0")}:${String(uDate.getMinutes()).padStart(2, "0")}` : "";
       const retrievedLbl = isToday
-        ? `Hentet i dag ${hhmm}`
+        ? `${t.last_sync} i dag ${hhmm}`
         : validU
-          ? `Hentet ${uDate.getDate()}. ${(MONTHS[uDate.getMonth()] || "").toLowerCase()} ${hhmm}`
-          : "Opdateret: ukendt";
+          ? `${t.last_sync} ${uDate.getDate()}. ${(MONTHS[uDate.getMonth()] || "").toLowerCase()} ${hhmm}`
+          : t.never_synced;
+      // Soft weekend reminder (computed by the integration; visual only, no push).
+      const syncReminder = Boolean(a.sync_reminder);
+      const syncReminderMsg = String(a.sync_reminder_message || "");
       const dayKeys = Object.keys(dy.days || {}).map((k) => parseInt(k, 10)).filter((n) => !Number.isNaN(n));
       const maxDay = dayKeys.length ? Math.max(...dayKeys) : null;
       const moLbl = (dy.month || "").split(" ")[0].slice(0, 3).toLowerCase();
@@ -603,7 +644,6 @@
           <option value="__custom__" ${isCustomNotify ? "selected" : ""}>✏️ Andet (indtast manuelt)…</option>
         </select>
         ${isCustomNotify ? `<input id="notifyInput" value="${esc(notifySvc)}" placeholder="f.eks. mobile_app_min_telefon" style="margin-top:6px" />` : ""}`;
-      const tokenExpired = Boolean(a.token_expired);
       const hasData = Boolean(
         st && (Object.keys(ann).length > 0 || Object.keys(mon).length > 0 || Object.keys(dy.days || {}).length > 0)
       );
@@ -615,15 +655,15 @@
       const wizPenalty = this._wizPenalty ?? penaltyT;
       const mitidLiveBox = otpCode
         ? `<div class="mitid-box otp"><div>🔑 Indtast denne 4-cifrede engangskode i MitID-appen:</div><div class="otp-digits">${esc(otpCode.split("").join(" "))}</div></div>`
-        : (qrSvg ? `<div class="mitid-box qr"><div>📲 Scan QR-koden med MitID-appen <i>(eller skift til Engangskoder i appens indstillinger)</i>:</div><div class="qr-wrap"><img src="data:image/svg+xml;utf8,${esc(encodeURIComponent(qrSvg))}" alt="MitID QR-kode" /></div></div>` : "");
+        : (qrSvg ? `<div class="mitid-box qr"><div>📲 Scan QR-koden med MitID-appen på din telefon:</div><div class="qr-wrap"><img id="mitidQrImg" src="${esc(this._qrDataUrl((this._mitidQrFrames || [])[this._mitidQrIdx || 0] || qrSvg))}" alt="MitID QR-kode" /></div><div class="qr-hint">Koden skifter hvert sekund — hold telefonen roligt foran skærmen. Står kortet på samme telefon som MitID-appen, kan QR-koden ikke scannes — slå i stedet engangskoder til i MitID-appen (Menu → Godkend med QR- eller engangskoder → Engangskoder).</div></div>` : "");
 
       // Dynamic Mushroom-style banner state
       let bannerIcon = isToday ? "✓" : "↻";
       let bannerTone = isToday ? "ok" : "orange";
       let bannerTitle = isToday
-        ? `${activeUtil.name} Fjernvarme · Hentet i dag`
-        : "Opdater fjernvarme (MitID)";
-      let bannerSub = `${freshText} · Tryk for ny sync`;
+        ? `${activeUtil.name} Fjernvarme · Synkroniseret i dag`
+        : "Synkroniser fjernvarme (MitID)";
+      let bannerSub = `${freshText} · Tryk for at synkronisere`;
       if (hasSyncMsg) {
         if (syncMsg.startsWith("Fejl")) {
           bannerIcon = "!";
@@ -641,11 +681,12 @@
           bannerTitle = "Synkroniserer fjernvarme…";
           bannerSub = syncMsg;
         }
-      } else if (tokenExpired && !isToday) {
-        bannerIcon = "🔑";
-        bannerTone = "amber";
-        bannerTitle = `${activeUtil.name} · ${t.sync_expired}`;
       }
+      // Friendly, non-invasive weekend nudge: a calm info chip next to the
+      // Synkroniser button (never red/error styling, no notification).
+      const syncNudge = (syncReminder && !hasSyncMsg && syncReminderMsg)
+        ? `<div class="sync-nudge" role="status"><span aria-hidden="true">💧</span><span>${esc(syncReminderMsg)}</span></div>`
+        : "";
 
       this.shadowRoot.innerHTML = `
         <style>
@@ -741,6 +782,12 @@
             padding: 4px 9px; border-radius: 10px; font-size: 12px; font-weight: 700;
             background: rgba(245,158,11,0.16); border: 1px solid rgba(245,158,11,0.3);
           }
+          .sync-nudge {
+            display: flex; align-items: center; gap: 8px; margin-top: -6px;
+            padding: 7px 12px; border-radius: 999px; font-size: 12.5px; font-weight: 600; line-height: 1.35;
+            color: var(--secondary-text-color);
+            background: rgba(14,165,233,0.08); border: 1px solid rgba(14,165,233,0.22);
+          }
           .fresh-pill {
             padding: 3px 9px; border-radius: 999px; font-size: 11.5px; font-weight: 700;
             background: rgba(148,163,184,0.16); border: 1px solid rgba(148,163,184,0.3);
@@ -796,8 +843,9 @@
             background: rgba(14,165,233,0.14); border: 2px solid rgba(14,165,233,0.5);
           }
           .otp-digits { font-size: 32px; font-weight: 900; letter-spacing: 6px; margin-top: 6px; color: #0284c7; }
-          .qr-wrap { margin: 10px auto 0; width: 170px; height: 170px; background: #fff; padding: 8px; border-radius: 12px; }
-          .qr-wrap img, .qr-wrap svg { width: 100%; height: 100%; display: block; }
+          .qr-wrap { margin: 10px auto 0; width: min(240px, 70vw); aspect-ratio: 1 / 1; box-sizing: content-box; background: #fff; padding: 14px; border-radius: 12px; }
+          .qr-wrap img, .qr-wrap svg { width: 100%; height: 100%; display: block; image-rendering: pixelated; }
+          .qr-hint { margin-top: 8px; font-size: 12px; font-weight: 600; color: var(--secondary-text-color); }
           details.ob-manual { font-size: 12.5px; color: var(--secondary-text-color); padding-top: 4px; border-top: 1px solid rgba(148,163,184,0.22); }
           details.ob-manual summary { cursor: pointer; font-weight: 700; padding: 4px 0; }
           button.btn.primary { background: rgba(34,197,94,0.20); border-color: rgba(34,197,94,0.45); }
@@ -855,9 +903,10 @@
             <div class="ob-guide">
               <ol>
                 <li>Udfyld dit <b>MitID Bruger-ID</b> ovenfor og tryk på <b>🚀 Gem &amp; Start MitID-synkronisering</b> herunder <i>(åbn ikke selv værkets hjemmeside i browseren)</i>.</li>
-                <li><b>Åbn straks MitID-appen på din telefon og lås den op</b> <i>(vigtigt: MitID genererer først den 4-cifrede kode / QR-koden i det øjeblik, du åbner MitID-appen!)</i>.</li>
-                <li>Aflæs de <b>4 cifre</b> direkte her på kortet (eller i push-notifikationen) — eller scan QR-koden — og godkend i MitID-appen!</li>
+                <li><b>Åbn straks MitID-appen på din telefon og lås den op</b> <i>(vigtigt: MitID genererer først QR-koden / den 4-cifrede kode i det øjeblik, du åbner MitID-appen!)</i>.</li>
+                <li><b>Opsætter du på en tablet eller computer:</b> scan QR-koden her på kortet med MitID-appen på telefonen og godkend. <b>Opsætter du på samme telefon som MitID-appen:</b> indtast de <b>4 cifre</b> fra kortet (eller push-notifikationen) i MitID-appen og godkend — det kræver engangskoder slået til (se herunder).</li>
               </ol>
+              <div class="ob-note" style="margin-top:6px">ℹ️ Hver synkronisering er ét MitID-login: data siden sidste synkronisering hentes, og adgangen fra KMD (gyldig ca. 1 time) kasseres straks. Integrationen henter ikke data i baggrunden — tryk <b>🔄 Synkroniser</b>, når du vil have nye tal (f.eks. dagligt eller ugentligt).</div>
             </div>
             ${this._mitidErr ? `<div class="ob-live red">⚠️ ${esc(this._mitidErr)}</div>` : ""}
             ${(hasSyncMsg || this._startingSync) ? `<div class="ob-live ${hasSyncMsg && syncMsg.startsWith("Fejl") ? "red" : (hasSyncMsg && syncMsg.includes("MitID") ? "blue" : "")}">📡 ${esc(hasSyncMsg ? syncMsg : "Starter MitID-login…")}</div>` : ""}
@@ -867,10 +916,10 @@
               ${hasData ? `<button class="btn" id="completeNowBtn">⚡ Hurtig-test: Vis dashboard med eksisterende data</button>` : ""}
             </div>
             <details class="ob-manual">
-              <summary>📲 Vigtigt for nye brugere: Slå 4-cifret Engangskode til i MitID-appen (i stedet for QR-kode)</summary>
+              <summary>📲 Kun hvis du opsætter på samme telefon som MitID-appen: Slå 4-cifret engangskode til</summary>
               <div class="ob-note" style="margin:8px 0">
-                Når du logger ind fra en anden enhed (headless browser), viser MitID som standard en animeret <b>QR-kode</b>, som ikke kan scannes fra en push-notifikation på samme telefon.<br/>
-                Skift i stedet til 4-cifret kode én gang for alle:<br/>
+                <b>Tablet eller computer + MitID-app på telefonen:</b> Du behøver ikke ændre noget. Scan blot QR-koden, der vises her på kortet, med MitID-appen og godkend.<br/>
+                <b>Samme telefon:</b> MitID viser som standard en animeret <b>QR-kode</b>, og den kan ikke scannes med den telefon, den står på. Skift derfor til 4-cifrede engangskoder én gang for alle:<br/>
                 <b>MitID-app → Menu (⚙️ øverst) → Godkend med QR- eller engangskoder → Engangskoder</b>.<br/>
                 <i>Bemærk: MitID har af sikkerhedshensyn 24 timers ventetid ved første skift fra QR-kode til engangskode, hvorefter du bekræfter skiftet i appen.</i>
               </div>
@@ -878,7 +927,7 @@
             <details class="ob-manual">
               <summary>🛠️ Manuelt login i browser / Første konto-aktivering hos værket</summary>
               <div class="ob-note" style="margin:8px 0">
-                Brug kun dette, hvis du <b>(a)</b> aldrig har aktiveret din konto hos værket før (kræver kundenr. + aktiveringskode fra regning 1. gang), eller <b>(b)</b> ikke bruger MitID Bridge og vil logge ind manuelt i browseren og indsætte et Bearer token herunder. Luk browser-fanen igen, før du bruger 1-klik MitID-sync.
+                Brug kun dette, hvis du <b>(a)</b> aldrig har aktiveret din konto hos værket før (kræver kundenr. + aktiveringskode fra regning 1. gang), eller <b>(b)</b> vil logge ind manuelt i browseren og indsætte et Bearer token herunder. Tokenet bruges til <b>én</b> synkronisering og gemmes ikke. Luk browser-fanen igen, før du bruger 1-klik MitID-sync.
               </div>
               <div style="margin-bottom:8px">
                 <button class="btn login" id="loginBtn" title="${esc(wizPortalUrl)}">🔑 Åbn ${esc(activeUtil.name)} login-portal i browser ↗</button>
@@ -892,7 +941,7 @@
                 </label>
               </div>
               <div style="margin-top:8px">
-                <button class="btn primary" id="saveTokenBtn">💾 Gem token &amp; fuldfør</button>
+                <button class="btn primary" id="saveTokenBtn">▶️ Synkroniser én gang med token</button>
               </div>
             </details>
             <div class="fb-foot">
@@ -921,6 +970,7 @@
               <button class="btn" id="openSetupBtn" title="Skift værk / opsætning">⚙️</button>
             </div>
           </div>
+          ${syncNudge}
           ${mitidLiveBox}
           ${(utilStatus !== "confirmed" && hasData) ? `
           <div class="fb-bar">
@@ -1180,11 +1230,8 @@
         }
         // Prefer the domain service (looks up the entry by id / utility_id) so
         // entity_id slugs like "envafors_sk_forsyning" cannot miss the button.
-        if (tokenExpired || !hasData) {
-          this._hass.callService("kmd_easy_energy", "start_mitid_sync", payload);
-        } else {
-          this._hass.callService("kmd_easy_energy", "refresh", payload);
-        }
+        // Session-based: every "Synkroniser" is one MitID login + fetch since last sync.
+        this._hass.callService("kmd_easy_energy", "start_mitid_sync", payload);
       };
       const syncBtn = this.shadowRoot.getElementById("syncBtn");
       if (syncBtn) syncBtn.addEventListener("click", triggerSync);

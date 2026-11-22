@@ -9,58 +9,31 @@
         }
       },
       "auth": {
-        "title": "Login & Token ({utility_name})",
-        "description": "Status: {status_badge}\nLogin portal: {portal_url}\n{notes}\n\nEnter your MitID User ID for native 1-click MitID sync inside Home Assistant, or paste a Bearer token manually.",
+        "title": "Login & Setup ({utility_name})",
+        "description": "Status: {status_badge}\nLogin portal: {portal_url}\n{notes}\n\nEnter your MitID User ID. Each sync is one MitID login: data since the last sync is fetched and the KMD access (valid ~1 hour) is discarded immediately and never stored. The integration does not poll KMD in the background.",
         "data": {
           "portal_url": "Portal URL",
           "mitid_username": "MitID User ID (saved locally in HA)",
           "notify_service": "Mobile notify service (optional, e.g. mobile_app_my_phone)",
-          "access_token": "Access token (optional — auto-fetched via MitID)",
           "customer_id": "Customer ID (optional)",
           "location_name": "City / Location label"
         }
       },
       "reconfigure": {
-        "title": "Update Token / Portal ({utility_name})",
-        "description": "Login portal: {portal_url}\nUpdate your MitID User ID, notify service, portal URL, or paste a fresh Bearer token.",
+        "title": "Update MitID / Portal ({utility_name})",
+        "description": "Login portal: {portal_url}\nUpdate your MitID User ID, notify service or portal URL.",
         "data": {
           "portal_url": "Portal URL",
           "mitid_username": "MitID User ID (saved locally in HA)",
           "notify_service": "Mobile notify service (optional)",
-          "access_token": "New access token (optional)",
           "customer_id": "Customer ID (optional)",
           "location_name": "City / Location label"
         }
-      },
-      "reauth_confirm": {
-        "title": "Reauthenticate {utility_name}",
-        "description": "The KMD access token has expired or was rejected.\nLogin portal: {portal_url}\n\nPaste a fresh Bearer token, or enter your MitID User ID and enable Start MitID sync. The 4-digit code is shown in a notification and on the dashboard card — it is never stored on the sensor.",
-        "data": {
-          "portal_url": "Portal URL",
-          "mitid_username": "MitID User ID (saved locally in HA)",
-          "notify_service": "Mobile notify service (optional)",
-          "access_token": "New access token (optional if starting MitID)",
-          "customer_id": "Customer ID (optional)",
-          "start_mitid": "Start MitID login now"
-        }
-      },
-      "reauth_mitid": {
-        "title": "MitID login in progress",
-        "description": "Status: {sync_state}\n{sync_message}\n\nOne-time code (if shown by MitID): {otp_hint}\n\nOpen the MitID app, approve the login, then press Submit to refresh this status."
       }
     },
-    "error": {
-      "invalid_auth": "Invalid token or no profile returned",
-      "token_or_mitid_required": "Paste a token or enable Start MitID login",
-      "mitid_unavailable": "The integration is not loaded, so MitID cannot be started here. Paste a token instead.",
-      "mitid_failed": "MitID login failed. Check the message and try again."
-    },
     "abort": {
-      "invalid_auth": "Invalid token or no profile returned",
       "reconfigure_successful": "Updated KMD Easy Energy configuration",
-      "already_configured": "This utility is already configured",
-      "mitid_unavailable": "The integration is not loaded. Paste a token to reauthenticate.",
-      "reauth_successful": "KMD Easy Energy reauthenticated"
+      "already_configured": "This utility is already configured"
     }
   },
   "options": {
@@ -78,7 +51,8 @@
           "price_dkk_per_kwh": "Heat price (DKK/kWh, 0 = use published default)",
           "price_dkk_per_m3": "Volume price (DKK/m³, optional, 0 = unset)",
           "motivation_dkk_per_kwh_per_k": "Motivation tariff (DKK/kWh/°C, 0 = published default)",
-          "normal_hdd_year": "Normal-year HDD17 (0 = 3100 estimate)"
+          "normal_hdd_year": "Normal-year HDD17 (0 = 3100 estimate)",
+          "sync_reminder": "Soft weekend reminder (shown Sat/Sun if not synced Thu–Sat)"
         }
       }
     }
@@ -125,6 +99,9 @@
       },
       "forecast_annual_energy": {
         "name": "Annual energy forecast"
+      },
+      "last_sync": {
+        "name": "Last synced"
       }
     },
     "button": {
@@ -138,6 +115,9 @@
       },
       "abnormal_consumption": {
         "name": "Abnormal consumption"
+      },
+      "sync_reminder": {
+        "name": "Sync reminder"
       }
     }
   }

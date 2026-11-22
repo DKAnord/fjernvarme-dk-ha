@@ -10,57 +10,30 @@
       },
       "auth": {
         "title": "Login & Opsætning ({utility_name})",
-        "description": "Status: {status_badge}\nLogin-portal: {portal_url}\n{notes}\n\nIndtast dit MitID Bruger-ID til 100% lokal MitID-synkronisering i Home Assistant, eller indsæt et Bearer token manuelt.",
+        "description": "Status: {status_badge}\nLogin-portal: {portal_url}\n{notes}\n\nIndtast dit MitID Bruger-ID. Hver synkronisering er ét MitID-login: data siden sidste synkronisering hentes, og adgangen fra KMD (gyldig ca. 1 time) kasseres straks og gemmes ikke. Integrationen henter ikke data i baggrunden.",
         "data": {
           "portal_url": "Portal-URL",
           "mitid_username": "MitID Bruger-ID (gemmes kun lokalt i HA)",
           "notify_service": "Mobil push-service (valgfri, f.eks. mobile_app_min_telefon)",
-          "access_token": "Access token (valgfri — hentes automatisk via MitID)",
           "customer_id": "Kunde-ID (valgfrit)",
           "location_name": "By / Lokationsnavn"
         }
       },
       "reconfigure": {
         "title": "Opdater MitID / Portal ({utility_name})",
-        "description": "Login-portal: {portal_url}\nOpdater MitID Bruger-ID, push-service, portal-URL eller indsæt et nyt Bearer token.",
+        "description": "Login-portal: {portal_url}\nOpdater MitID Bruger-ID, push-service eller portal-URL.",
         "data": {
           "portal_url": "Portal-URL",
           "mitid_username": "MitID Bruger-ID (gemmes kun lokalt i HA)",
           "notify_service": "Mobil push-service (valgfri)",
-          "access_token": "Nyt access token (valgfrit)",
           "customer_id": "Kunde-ID (valgfrit)",
           "location_name": "By / Lokationsnavn"
         }
-      },
-      "reauth_confirm": {
-        "title": "Log ind igen ({utility_name})",
-        "description": "KMD-adgangstokenet er udløbet eller blev afvist.\nLogin-portal: {portal_url}\n\nIndsæt et nyt Bearer token, eller indtast dit MitID Bruger-ID og slå Start MitID-synkronisering til. Den 4-cifrede kode vises i en notifikation og på dashboard-kortet — den gemmes ikke på sensoren.",
-        "data": {
-          "portal_url": "Portal-URL",
-          "mitid_username": "MitID Bruger-ID (gemmes kun lokalt i HA)",
-          "notify_service": "Mobil push-service (valgfri)",
-          "access_token": "Nyt access token (valgfrit hvis du starter MitID)",
-          "customer_id": "Kunde-ID (valgfrit)",
-          "start_mitid": "Start MitID-login nu"
-        }
-      },
-      "reauth_mitid": {
-        "title": "MitID-login i gang",
-        "description": "Status: {sync_state}\n{sync_message}\n\nEngangskode (hvis MitID viser en): {otp_hint}\n\nÅbn MitID-appen, godkend, og tryk på Send for at opdatere status."
       }
     },
-    "error": {
-      "invalid_auth": "Ugyldigt token eller ingen profil returneret",
-      "token_or_mitid_required": "Indsæt et token, eller slå Start MitID-login til",
-      "mitid_unavailable": "Integrationen er ikke indlæst, så MitID kan ikke startes her. Indsæt et token i stedet.",
-      "mitid_failed": "MitID-login fejlede. Se beskeden og prøv igen."
-    },
     "abort": {
-      "invalid_auth": "Ugyldigt token eller ingen profil returneret",
       "reconfigure_successful": "Fjernvarme-konfiguration opdateret",
-      "already_configured": "Dette værk er allerede konfigureret",
-      "mitid_unavailable": "Integrationen er ikke indlæst. Indsæt et token for at logge ind igen.",
-      "reauth_successful": "Fjernvarme-login er opdateret"
+      "already_configured": "Dette værk er allerede konfigureret"
     }
   },
   "options": {
@@ -78,7 +51,8 @@
           "price_dkk_per_kwh": "Varmepris (kr./kWh, 0 = brug offentliggjort standard)",
           "price_dkk_per_m3": "Volumenpris (kr./m³, valgfri, 0 = ikke sat)",
           "motivation_dkk_per_kwh_per_k": "Motivationstarif (kr./kWh/°C, 0 = offentliggjort standard)",
-          "normal_hdd_year": "Normalår-graddage HDD17 (0 = skøn 3100)"
+          "normal_hdd_year": "Normalår-graddage HDD17 (0 = skøn 3100)",
+          "sync_reminder": "Blød påmindelse i weekenden (vises lør/søn, hvis der ikke er synkroniseret tors–lør)"
         }
       }
     }
@@ -125,6 +99,9 @@
       },
       "forecast_annual_energy": {
         "name": "Årsprognose (kWh)"
+      },
+      "last_sync": {
+        "name": "Sidst synkroniseret"
       }
     },
     "button": {
@@ -138,6 +115,9 @@
       },
       "abnormal_consumption": {
         "name": "Unormalt forbrug"
+      },
+      "sync_reminder": {
+        "name": "Synkroniseringspåmindelse"
       }
     }
   }

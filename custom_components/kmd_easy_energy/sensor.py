@@ -41,6 +41,7 @@ async def async_setup_entry(
             KMDKwhPerHddSensor(coordinator, entry),
             KMDNormalizedAnnualSensor(coordinator, entry),
             KMDForecastAnnualSensor(coordinator, entry),
+            KMDLastSyncSensor(coordinator, entry),
         ]
     )
 
@@ -89,6 +90,11 @@ class KMDBaseSensor(CoordinatorEntity[KMDEasyEnergyCoordinator], SensorEntity):
             "name": entry.title or "KMD Easy Energy",
             "manufacturer": "KMD",
         }
+
+
+def _sync_attrs(coordinator: KMDEasyEnergyCoordinator) -> dict[str, Any]:
+    """Last sync + soft weekend reminder (computed live, no KMD call)."""
+    return coordinator.sync_reminder()
 
 
 def _sum_complete(series: list[dict[str, Any]] | None) -> float | None:
@@ -149,7 +155,7 @@ class KMDOverviewSensor(KMDBaseSensor):
             "forecast": data.get("forecast") or {},
             "billing": data.get("billing") or {},
             "available_units": data.get("available_units") or [],
-            "token_expired": bool(data.get("token_expired", False)),
+            **_sync_attrs(self.coordinator),
         }
 
 
@@ -183,7 +189,7 @@ class KMDEnergySensor(KMDBaseSensor):
             "hourly_kwh_points": data.get("hourly_kwh_points", 0),
             "hourly_m3_points": len(data.get("hourly_m3") or []),
             "hourly_temp_points": len(data.get("hourly_temp") or []),
-            "token_expired": bool(data.get("token_expired", False)),
+            "last_sync": _sync_attrs(self.coordinator)["last_sync"],
             "settlement_period": (
                 f"{sp.get('DateFrom', '')[:10]} - {sp.get('DateTo', '')[:10]}"
                 if sp.get("DateFrom") and sp.get("DateTo")
@@ -404,3 +410,24 @@ class KMDForecastAnnualSensor(KMDBaseSensor):
     def extra_state_attributes(self) -> dict[str, Any]:
         dd = dict((self.coordinator.data or {}).get("degree_day") or {})
         return dd
+
+
+class KMDLastSyncSensor(KMDBaseSensor):
+    """Timestamp of the last successful MitID sync ("Sidst synkroniseret")."""
+
+    _attr_translation_key = "last_sync"
+    _attr_device_class = SensorDeviceClass.TIMESTAMP
+    _attr_icon = "mdi:cloud-check-outline"
+
+    @property
+    def unique_id(self) -> str:
+        return f"{self._entry.entry_id}_last_sync"
+
+    @property
+    def native_value(self) -> Any:
+        return self.coordinator.last_sync
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        rem = _sync_attrs(self.coordinator)
+        return {"days_since_sync": rem["days_since_sync"]}

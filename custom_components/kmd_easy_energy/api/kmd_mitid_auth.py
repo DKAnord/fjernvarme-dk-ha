@@ -40,10 +40,19 @@ DEFAULT_KREDSLOB = {
 
 
 def _qr_to_svg(qr_obj: qrcode.QRCode) -> str:
+    """Render a QR code as a compact SVG that scales crisply in the browser.
+
+    ``shape-rendering="crispEdges"`` avoids hairline gaps between the unit
+    squares when the card scales the SVG up, which can make the code hard to
+    scan from a tablet or PC screen.
+    """
     img = qr_obj.make_image(image_factory=qrcode.image.svg.SvgPathImage)
     buf = io.BytesIO()
     img.save(buf)
-    return buf.getvalue().decode("utf-8")
+    svg = buf.getvalue().decode("utf-8")
+    if "shape-rendering" not in svg:
+        svg = svg.replace("<svg ", '<svg shape-rendering="crispEdges" ', 1)
+    return svg
 
 
 class _CaptureCodeRedirectHandler(urllib.request.HTTPRedirectHandler):
@@ -192,7 +201,6 @@ class KMDMitIDAuthenticator:
         self._code_verifier: str = ""
         self._client_id: str = DEFAULT_KREDSLOB["client_id"]
         self._redirect_uri: str = DEFAULT_KREDSLOB["redirect_uri"]
-        self._qr_toggle: bool = False
 
     def _discover_oidc_config(self, portal_url: str) -> dict[str, str]:
         if "minvarme.kredslob.dk" in portal_url:
@@ -315,9 +323,14 @@ class KMDMitIDAuthenticator:
         res = self.mitid_client.poll_app_authentication_status()
         if res.get("status") == "qr_ready":
             qrs = self.mitid_client.get_current_qr_codes()
-            if qrs:
-                self._qr_toggle = not self._qr_toggle
-                res["qr_svg"] = _qr_to_svg(qrs[1] if self._qr_toggle else qrs[0])
+            if qrs and all(qrs):
+                # MitID's animated QR is two frames (p=1 / p=2) that each carry
+                # half of the channel binding. The MitID app must see BOTH, so
+                # deliver both and let the card alternate them every second,
+                # independent of how long MitID's long-poll takes to answer.
+                frames = [_qr_to_svg(qr) for qr in qrs]
+                res["qr_frames"] = frames
+                res["qr_svg"] = frames[0]
         return res
 
     def finalize_and_exchange_token(self) -> str:

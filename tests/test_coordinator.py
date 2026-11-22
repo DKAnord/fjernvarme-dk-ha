@@ -10,11 +10,10 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from aiohttp import ClientResponseError
 
-from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
-from kmd_easy_energy.const import EVENT_MITID_CHALLENGE
-from kmd_easy_energy.coordinator import KMDEasyEnergyCoordinator
+from kmd_easy_energy.const import EVENT_MITID_CHALLENGE, SIGNAL_MITID_CHALLENGE
+from kmd_easy_energy.coordinator import KMDEasyEnergyCoordinator, KMDLoginError
 from kmd_easy_energy.util import legacy_www_cache_paths, sanitize_cache
 
 
@@ -78,7 +77,8 @@ def make_coordinator(tmp_path: Path, store: FakeStore | None = None, **entry_dat
         coord.entry = entry
         coord._portal_url = entry.data["portal_url"]
         coord.client = None
-        coord._token_obtained = None
+        coord.last_sync = None
+        coord._reminder_sig = None
         coord._utility_id = "kredslob"
         coord._store = store
         coord._legacy_paths = legacy_www_cache_paths(hass, "kredslob")
@@ -87,6 +87,7 @@ def make_coordinator(tmp_path: Path, store: FakeStore | None = None, **entry_dat
         coord.sync_message = ""
         coord.mitid_otp_code = None
         coord.mitid_qr_svg = None
+        coord.mitid_qr_frames = []
         coord._sync_task = None
         coord.data = {}
         coord.logger = MagicMock()
@@ -160,31 +161,170 @@ async def test_save_cache_strips_otp_and_stays_private(tmp_path: Path) -> None:
 
 
 @pytest.mark.asyncio
-async def test_401_raises_auth_failed_and_keeps_cache(tmp_path: Path) -> None:
-    coord, hass, _, store = make_coordinator(
-        tmp_path, access_token="expired-token", customer_id="c", customer_number="n"
+async def test_update_data_is_cache_only_no_kmd_call(tmp_path: Path) -> None:
+    """HA restart / refresh restores cached values without contacting KMD."""
+    store = FakeStore(
+        {
+            "annual": {"2026": 77},
+            "daily": {"total": 5},
+            "last_sync": "2026-11-19T18:30:00+00:00",
+            "token_expired": True,
+        }
     )
-    cached = {"annual": {"2026": 77}, "daily": {"total": 5}}
-    coord.data = dict(cached)
-    err = ClientResponseError(MagicMock(), (), status=401, message="Unauthorized")
-    coord.client = MagicMock()
-    coord.client.get_active_meters = AsyncMock(side_effect=err)
+    coord, hass, entry, _ = make_coordinator(tmp_path, store=store)
+    coord.data = None
+    with patch("kmd_easy_energy.coordinator.KMDClient", side_effect=AssertionError("no KMD")):
+        state = await coord._async_update_data()
+    assert state["annual"]["2026"] == 77
+    assert "token_expired" not in state
+    assert state["last_sync"] == "2026-11-19T18:30:00+00:00"
+    assert coord.client is None
+    from kmd_easy_energy.const import UPDATE_INTERVAL
 
-    with pytest.raises(ConfigEntryAuthFailed):
-        await coord._async_update_data()
-    assert coord.data["annual"]["2026"] == 77
-    assert coord.data["token_expired"] is True
+    assert UPDATE_INTERVAL is None
 
 
 @pytest.mark.asyncio
-async def test_transient_http_error_serves_cache(tmp_path: Path) -> None:
-    coord, *_ = make_coordinator(tmp_path, access_token="tok", customer_id="c", customer_number="n")
-    coord.data = {"annual": {"2026": 11}, "daily": {"total": 2}}
+async def test_last_sync_falls_back_to_updated_for_migrated_cache(tmp_path: Path) -> None:
+    store = FakeStore({"annual": {"2026": 3}, "updated": "2026-11-20T07:00:00+01:00"})
+    coord, *_ = make_coordinator(tmp_path, store=store)
+    await coord.async_initialize_cache()
+    assert coord.last_sync is not None
+    assert coord.last_sync.isoformat().startswith("2026-11-20T07:00:00")
+
+
+@pytest.mark.asyncio
+async def test_sync_with_token_discards_token_and_records_last_sync(tmp_path: Path) -> None:
+    store = FakeStore({"annual": {"2026": 1}})
+    coord, hass, entry, store = make_coordinator(tmp_path, store=store)
+    coord.async_set_updated_data = MagicMock()
+    seen_clients = []
+
+    async def fake_fetch(state):
+        seen_clients.append(coord.client)
+        state = dict(state)
+        state["annual"] = {"2026": 99}
+        return state
+
+    coord._async_fetch_from_kmd = fake_fetch
+    secret = "fake-session-token-not-real"
+    await coord.async_sync_with_token(secret)
+    assert seen_clients and seen_clients[0] is not None  # token used during the sync
+    assert coord.client is None  # ...and discarded right after
+    assert coord.last_sync is not None
+    assert store.data["annual"]["2026"] == 99
+    assert store.data["last_sync"]
+    assert store.data["initial_setup_complete"] is True
+    assert secret not in json.dumps(store.data, default=str)
+    hass.config_entries.async_update_entry.assert_not_called()  # nothing written to the entry
+    published = coord.async_set_updated_data.call_args[0][0]
+    assert secret not in json.dumps(published, default=str)
+
+
+@pytest.mark.asyncio
+async def test_sync_401_is_login_error_and_keeps_cache(tmp_path: Path) -> None:
+    store = FakeStore({"annual": {"2026": 77}, "daily": {"total": 5}})
+    coord, hass, entry, store = make_coordinator(tmp_path, store=store)
+    coord.data = dict(store.data)
+    coord.async_set_updated_data = MagicMock()
+    err = ClientResponseError(MagicMock(), (), status=401, message="Unauthorized")
+    fake_client = MagicMock()
+    fake_client.get_active_meters = AsyncMock(side_effect=err)
+    with patch.object(coord, "_make_client", return_value=fake_client):
+        with pytest.raises(KMDLoginError):
+            await coord.async_sync_with_token("fake")
+    assert coord.client is None
+    assert coord.last_sync is None
+    assert store.saved == []  # cache untouched
+    assert coord.data["annual"]["2026"] == 77
+    entry.async_start_reauth.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_sync_transient_http_error_is_plain_error(tmp_path: Path) -> None:
+    coord, *_ = make_coordinator(tmp_path)
     err = ClientResponseError(MagicMock(), (), status=502, message="Bad Gateway")
+    fake_client = MagicMock()
+    fake_client.get_active_meters = AsyncMock(side_effect=err)
+    with patch.object(coord, "_make_client", return_value=fake_client):
+        with pytest.raises(RuntimeError) as exc:
+            await coord.async_sync_with_token("fake")
+    assert not isinstance(exc.value, KMDLoginError)
+    assert "502" in str(exc.value)
+
+
+def _hp(day: str, hour: int = 0, value: float = 1.0) -> dict:
+    return {"DateFrom": f"{day}T{hour:02d}:00:00+01:00", "Value": value, "IsComplete": True}
+
+
+@pytest.mark.asyncio
+async def test_gap_fill_fetches_from_last_stored_day_to_month_start(tmp_path: Path) -> None:
+    import datetime as dt
+
+    coord, *_ = make_coordinator(tmp_path)
     coord.client = MagicMock()
-    coord.client.get_active_meters = AsyncMock(side_effect=err)
-    result = await coord._async_update_data()
-    assert result["annual"]["2026"] == 11
+    coord.client.get_hourly_with_fallback = AsyncMock(return_value=[_hp("2026-01-30", 5, 2.0)])
+    state = {"hourly_kwh": [_hp("2026-01-28", 23)], "hourly_m3": [_hp("2026-02-02", 1)]}
+    mp = {"InstallationId": "i", "MeasurementPointId": "m"}
+    await coord._async_fill_gap_since_last_sync(
+        state, mp, {"Id": "kwh"}, {"Id": "m3"}, dt.date(2026, 2, 4)
+    )
+    # kWh: last stored day 28 Jan (< 1 Feb) -> fetch 28 Jan .. 1 Feb. m³ already in Feb -> no call.
+    coord.client.get_hourly_with_fallback.assert_awaited_once()
+    args = coord.client.get_hourly_with_fallback.await_args.args
+    assert args[3] == dt.datetime(2026, 1, 28) and args[4] == dt.datetime(2026, 2, 1)
+    assert len(state["hourly_kwh"]) == 2
+
+
+@pytest.mark.asyncio
+async def test_backfill_first_sync_full_year_then_few_months(tmp_path: Path) -> None:
+    import datetime as dt
+
+    coord, *_ = make_coordinator(tmp_path)
+    coord.client = MagicMock()
+    coord.client.get_consumption_timeseries = AsyncMock(return_value={"Series": []})
+    coord.client.get_hourly_with_fallback = AsyncMock(return_value=[])
+    mp = {"InstallationId": "i", "MeasurementPointId": "m"}
+    state: dict = {"hourly_kwh": [_hp("2026-11-03")]}
+    await coord._async_backfill_history(state, mp, {"Id": "k"}, None, dt.date(2026, 11, 22), True)
+    assert coord.client.get_hourly_with_fallback.await_count == 12
+    coord.client.get_hourly_with_fallback.reset_mock()
+    await coord._async_backfill_history(state, mp, {"Id": "k"}, None, dt.date(2026, 11, 22), False)
+    assert coord.client.get_hourly_with_fallback.await_count == 3
+
+
+def test_statistics_rows_idempotent_for_repeated_syncs() -> None:
+    """Same hours imported twice (two syncs a day) -> same rows, unique starts."""
+    from kmd_easy_energy.insights import (
+        cumulative_statistic_rows,
+        hourly_points_to_buckets,
+        merge_hourly_points,
+    )
+
+    first = [_hp("2026-11-20", h, 1.0) for h in range(24)]
+    again = merge_hourly_points(first, [_hp("2026-11-20", h, 1.0) for h in range(12, 24)])
+    rows_a = cumulative_statistic_rows(hourly_points_to_buckets(first, complete_only=True))
+    rows_b = cumulative_statistic_rows(hourly_points_to_buckets(again, complete_only=True))
+    assert len(again) == 24
+    assert rows_a == rows_b
+    starts = [r["start"] for r in rows_b]
+    assert len(starts) == len(set(starts))
+
+
+def test_reminder_refresh_updates_listeners_only_on_change(tmp_path: Path) -> None:
+    from datetime import datetime, timezone
+
+    coord, *_ = make_coordinator(tmp_path)
+    coord.data = {"annual": {"2026": 1}}
+    coord.async_update_listeners = MagicMock()
+    sat = datetime(2026, 11, 21, 10, 0, tzinfo=timezone.utc)
+    coord.last_sync = datetime(2026, 11, 17, 10, 0, tzinfo=timezone.utc)  # Tuesday
+    with patch("kmd_easy_energy.coordinator.dt_util.utcnow", return_value=sat):
+        coord.async_refresh_reminder()
+        coord.async_refresh_reminder()
+    assert coord.async_update_listeners.call_count == 1
+    assert coord.data["sync_reminder"] is True
+    assert coord.data["sync_reminder_message"] == "Det er 4 dage siden sidste synkronisering — tryk Synkroniser, når du har et øjeblik."
 
 
 @pytest.mark.asyncio
@@ -199,11 +339,16 @@ async def test_remove_storage_clears_store_and_legacy(tmp_path: Path) -> None:
     assert not public.exists()
 
 
-def test_push_sync_ui_fires_event_without_otp_in_state(tmp_path: Path) -> None:
+def test_push_sync_ui_keeps_otp_off_state_and_bus(tmp_path: Path) -> None:
+    """OTP/QR go to the dispatcher (websocket) only, never to state or the bus.
+
+    The recorder stores every bus event, so the bus event carries status only.
+    """
     coord, hass, *_ = make_coordinator(tmp_path)
     coord.data = {"annual": {"2026": 1}}
     coord.async_set_updated_data = MagicMock()
-    coord._push_sync_ui("otp_ready", "Indtast kode på kortet.", otp_code="1234", qr_svg="<svg />")
+    with patch("kmd_easy_energy.coordinator.async_dispatcher_send") as send:
+        coord._push_sync_ui("otp_ready", "Indtast kode på kortet.", otp_code="1234")
     assert coord.mitid_otp_code == "1234"
     published = coord.async_set_updated_data.call_args[0][0]
     assert "mitid_otp_code" not in published
@@ -211,10 +356,153 @@ def test_push_sync_ui_fires_event_without_otp_in_state(tmp_path: Path) -> None:
     hass.bus.async_fire.assert_called()
     ev_name, ev_data = hass.bus.async_fire.call_args[0]
     assert ev_name == EVENT_MITID_CHALLENGE
-    assert ev_data["otp_code"] == "1234"
+    assert "otp_code" not in ev_data and "qr_svg" not in ev_data and "qr_frames" not in ev_data
+    assert "1234" not in json.dumps(ev_data)
+    assert ev_data["has_otp"] is True and ev_data["has_qr"] is False
+    sig, payload = send.call_args[0][1:]
+    assert sig == SIGNAL_MITID_CHALLENGE
+    assert payload["otp_code"] == "1234"
+    assert payload["entry_id"] == "entry-1"
+
+
+def test_push_sync_ui_delivers_both_qr_frames(tmp_path: Path) -> None:
+    coord, hass, *_ = make_coordinator(tmp_path)
+    coord.async_set_updated_data = MagicMock()
+    with patch("kmd_easy_energy.coordinator.async_dispatcher_send") as send:
+        coord._push_sync_ui("qr_ready", "Scan", qr_frames=["<svg>1</svg>", "<svg>2</svg>"])
+    payload = send.call_args[0][2]
+    assert payload["qr_frames"] == ["<svg>1</svg>", "<svg>2</svg>"]
+    assert payload["otp_code"] is None
+    ev_data = hass.bus.async_fire.call_args[0][1]
+    assert ev_data["has_qr"] is True
+    assert "<svg" not in json.dumps(ev_data)
+
+
+class _FakeAuth:
+    """Scripted MitID authenticator (no network, no real MitID)."""
+
+    def __init__(self, script):
+        self.script = list(script)
+        self.started = None
+
+    def start_session(self, portal_url, username):
+        self.started = (portal_url, username)
+
+    def poll_once(self):
+        return self.script.pop(0)
+
+    def finalize_and_exchange_token(self):
+        return "fake-token-not-real"
+
+
+def _run_flow(tmp_path: Path, script):
+    coord, hass, *_ = make_coordinator(tmp_path)
+    coord.async_set_updated_data = MagicMock()
+    coord.async_sync_with_token = AsyncMock()
+    auth = _FakeAuth(script)
+    pushed: list[dict] = []
+    with (
+        patch("kmd_easy_energy.coordinator.KMDMitIDAuthenticator", return_value=auth),
+        patch(
+            "kmd_easy_energy.coordinator.async_dispatcher_send",
+            side_effect=lambda h, sig, payload: pushed.append(dict(payload)),
+        ),
+        patch("kmd_easy_energy.coordinator.persistent_notification") as pn,
+        patch("kmd_easy_energy.coordinator.asyncio.sleep", AsyncMock()),
+    ):
+        hass.async_add_executor_job = AsyncMock(side_effect=lambda fn, *a: fn(*a))
+        import asyncio as _asyncio
+
+        _asyncio.run(coord._async_run_mitid_flow("mitid-user-test", ""))
+    return coord, hass, auth, pushed, pn
+
+
+def test_mitid_flow_qr_only_tablet_path_completes_without_code(tmp_path: Path) -> None:
+    """Tablet/PC setup: QR frames shown, scanned, approved — no OTP ever needed."""
+    frames_a = ["<svg>a1</svg>", "<svg>a2</svg>"]
+    frames_b = ["<svg>b1</svg>", "<svg>b2</svg>"]
+    script = [
+        {"status": "waiting"},
+        {"status": "qr_ready", "qr_frames": frames_a, "qr_svg": frames_a[0]},
+        {"status": "qr_ready", "qr_frames": frames_a, "qr_svg": frames_a[0]},  # unchanged
+        {"status": "qr_ready", "qr_frames": frames_b, "qr_svg": frames_b[0]},  # rotated
+        {"status": "verified"},
+        {"status": "verified"},
+        {"status": "completed"},
+    ]
+    coord, hass, auth, pushed, pn = _run_flow(tmp_path, script)
+    assert auth.started == ("https://minvarme.kredslob.dk/", "mitid-user-test")
+    coord.async_sync_with_token.assert_awaited_once_with("fake-token-not-real")
+    qr_pushes = [p for p in pushed if p["sync_state"] == "qr_ready"]
+    # Pushed once per distinct QR (not once per poll), always both frames.
+    assert [p["qr_frames"] for p in qr_pushes] == [frames_a, frames_b]
+    assert all(p["otp_code"] is None for p in pushed)
+    assert [p["sync_state"] for p in pushed].count("verified") == 1
+    # Ends idle with the challenge cleared.
+    assert pushed[-1]["sync_state"] == "idle"
+    assert pushed[-1]["qr_frames"] == [] and pushed[-1]["otp_code"] is None
+    assert coord.mitid_qr_frames == [] and coord.mitid_qr_svg is None
+    # Nothing secret ever hits the bus (recorder) or a service call.
+    bus_blob = json.dumps([c.args for c in hass.bus.async_fire.call_args_list], default=str)
+    assert "<svg" not in bus_blob
+    hass.services.async_call.assert_not_called()
+    pn.async_dismiss.assert_called()
+
+
+def test_mitid_flow_otp_path_pushes_code_once(tmp_path: Path) -> None:
+    script = [
+        {"status": "otp_ready", "otp_code": "4821"},
+        {"status": "otp_ready", "otp_code": "4821"},
+        {"status": "verified"},
+        {"status": "completed"},
+    ]
+    coord, hass, auth, pushed, pn = _run_flow(tmp_path, script)
+    otp_pushes = [p for p in pushed if p["sync_state"] == "otp_ready"]
+    assert len(otp_pushes) == 1 and otp_pushes[0]["otp_code"] == "4821"
+    bus_blob = json.dumps([c.args for c in hass.bus.async_fire.call_args_list], default=str)
+    assert "4821" not in bus_blob
+    # Persistent notification created via helper (no call_service event to record).
+    assert any("4821" in str(c) for c in pn.async_create.call_args_list)
+    hass.services.async_call.assert_not_called()
+
+
+def test_mitid_flow_error_clears_challenge(tmp_path: Path) -> None:
+    script = [
+        {"status": "qr_ready", "qr_frames": ["<svg>x</svg>", "<svg>y</svg>"]},
+        {"status": "error", "message": "Authentication was not accepted"},
+    ]
+    coord, hass, auth, pushed, pn = _run_flow(tmp_path, script)
+    assert pushed[-1]["sync_state"] == "error"
+    assert pushed[-1]["qr_frames"] == []
+    coord.async_sync_with_token.assert_not_awaited()
+    pn.async_dismiss.assert_called()
 
 
 def test_sanitize_matches_event_split() -> None:
     """OTP may live on the coordinator object and in a bus event, never in persisted state."""
     persisted = sanitize_cache({"mitid_otp_code": "0000", "annual": {"2026": 1}})
     assert "mitid_otp_code" not in persisted
+
+
+def test_mitid_flow_kmd_login_error_shows_on_card_without_reauth(tmp_path: Path) -> None:
+    script = [{"status": "verified"}, {"status": "completed"}]
+    coord, hass, *_ = make_coordinator(tmp_path)
+    coord.async_set_updated_data = MagicMock()
+    coord.async_sync_with_token = AsyncMock(side_effect=KMDLoginError("KMD afviste login (HTTP 401)"))
+    auth = _FakeAuth(script)
+    pushed: list[dict] = []
+    with (
+        patch("kmd_easy_energy.coordinator.KMDMitIDAuthenticator", return_value=auth),
+        patch(
+            "kmd_easy_energy.coordinator.async_dispatcher_send",
+            side_effect=lambda h, sig, payload: pushed.append(dict(payload)),
+        ),
+        patch("kmd_easy_energy.coordinator.persistent_notification"),
+        patch("kmd_easy_energy.coordinator.asyncio.sleep", AsyncMock()),
+    ):
+        import asyncio as _asyncio
+
+        _asyncio.run(coord._async_run_mitid_flow("mitid-user-test", ""))
+    assert pushed[-1]["sync_state"] == "error"
+    assert "HTTP 401" in pushed[-1]["sync_message"]
+    coord.entry.async_start_reauth.assert_not_called()

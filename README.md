@@ -58,18 +58,31 @@ Log ind med **MitID direkte i Home Assistant** i ren Python (OIDC PKCE + NemLog-
 
 ---
 
+## 🔄 Sådan synkroniserer integrationen (session-baseret)
+
+KMD udsteder kun en adgang (access token), der gælder ca. 1 time, og ingen refresh token. Derfor:
+
+- **Hvert tryk på 🔄 Synkroniser er ét MitID-login.** Integrationen henter alt siden sidste synkronisering (inkl. timedata til Energy-dashboardet) og **kasserer adgangen straks**. Den gemmes ikke i konfigurationen eller cachen.
+- **Ingen baggrundshentning:** Integrationen kontakter ikke KMD af sig selv. Sensorerne viser de senest hentede tal, og `sensor.<værk>_last_synced` (**Sidst synkroniseret**) viser hvornår. Efter en genstart af Home Assistant indlæses tallene fra den lokale cache uden at kontakte KMD.
+- **Ingen "log ind igen"-reparationer:** Et udløbet token er normalt og giver ingen fejl. Kun et login, der reelt fejler, vises som fejl på kortet.
+- **Første synkronisering** henter op til et års timehistorik. Senere synkroniseringer henter fra sidste synkronisering og frem (og eventuelle manglende måneder). Flere synkroniseringer samme dag er fine — Energy-statistikken skrives pr. time og bliver ikke dobbelt.
+- **Blød påmindelse i weekenden:** Lørdag og søndag viser kortet en lille, rolig info-linje lige under Synkroniser-knappen — fx *"💧 Det er 4 dage siden sidste synkronisering — tryk Synkroniser, når du har et øjeblik."* — hvis der ikke er synkroniseret torsdag, fredag eller lørdag samme uge (en synkronisering søndag fjerner den også). Mandag–fredag vises ingen påmindelse. Det er et venligt puf, ikke en fejl: ingen rød/advarsels-styling, ingen persistent notification, ingen reparation (repair) og ingen push. `binary_sensor.<værk>_sync_reminder` kan bruges i egne automatiseringer, og påmindelsen kan slås fra under integrationens indstillinger.
+
+---
+
 ## 🔑 Førstegangsopsætning & MitID-guide
 
 ### Sådan gør du (3 enkle trin)
 1. Indtast dit **MitID Bruger-ID** i opsætningskortet på dashboardet *(gemmes kun lokalt i Home Assistant)*, og tryk på **🚀 Gem & Start MitID-synkronisering**. *(Åbn ikke selv værkets hjemmeside i browseren samtidig — det giver MitID-fejl `CAP008`).*
-2. **Åbn straks MitID-appen på din telefon og lås den op** — MitID danner først engangskoden / QR-koden i det øjeblik, appen åbnes.
-3. Aflæs de **4 cifre** direkte på dashboard-kortet (eller i push-notifikationen) — eller scan QR-koden — og godkend i MitID-appen!
+2. **Åbn straks MitID-appen på din telefon og lås den op** — MitID danner først QR-koden / engangskoden i det øjeblik, appen åbnes.
+3. **Opsætter du på en tablet eller computer:** scan QR-koden på dashboard-kortet med MitID-appen på telefonen, og godkend. **Opsætter du på samme telefon som MitID-appen:** indtast de **4 cifre** fra kortet (eller push-notifikationen) i MitID-appen, og godkend — det kræver, at engangskoder er slået til (se nedenfor).
 
 > [!TIP]
-> **4-cifret engangskode vs. QR-kode på telefonen**
-> Når du starter synkroniseringen fra din telefon, kan du ikke scanne en QR-kode på samme skærm. I MitID-appen kan du skifte fra QR-kode til 4-cifrede engangskoder:
+> **Kun hvis du opsætter på samme telefon som MitID-appen: slå 4-cifret engangskode til**
+> Bruger du en tablet eller computer til opsætningen og har MitID-appen på telefonen, skal du ikke ændre noget — scan blot QR-koden på kortet.
+> Står kortet derimod på samme telefon som MitID-appen, kan QR-koden ikke scannes. Skift derfor fra QR-kode til 4-cifrede engangskoder i MitID-appen:
 > **MitID-app → Menu (⚙️) → Godkend med QR- eller engangskoder → Engangskoder**.
-> *Bemærk: MitID har af sikkerhedshensyn 24 timers ventetid ved første skift.*
+> *Bemærk: MitID har af sikkerhedshensyn 24 timers ventetid ved første skift fra QR-kode til engangskode, hvorefter du bekræfter skiftet i appen.*
 
 ---
 
@@ -90,12 +103,14 @@ Log ind med **MitID direkte i Home Assistant** i ren Python (OIDC PKCE + NemLog-
 - `sensor.<værk>_forecast_annual_energy` — Årsprognose (ÅTD + resterende normalår-HDD × kWh/HDD)
 - `binary_sensor.<værk>_motivation_penalty` — Til, når returtemperaturen er i gebyrzonen
 - `binary_sensor.<værk>_abnormal_consumption` — Til ved unormalt døgnforbrug (samme ugedag, HDD-justeret). Ingen automatisk notifikation.
+- `sensor.<værk>_last_synced` — **Sidst synkroniseret** (tidsstempel for seneste MitID-synkronisering)
+- `binary_sensor.<værk>_sync_reminder` — Blød weekend-påmindelse (til lør/søn uden synkronisering tors–lør). Attributter: `message` (venlig tekst), `short` (*"Ikke synkroniseret i X dage"*), `days_since_sync`, `last_sync`, `enabled`.
 - `button.<værk>_sync` — 1-klik knap til at starte MitID-synkronisering
 
 ### Tjenester (`services.yaml`)
 - `kmd_easy_energy.configure_utility` — Konfigurer værk, lokation, retur-grænser, MitID Bruger-ID og start evt. sync
-- `kmd_easy_energy.refresh` — Opdater data fra KMD API og Open-Meteo med det aktive token
-- `kmd_easy_energy.update_token` — Opdater Bearer token manuelt eller via eksternt script
+- `kmd_easy_energy.refresh` — Genindlæs cachede data og genberegn afledte værdier (kontakter **ikke** KMD)
+- `kmd_easy_energy.update_token` — Avanceret: kør én synkronisering med et token, du selv har hentet (tokenet gemmes ikke)
 - `kmd_easy_energy.start_mitid_sync` — Start indbygget MitID-login (bruges af dashboard-kortet)
 - `kmd_easy_energy.reset_setup` — Nulstil dashboardet til førstegangsopsætning
 
@@ -104,7 +119,7 @@ Log ind med **MitID direkte i Home Assistant** i ren Python (OIDC PKCE + NemLog-
 ## ⚡ Energy-dashboard, priser og danske indsigter
 
 - **Timehistorik til Energy-dashboardet:** Integrationen importerer eksterne statistikker `kmd_easy_energy:energy_<entry_id>` (kWh) og `kmd_easy_energy:volume_<entry_id>` (m³). Tilføj **disse** under Indstillinger → Dashboards → Energi — ikke måned-til-dato-sensorerne `sensor.*_energy` / `sensor.*_overview`, som nulstilles hver måned.
-- Historikken for indeværende måned kommer med det samme; ældre måneder hentes gradvist (op til to pr. døgn), så API'et ikke overbelastes.
+- Første synkronisering henter op til 12 måneders timehistorik; senere synkroniseringer udfylder data siden sidste synkronisering og op til tre manglende måneder ad gangen.
 - **Varmepris:** Indstillinger → integrationen → Valgfrit: kr./kWh, ev. kr./m³, motivationstarif (kr./kWh/°C) og normalår-graddage. For **Kredsløb** udfyldes kWh-pris og motivation automatisk fra den offentliggjorte takst for kalenderåret ([prisside](https://www.kredslob.dk/privat/fjernvarme/fjernvarmepriser)). Sæt 0 for at bruge standarden. Andre værker har ingen indbygget pris — den skal tastes. Kredsløb afregner varme i kWh, så m³-pris er ikke udfyldt på forhånd.
 - **Motivationstarif / afkøling:** Bonus under 30 °C, gebyr over 40 °C (kan ændres). Sensorerne viser status og kr./kWh-regulering.
 - **Graddage og prognose:** kWh/HDD og et skønnet normalår (standard 3100 HDD17, kan ændres — det er *ikke* et officielt DMI 1991–2020-tal). Årsprognosen er ÅTD plus resterende skønnede graddage.
@@ -116,20 +131,21 @@ Download diagnostics fra integrationen, hvis du skal have support: tokens, MitID
 
 ## 🇬🇧 English notes (new in 0.3.0)
 
-This is a Denmark-only Home Assistant integration for district heating on the KMD Easy Energy platform. Version **0.3.0** (unreleased, based on v0.2.1) moves the usage cache to private `.storage`, keeps MitID OTP/QR off sensor attributes (use event `kmd_easy_energy_mitid_challenge` or the bundled card), starts reauth on 401/403, and can set up from cache after a transient first-refresh failure.
+This is a Denmark-only Home Assistant integration for district heating on the KMD Easy Energy platform. Version **0.3.0** (unreleased, based on v0.2.1) moves the usage cache to private `.storage`, keeps MitID OTP/QR off sensor attributes and off the event bus (the bundled card gets them via the websocket subscription `kmd_easy_energy/mitid/subscribe`; event `kmd_easy_energy_mitid_challenge` carries status only), and uses **session-based sync**: KMD only issues a ~1 h access token (no refresh token), so each "Synkroniser" press is one MitID login that fetches everything since the last sync and then discards the token (never stored). There is no background polling, no reauth/repair for an expired token, and cached values are restored after an HA restart without contacting KMD. A soft, non-invasive weekend nudge (a calm info chip under the Synkroniser button; no notification, repair or push) (`binary_sensor.<entry>_sync_reminder`, Danish text on the card) is shown on Saturday/Sunday if there was no sync on Thursday, Friday or Saturday that week; it can be turned off in the options.
 
 For the Energy dashboard, add the imported hourly statistics `kmd_easy_energy:energy_<entry>` / `:volume_<entry>`, not the month-to-date entities. Heat price (DKK/kWh) is an option; Kredsløb defaults come from the [official price page](https://www.kredslob.dk/privat/fjernvarme/fjernvarmepriser) for the current year. Motivation tariff, degree-day forecast and an abnormal-consumption binary sensor are included; the integration never sends leak notifications on its own.
 
-**Breaking for custom dashboards:** attributes `mitid_otp_code` and `mitid_qr_svg` are removed. Use card 0.3.0 or the event above. Not tested live with MitID / a real Kredsløb account in this change set.
+**Breaking for custom dashboards:** attributes `mitid_otp_code` and `mitid_qr_svg` are removed. Use the bundled card or the websocket subscription above. Setup from a tablet/PC works with MitID's default QR (both animated frames are shown on the card); only setup on the same phone as the MitID app needs one-time codes enabled in the MitID app. Not tested live with MitID / a real Kredsløb account in this change set.
 
 ---
 
 ## 🔒 Privatliv & Sikkerhed
 
 - Integrationen kommunikerer **kun direkte** mellem din Home Assistant-instans og KMD Easy Energy / NemLog-in / MitID / Open-Meteo.
-- MitID Bruger-ID og access tokens lagres kun lokalt i Home Assistants `.storage/core.config_entries` (i klartekst i den krypterede HA-konfiguration — det er standard for config entries).
+- MitID Bruger-ID lagres kun lokalt i Home Assistants `.storage/core.config_entries`. **Access tokens gemmes ikke**: de bruges til én synkronisering og kasseres. Et token fra en ældre version fjernes automatisk ved opgradering (config entry 1.2).
 - Forbrugsdata caches i den private fil `.storage/kmd_easy_energy.<entry_id>` — **ikke** i `/local/` / `www/`.
-- MitID-engangskode og QR vises midlertidigt i en notifikation og på dashboard-kortet. De gemmes **ikke** på sensorattributter og havner derfor ikke i historikken. Eventuelle push-beskeder har koden i *brødteksten*, aldrig i titlen.
-- Når tokenet udløber (~45–60 min), beder Home Assistant om gen-login (indsæt token eller start MitID). Sensorerne bliver stående på sidste cachede værdier, hvis de findes.
+- MitID-engangskode og QR vises midlertidigt på dashboard-kortet (via integrationens egen websocket-abonnement `kmd_easy_energy/mitid/subscribe`) og i en HA-notifikation. De gemmes **ikke** på sensorattributter eller i hændelser på event-bussen og havner derfor ikke i historikken/recorder-databasen. Eventet `kmd_easy_energy_mitid_challenge` indeholder kun status (`sync_state`, `has_otp`, `has_qr`).
+- Vælger du en mobil push-service, sendes engangskoden i push-beskedens *brødtekst* (aldrig i titlen). Bemærk, at Home Assistant registrerer alle tjenestekald (`call_service`) i recorderen, så koden i en push-besked kan stå i databasen, indtil den ryddes. Koden er kun gyldig i den ene login-session. Vil du helt undgå det, så lad push-feltet stå tomt og aflæs koden på kortet.
+- Integrationen henter kun data, når du trykker **Synkroniser**. Ellers står sensorerne på de senest hentede værdier fra den lokale cache.
 - Den valgfrie feedback-knap til GitHub åbner kun en forudfyldt kladde i din browser uden personoplysninger, tokens, kundenumre eller forbrugstal.
 - **Diagnostics** (Indstillinger → integrationen → Download diagnostics) redigerer access tokens, MitID-brugernavn, kunde- og måler-id'er og adresser. Store forbrugsserier er kun talt, ikke inkluderet.

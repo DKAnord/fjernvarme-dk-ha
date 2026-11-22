@@ -2,12 +2,41 @@
 
 Alle væsentlige ændringer i **Fjernvarme (KMD Easy Energy) – HA Connector & Dashboard** dokumenteres her.
 
+## [Unreleased] (efter 0.3.0-beta.1)
+
+### Brudende ændringer
+- Access tokens gemmes ikke, og der er ingen baggrundspolling: nye data kommer kun ved **Synkroniser** (MitID). Automatiseringer, der kaldte `kmd_easy_energy.refresh` for at hente nye data, skal i stedet bruge `start_mitid_sync` (kræver godkendelse i MitID-appen).
+- Attributten `token_expired` og reauth-flowet er fjernet. Live-kode/QR leveres via websocket, ikke bus-event (se nedenfor).
+
+### MitID: QR fra tablet/computer og tydeligere vejledning
+- Kort, README og tekster siger nu tydeligt, at skiftet til 4-cifret engangskode **kun** er nødvendigt, når opsætningen sker på **samme telefon** som MitID-appen. Opsætter man på en tablet eller computer, scanner man bare QR-koden på kortet med MitID-appen.
+- MitID's animerede QR består af to billeder (p=1/p=2), som appen skal se begge. Backend sender nu begge billeder, og kortet skifter mellem dem hvert sekund i browseren. Før skiftede billedet kun, når MitID's long-poll svarede, så appen kunne have svært ved at læse koden.
+- QR-koden vises større (op til 240 px med hvid kant) og med skarpe kanter (`crispEdges`), så den er lettere at scanne fra en skærm.
+- Live-kode/QR leveres nu via integrationens eget websocket-abonnement `kmd_easy_energy/mitid/subscribe` i stedet for et bus-event:
+  - Recorderen gemmer alle bus-events, så engangskode og QR endte tidligere i databasen. Eventet `kmd_easy_energy_mitid_challenge` indeholder nu kun status (`sync_state`, `sync_message`, `has_otp`, `has_qr`).
+  - Virker også for ikke-admin-brugere (typisk vægtablet). `subscribe_events` på et custom event kræver admin.
+  - En tablet, der åbner kortet midt i et login, får den aktuelle QR/kode med det samme.
+- HA-notifikationen oprettes via helperen i stedet for tjenestekaldet `persistent_notification.create` (der ville lægge koden i et `call_service`-event i recorderen). QR-notifikationen oprettes kun én gang pr. login, og QR/kode sendes kun til kortet, når den faktisk ændrer sig.
+- Notifikationen fjernes også ved fejl. Status `verified` (kode/QR godkendt) sendes én gang.
+- Den vendorede `BrowserClient` logger ikke længere selve engangskoden.
+
+### Session-baseret synkronisering (ingen baggrundspolling, intet gemt token)
+- **Hvert tryk på Synkroniser = ét MitID-login.** Data siden sidste synkronisering hentes (inkl. Energy-timestatistik), og KMD-adgangen kasseres straks. Access tokens gemmes ikke længere i config entry eller cache.
+- **Ingen automatisk polling mod KMD** (`update_interval` er `None`). Coordinatoren genindlæser kun den private cache. Efter genstart vises de senest hentede tal uden kontakt til KMD.
+- **Ingen reauth/reparation for udløbet token.** `ConfigEntryAuthFailed`, reauth-trinnene (`reauth_confirm`, `reauth_mitid`), advarslen om tokenalder og attributten `token_expired` er fjernet. Kun et login, der reelt fejler (fx HTTP 401/403 lige efter MitID), vises som fejl på kortet/sync-status.
+- Felterne til at indsætte token er fjernet fra config- og reconfigure-flowet. Tjenesten `update_token` er bevaret som avanceret engangs-synkronisering med et selvhentet token (gemmes ikke). `refresh` genindlæser nu kun cache.
+- **Ny sensor** `sensor.<værk>_last_synced` (*Sidst synkroniseret*, tidsstempel) og attributterne `last_sync`, `days_since_sync`, `sync_reminder`, `sync_reminder_message`, `sync_reminder_short` på overbliks-sensoren.
+- **Blød weekend-påmindelse:** Lørdag og søndag (Europe/Copenhagen) vises en lille, rolig info-linje (💧, neutral/blød blå, ingen rød fejl-styling) lige under Synkroniser-knappen: *"Det er X dage siden sidste synkronisering — tryk Synkroniser, når du har et øjeblik."*, hvis der ikke er synkroniseret torsdag, fredag eller lørdag samme uge (en synkronisering søndag fjerner den). Mandag–fredag aldrig. Ingen persistent notification, repair eller push. Ny `binary_sensor.<værk>_sync_reminder` til egne automatiseringer. Kan slås fra under indstillinger (standard: til).
+- **Historik:** Første synkronisering henter op til 12 måneders timehistorik. Senere synkroniseringer udfylder hullet fra sidste gemte time frem til indeværende måned og op til tre manglende måneder. Statistikken skrives pr. time (upsert), så flere synkroniseringer samme dag ikke giver dubletter.
+- **Migrering (config entry 1.1 → 1.2):** Et gemt token fjernes automatisk fra data og options. Indgangen virker videre med de cachede data. *Sidst synkroniseret* sættes ud fra cachens `updated`, indtil næste synkronisering.
+- Kortet: Synkroniser-knappen starter altid MitID-synkronisering. Banneret viser *Sidst synkroniseret*; weekend-påmindelsen vises som en rolig info-linje under knappen. "Token udløbet" er fjernet. Manuelt token hedder nu "Synkroniser én gang med token".
+
 ## [0.3.0] - 2026-11-22
 
 ### Sikkerhed og privatliv
 - Forbrugscache skrives nu til Home Assistants private `.storage` (`kmd_easy_energy.<entry_id>`), ikke til den uautentificerede `www/`-mappe (`/local/varme/...`).
 - Eksisterende `www/varme/kmd_easy_energy_cache*.json` migreres automatisk og slettes bagefter. Filen `www/varme/data.json` bruges ikke længere som seed.
-- MitID-engangskode og QR-kode lægges ikke længere på sensorattributter (og dermed ikke i recorder). De vises via et midlertidigt `kmd_easy_energy_mitid_challenge`-event, en persistent_notification og (valgfrit) push, hvor koden kun står i beskeden — aldrig i titlen.
+- MitID-engangskode og QR-kode lægges ikke længere på sensorattributter (og dermed ikke i recorder). De vises via et midlertidigt `kmd_easy_energy_mitid_challenge`-event (fra næste version: websocket-abonnement, se ovenfor), en persistent_notification og (valgfrit) push, hvor koden kun står i beskeden — aldrig i titlen.
 - URL'er med `code=` / tokens redigeres i logs og logges på DEBUG.
 - `async_remove_entry` rydder privat storage og eventuelle efterladte `www/`-cachefiler.
 

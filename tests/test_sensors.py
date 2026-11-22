@@ -17,8 +17,15 @@ from kmd_easy_energy.sensor import (
 )
 
 
-def _coord(data: dict | None = None):
+def _coord(data: dict | None = None, last_sync=None):
+    from datetime import datetime, timezone
+
+    from kmd_easy_energy.sync_reminder import compute_sync_reminder
+
     coord = MagicMock()
+    coord.last_sync = last_sync
+    now = datetime(2026, 11, 21, 12, tzinfo=timezone.utc)  # Saturday
+    coord.sync_reminder = lambda: compute_sync_reminder(coord.last_sync, now, True)
     coord.data = data or {
         "annual": {"2026": 1234.0},
         "daily": {"total": 210.5, "days": {"1": 10}},
@@ -142,3 +149,31 @@ def test_price_motivation_and_forecast_sensors() -> None:
     assert KMDKwhPerHddSensor(coord, entry).native_value == 2.0
     assert KMDNormalizedAnnualSensor(coord, entry).native_value == 6200.0
     assert KMDForecastAnnualSensor(coord, entry).native_value == 5400.0
+
+
+def test_overview_has_last_sync_and_reminder_no_token_flag() -> None:
+    from datetime import datetime, timezone
+
+    coord = _coord(last_sync=datetime(2026, 11, 17, 8, tzinfo=timezone.utc))
+    attrs = KMDOverviewSensor(coord, _entry()).extra_state_attributes
+    assert "token_expired" not in attrs
+    assert attrs["last_sync"].startswith("2026-11-17T08:00:00")
+    assert attrs["sync_reminder"] is True
+    assert attrs["sync_reminder_message"] == "Det er 4 dage siden sidste synkronisering — tryk Synkroniser, når du har et øjeblik."
+    energy_attrs = KMDEnergySensor(coord, _entry()).extra_state_attributes
+    assert "token_expired" not in energy_attrs
+
+
+def test_last_sync_timestamp_sensor() -> None:
+    from datetime import datetime, timezone
+
+    from kmd_easy_energy.sensor import KMDLastSyncSensor
+
+    ts = datetime(2026, 11, 20, 18, tzinfo=timezone.utc)
+    sensor = KMDLastSyncSensor(_coord(last_sync=ts), _entry())
+    assert sensor.device_class == SensorDeviceClass.TIMESTAMP
+    assert sensor.native_value == ts
+    assert sensor.unique_id == "test-entry_last_sync"
+    assert sensor.translation_key == "last_sync"
+    assert sensor.extra_state_attributes["days_since_sync"] == 1
+    assert KMDLastSyncSensor(_coord(), _entry()).native_value is None

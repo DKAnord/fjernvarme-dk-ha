@@ -2,6 +2,17 @@
 
 Alle væsentlige ændringer i **Dansk Fjernvarme** (tidligere *Fjernvarme (KMD Easy Energy)*) dokumenteres her.
 
+## [1.0.0] - 2026-11-22
+
+Første stabile **1.0.0**-udgivelse (ude af beta) af **Dansk Fjernvarme** (`DKAnord/fjernvarme-dk-ha`, ikke-breaking teknisk domæne `kmd_easy_energy`).
+
+### Samlet højdepunkt i 1.0.0
+- **Tre danske fjernvarmebackends i én lokal integration:** **KMD Easy Energy / Min Forsyning 2** (100 % lokalt MitID-login med QR eller 4-cifret engangskode), **Watts On** (browser-login med roterende refresh token) og **E|Forsyning** (forbrugernummer + webpinkode).
+- **Bekræftet live på tre værker:** **Kredsløb**, **Energi Ikast** (Min Forsyning 2, `@BenzDK` i #19) og **Aalborg Forsyning** (Watts On, `@dkvand` i PR #9).
+- **Rigtig varmemåler på Min Forsyning 2 (inkl. fra 0.3.7):** Konti med flere kundeforhold vælger automatisk **Varme** (aldrig El eller Vand), og konti med flere varmemålere kan vælge den rigtige under integrationens indstillinger.
+- **Omkostningsestimater i kr. på tværs af alle udbydere:** 4 nye estimatsensorer + indbygget `💰 Estimeret forbrug i kr.`-panel på dashboard-kortet, procentbaseret motivationstarif og skærpede R²/HDD-indsigter.
+- **HACS Marketplace-klar:** Fuld HACS + Hassfest-validering, ikke-blokerende opstart og XSS-hærdning i kortet.
+
 ## [0.3.7] - 2026-11-22
 
 ### Rettet

@@ -5,7 +5,7 @@ Alle væsentlige ændringer i **Fjernvarme (KMD Easy Energy) – HA Connector & 
 ## [0.3.3] - 2026-11-22
 
 ### Watts On
-- **Aalborg Forsyning** er markeret som ✅ bekræftet live (beta-tester, varme-endpoint og felter `En` / `Vol` / `TI`/`TO` verificeret i v0.3.2).
+- **Aalborg Forsyning** er markeret som ✅ bekræftet live — stor tak til [@dkvand](https://github.com/dkvand) for live-test, sparring og PR #9 (varme-endpoint og felter `En` / `Vol` / `TI`/`TO` verificeret i v0.3.2).
 - Nye Watts On-værker i værk-vælgeren, alle 🧪 afventer første test (beta-testere søges): **Forsyning Helsingør**, **Fjernvarme Fyn** og **Hillerød Forsyning**. Portalerne er verificeret mod Watts' officielle support og værkernes egne sider. Varmemåleren skal først parres i Watts On-appen.
 - **Forsyning Helsingør** er skiftet fra KMD-kandidat til Watts On, fordi værket officielt viser fjernvarme i Watts On ([fh.dk/watts](https://www.fh.dk/watts)). Kunder hos Hornbæk Fjernvarme er undtaget. **Novafos** er ikke tilføjet (kun vand).
 - Værk-vælgeren viser `✅` / `🧪` for Watts On-værker på samme måde som for KMD-værker.
@@ -17,7 +17,7 @@ Alle væsentlige ændringer i **Fjernvarme (KMD Easy Energy) – HA Connector & 
 - Auto-POST af SAML/callback-formularer følger nu også formularer uden `action` (de postes til den aktuelle URL) og tager named submit-knapper med. Interaktive sider (første login, opret bruger, vilkår) postes ikke automatisk; kortet viser en dansk besked om at logge ind én gang i en almindelig browser først. Side-titel og eventuelle `error`/`remoteError` logges renset (uden e-mail, tokens eller CPR).
 
 ### Watts On / Aalborg Forsyning
-- Varme-endpointet er verificeret live af en beta-tester i Aalborg: `heating/api/v1/devices/{device_id}/consumption/recent` med `?newerThan=`. Feltnavne `En` (kWh), `Vol` (m³) og `TI`/`TO` (frem-/returtemperatur) genkendes. De gamle gættede stier beholdes som fallback.
+- Varme-endpointet er verificeret live i Aalborg af [@dkvand](https://github.com/dkvand) (PR #9, live-test og sparring): `heating/api/v1/devices/{device_id}/consumption/recent` med `?newerThan=`. Feltnavne `En` (kWh), `Vol` (m³) og `TI`/`TO` (frem-/returtemperatur) genkendes. De gamle gættede stier beholdes som fallback.
 
 ## [0.3.1] - 2026-11-22
 

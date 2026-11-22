@@ -43,6 +43,27 @@ class KMDBaseSensor(CoordinatorEntity[KMDEasyEnergyCoordinator], SensorEntity):
     """Base entity for KMD Easy Energy sensors."""
 
     _attr_has_entity_name = True
+    # Belt-and-suspenders: these keys must never hit the recorder even if
+    # a future change reintroduces them on attributes.
+    _unrecorded_attributes = frozenset(
+        {
+            "mitid_otp_code",
+            "mitid_qr_svg",
+            "annual",
+            "monthly",
+            "daily",
+            "hourly",
+            "return_temp",
+            "weather",
+            "insights",
+            "forecast",
+            "billing",
+            "available_units",
+            "hourly_kwh_points",
+            "hourly_m3_points",
+            "hourly_temp_points",
+        }
+    )
 
     def __init__(self, coordinator: KMDEasyEnergyCoordinator, entry: ConfigEntry) -> None:
         super().__init__(coordinator)
@@ -99,10 +120,9 @@ class KMDOverviewSensor(KMDBaseSensor):
             "has_mitid_username": bool(data.get("has_mitid_username", False)),
             "mitid_username_masked": data.get("mitid_username_masked", ""),
             "notify_service": data.get("notify_service", ""),
+            "entry_id": data.get("entry_id") or self._entry.entry_id,
             "sync_state": data.get("sync_state", "idle"),
             "sync_message": data.get("sync_message", ""),
-            "mitid_otp_code": data.get("mitid_otp_code"),
-            "mitid_qr_svg": data.get("mitid_qr_svg"),
             "annual": data.get("annual") or {},
             "monthly": data.get("monthly") or {},
             "daily": data.get("daily") or {},
@@ -159,9 +179,11 @@ class KMDEnergySensor(KMDBaseSensor):
 
 
 class KMDVolumeSensor(KMDBaseSensor):
+    # Circulating district-heating water volume (m³), not drinking water.
+    # WATER is used so the entity can be added on the Energy dashboard volume track.
     _attr_name = "Volume"
     _attr_native_unit_of_measurement = UnitOfVolume.CUBIC_METERS
-    _attr_device_class = SensorDeviceClass.VOLUME
+    _attr_device_class = SensorDeviceClass.WATER
     _attr_state_class = SensorStateClass.TOTAL_INCREASING
 
     @property

@@ -3,7 +3,7 @@
  * Zero external dependencies, Shadow DOM, responsive, interactive tooltips, DA/EN i18n.
  */
 (() => {
-  const VER = "0.2.1";
+  const VER = "0.3.0";
   const MONTHS = ["Jan", "Feb", "Mar", "Apr", "Maj", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Dec"];
   const DAYS_IN_MONTH = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
   const isLeapYear = (y) => (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0;
@@ -163,13 +163,43 @@
       return null;
     }
 
+    _subscribeMitid(hass) {
+      if (this._unsubMitid || !hass?.connection?.subscribeEvents) return;
+      this._unsubMitid = hass.connection.subscribeEvents((ev) => {
+        const d = ev.data || {};
+        const st = this._resolveEntity();
+        const entryId = st?.attributes?.entry_id;
+        const utilId = st?.attributes?.utility_id || this._config?.utility_id;
+        if (d.entry_id && entryId && d.entry_id !== entryId) return;
+        if (!d.entry_id && d.utility_id && utilId && d.utility_id !== utilId) return;
+        this._mitidOtp = d.otp_code || "";
+        this._mitidQr = d.qr_svg || "";
+        if (d.sync_state === "idle" || d.sync_state === "error") {
+          if (d.sync_state === "idle") {
+            this._mitidOtp = "";
+            this._mitidQr = "";
+          }
+        }
+        this._lastSig = null;
+        this._render();
+      }, "kmd_easy_energy_mitid_challenge");
+    }
+
+    disconnectedCallback() {
+      const unsub = this._unsubMitid;
+      this._unsubMitid = null;
+      if (typeof unsub === "function") unsub();
+      else if (unsub && typeof unsub.then === "function") unsub.then((fn) => fn && fn());
+    }
+
     set hass(hass) {
       this._hass = hass;
+      this._subscribeMitid(hass);
       const st = this._resolveEntity();
       const statusEnt = this._config?.status_entity;
       const syncSt = statusEnt ? (hass?.states?.[statusEnt]?.state || "") : "";
       const sig = st
-        ? `${st.entity_id}|${st.state}|${st.attributes?.updated || ""}|${st.attributes?.hourly?.days_averaged || ""}|${st.attributes?.daily?.latest_complete}|${st.attributes?.token_expired}|${st.attributes?.initial_setup_complete}|${st.attributes?.utility_id || ""}|${st.attributes?.sync_state || ""}|${st.attributes?.sync_message || ""}|${st.attributes?.mitid_otp_code || ""}|${Boolean(st.attributes?.mitid_qr_svg)}|${syncSt}`
+        ? `${st.entity_id}|${st.state}|${st.attributes?.updated || ""}|${st.attributes?.hourly?.days_averaged || ""}|${st.attributes?.daily?.latest_complete}|${st.attributes?.token_expired}|${st.attributes?.initial_setup_complete}|${st.attributes?.utility_id || ""}|${st.attributes?.entry_id || ""}|${st.attributes?.sync_state || ""}|${st.attributes?.sync_message || ""}|${this._mitidOtp || ""}|${Boolean(this._mitidQr)}|${syncSt}`
         : "none";
       if (sig === this._lastSig) return;
       this._lastSig = sig;
@@ -549,8 +579,8 @@
       const nativeSyncMsg = a.sync_message || "";
       const syncMsg = nativeSyncMsg || (legacySyncMsg && legacySyncMsg !== "unknown" && legacySyncMsg !== "unavailable" ? legacySyncMsg : "");
       const hasSyncMsg = Boolean(syncMsg);
-      const otpCode = a.mitid_otp_code || "";
-      const qrSvg = a.mitid_qr_svg || "";
+      const otpCode = this._mitidOtp || "";
+      const qrSvg = this._mitidQr || "";
       const hasMitidUser = Boolean(a.has_mitid_username);
       const mitidMasked = a.mitid_username_masked || "";
       const notifySvc = this._wizNotify ?? (a.notify_service || "");
@@ -1101,16 +1131,24 @@
       }
       const triggerSync = () => {
         if (!this._hass) return;
-        const nativeBtn = `button.${activeUtilId.replace(/-/g, "_")}_sync`;
-        const btnEnt =
-          cfg.sync_button_entity ||
-          (this._hass.states[nativeBtn] ? nativeBtn : null);
-        if (btnEnt && btnEnt.startsWith("button.")) {
-          this._hass.callService("button", "press", { entity_id: btnEnt });
-        } else if (btnEnt && btnEnt.startsWith("input_button.")) {
-          this._hass.callService("input_button", "press", { entity_id: btnEnt });
+        const payload = {};
+        if (a.entry_id) payload.entry_id = a.entry_id;
+        else if (activeUtilId) payload.utility_id = activeUtilId;
+        const customBtn = cfg.sync_button_entity;
+        if (customBtn && customBtn.startsWith("button.")) {
+          this._hass.callService("button", "press", { entity_id: customBtn });
+          return;
+        }
+        if (customBtn && customBtn.startsWith("input_button.")) {
+          this._hass.callService("input_button", "press", { entity_id: customBtn });
+          return;
+        }
+        // Prefer the domain service (looks up the entry by id / utility_id) so
+        // entity_id slugs like "envafors_sk_forsyning" cannot miss the button.
+        if (tokenExpired || !hasData) {
+          this._hass.callService("kmd_easy_energy", "start_mitid_sync", payload);
         } else {
-          this._hass.callService("kmd_easy_energy", "refresh", {});
+          this._hass.callService("kmd_easy_energy", "refresh", payload);
         }
       };
       const syncBtn = this.shadowRoot.getElementById("syncBtn");

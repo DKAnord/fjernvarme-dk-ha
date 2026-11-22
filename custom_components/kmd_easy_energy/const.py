@@ -1,5 +1,7 @@
 """Constants for KMD Easy Energy integration."""
 
+from datetime import timedelta
+
 DOMAIN = "kmd_easy_energy"
 
 CONF_ACCESS_TOKEN = "access_token"
@@ -30,5 +32,18 @@ ZOOM_HOUR = 3
 CONSUMPTION_TYPE_HEATING = 5
 CONSUMPTION_TYPE_WATER = 6
 
-UPDATE_INTERVAL = 3600  # seconds
+# Coordinator poll interval (district heating data is at most hourly)
+UPDATE_INTERVAL = timedelta(minutes=30)
 TOKEN_MAX_AGE_SECONDS = 45 * 60
+TOKEN_WARN_AGE = timedelta(minutes=40)
+
+# Private HA Store version (config/.storage/kmd_easy_energy.<entry_id>)
+STORAGE_VERSION = 1
+
+# Bus event used to show a live MitID challenge in the Lovelace card
+# (OTP / QR are never written to entity state or recorder).
+EVENT_MITID_CHALLENGE = "kmd_easy_energy_mitid_challenge"
+
+# Volume is the district-heating circulating water (m³), not drinking water.
+# SensorDeviceClass.WATER lets the entity be added on the Energy dashboard
+# water/volume track; see README / CHANGELOG.

@@ -78,7 +78,7 @@ Log ind med **MitID direkte i Home Assistant** i ren Python (OIDC PKCE + NemLog-
 ### Sensorer & Knap (oprettes pr. værk)
 - `sensor.<værk>_overview` — Årsforbrug (kWh) + komplette dashboard-attributter (`annual`, `monthly`, `daily`, `hourly`, `return_temp`, `weather`, `insights`, `forecast`, `billing`)
 - `sensor.<værk>_energy` — Aktuel måneds forbrug (`kWh`)
-- `sensor.<værk>_volume` — Volumen (`m³`)
+- `sensor.<værk>_volume` — Volumen (`m³`, `device_class: water` — cirkulerende fjernvarmevand, ikke drikkevand)
 - `sensor.<værk>_return_temperature` — Returtemperatur (`°C`)
 - `sensor.<værk>_balance` — Saldo (`DKK`)
 - `sensor.<værk>_heating_degree_days_7d` — 7-dages graddage (`HDD17`) fra Open-Meteo
@@ -88,6 +88,7 @@ Log ind med **MitID direkte i Home Assistant** i ren Python (OIDC PKCE + NemLog-
 - `kmd_easy_energy.configure_utility` — Konfigurer værk, lokation, retur-grænser, MitID Bruger-ID og start evt. sync
 - `kmd_easy_energy.refresh` — Opdater data fra KMD API og Open-Meteo med det aktive token
 - `kmd_easy_energy.update_token` — Opdater Bearer token manuelt eller via eksternt script
+- `kmd_easy_energy.start_mitid_sync` — Start indbygget MitID-login (bruges af dashboard-kortet)
 - `kmd_easy_energy.reset_setup` — Nulstil dashboardet til førstegangsopsætning
 
 ---
@@ -95,5 +96,8 @@ Log ind med **MitID direkte i Home Assistant** i ren Python (OIDC PKCE + NemLog-
 ## 🔒 Privatliv & Sikkerhed
 
 - Integrationen kommunikerer **kun direkte** mellem din Home Assistant-instans og KMD Easy Energy / NemLog-in / MitID / Open-Meteo.
-- MitID Bruger-ID og access tokens lagres kun lokalt i Home Assistants `.storage/core.config_entries`.
+- MitID Bruger-ID og access tokens lagres kun lokalt i Home Assistants `.storage/core.config_entries` (i klartekst i den krypterede HA-konfiguration — det er standard for config entries).
+- Forbrugsdata caches i den private fil `.storage/kmd_easy_energy.<entry_id>` — **ikke** i `/local/` / `www/`.
+- MitID-engangskode og QR vises midlertidigt i en notifikation og på dashboard-kortet. De gemmes **ikke** på sensorattributter og havner derfor ikke i historikken. Eventuelle push-beskeder har koden i *brødteksten*, aldrig i titlen.
+- Når tokenet udløber (~45–60 min), beder Home Assistant om gen-login (indsæt token eller start MitID). Sensorerne bliver stående på sidste cachede værdier, hvis de findes.
 - Den valgfrie feedback-knap til GitHub åbner kun en forudfyldt kladde i din browser uden personoplysninger, tokens, kundenumre eller forbrugstal.

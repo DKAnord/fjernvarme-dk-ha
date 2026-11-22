@@ -31,14 +31,36 @@
           "customer_id": "Kunde-ID (valgfrit)",
           "location_name": "By / Lokationsnavn"
         }
+      },
+      "reauth_confirm": {
+        "title": "Log ind igen ({utility_name})",
+        "description": "KMD-adgangstokenet er udløbet eller blev afvist.\nLogin-portal: {portal_url}\n\nIndsæt et nyt Bearer token, eller indtast dit MitID Bruger-ID og slå Start MitID-synkronisering til. Den 4-cifrede kode vises i en notifikation og på dashboard-kortet — den gemmes ikke på sensoren.",
+        "data": {
+          "portal_url": "Portal-URL",
+          "mitid_username": "MitID Bruger-ID (gemmes kun lokalt i HA)",
+          "notify_service": "Mobil push-service (valgfri)",
+          "access_token": "Nyt access token (valgfrit hvis du starter MitID)",
+          "customer_id": "Kunde-ID (valgfrit)",
+          "start_mitid": "Start MitID-login nu"
+        }
+      },
+      "reauth_mitid": {
+        "title": "MitID-login i gang",
+        "description": "Status: {sync_state}\n{sync_message}\n\nEngangskode (hvis MitID viser en): {otp_hint}\n\nÅbn MitID-appen, godkend, og tryk på Send for at opdatere status."
       }
     },
     "error": {
-      "invalid_auth": "Ugyldigt token eller ingen profil returneret"
+      "invalid_auth": "Ugyldigt token eller ingen profil returneret",
+      "token_or_mitid_required": "Indsæt et token, eller slå Start MitID-login til",
+      "mitid_unavailable": "Integrationen er ikke indlæst, så MitID kan ikke startes her. Indsæt et token i stedet.",
+      "mitid_failed": "MitID-login fejlede. Se beskeden og prøv igen."
     },
     "abort": {
       "invalid_auth": "Ugyldigt token eller ingen profil returneret",
-      "reconfigure_successful": "Fjernvarme-konfiguration opdateret"
+      "reconfigure_successful": "Fjernvarme-konfiguration opdateret",
+      "already_configured": "Dette værk er allerede konfigureret",
+      "mitid_unavailable": "Integrationen er ikke indlæst. Indsæt et token for at logge ind igen.",
+      "reauth_successful": "Fjernvarme-login er opdateret"
     }
   },
   "options": {

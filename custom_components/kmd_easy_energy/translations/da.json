@@ -2,7 +2,7 @@
   "config": {
     "step": {
       "user": {
-        "title": "Fjernvarme (KMD Easy Energy) — Vælg værk",
+        "title": "Dansk Fjernvarme — Vælg værk",
         "description": "Vælg dit fjernvarmeværk. Bekræftede værker er testet live; øvrige afventer første test fra fællesskabet.",
         "data": {
           "utility_id": "Forsyningsselskab"
@@ -10,7 +10,7 @@
       },
       "auth": {
         "title": "Login & Opsætning ({utility_name})",
-        "description": "Status: {status_badge}\nLogin-portal: {portal_url}\n{notes}\n\nIndtast dit MitID Bruger-ID. Hver synkronisering er ét MitID-login: data siden sidste synkronisering hentes, og adgangen fra KMD (gyldig ca. 1 time) kasseres straks og gemmes ikke. Integrationen henter ikke data i baggrunden.\n\nEfter Submit: tilføj kortet \"Fjernvarme (KMD Easy Energy): Dashboard\" på et dashboard, og tryk 🚀 Gem & Start MitID-synkronisering dér. Der sker intet MitID-login i denne dialog.",
+        "description": "Status: {status_badge}\nLogin-portal: {portal_url}\n{notes}\n\nIndtast dit MitID Bruger-ID. Hver synkronisering er ét MitID-login: data siden sidste synkronisering hentes, og adgangen fra KMD (gyldig ca. 1 time) kasseres straks og gemmes ikke. Integrationen henter ikke data i baggrunden.\n\nEfter Submit: tilføj kortet \"Dansk Fjernvarme: Dashboard\" på et dashboard, og tryk 🚀 Gem & Start MitID-synkronisering dér. Der sker intet MitID-login i denne dialog.",
         "data": {
           "portal_url": "Portal-URL",
           "mitid_username": "MitID Bruger-ID (gemmes kun lokalt i HA)",

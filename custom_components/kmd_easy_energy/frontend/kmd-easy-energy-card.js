@@ -3,7 +3,7 @@
  * Zero external dependencies, Shadow DOM, responsive, interactive tooltips, DA/EN i18n.
  */
 (() => {
-  const VER = "0.3.4";
+  const VER = "0.3.5";
   const MONTHS = ["Jan", "Feb", "Mar", "Apr", "Maj", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Dec"];
   const DAYS_IN_MONTH = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
   const isLeapYear = (y) => (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0;
@@ -1433,7 +1433,7 @@
         const title = encodeURIComponent(`[Utility ${kind}] ${activeUtil.name} (${activeUtilId})`);
         const body = encodeURIComponent(buildFeedbackBody(kind));
         const lbl = kind === "Confirmed" ? "utility-verification" : "bug";
-        window.open(`https://github.com/DKAnord/kmd-fjernvarme-ha/issues/new?labels=${lbl}&title=${title}&body=${body}`, "_blank", "noopener");
+        window.open(`https://github.com/DKAnord/fjernvarme-dk-ha/issues/new?labels=${lbl}&title=${title}&body=${body}`, "_blank", "noopener");
       };
       const copyFeedback = async () => {
         const txt = buildFeedbackBody(utilStatus === "confirmed" ? "Confirmed" : "Working");
@@ -1530,10 +1530,10 @@
     window.customCards = window.customCards || [];
     window.customCards.push({
       type: "kmd-easy-energy-card",
-      name: "Fjernvarme (KMD Easy Energy): Dashboard",
+      name: "Dansk Fjernvarme: Dashboard",
       description: "Plug-and-play dansk fjernvarme-dashboard med 1-klik MitID-sync, smart værk-vælger og Open-Meteo vejrindsigter",
       preview: true,
-      documentationURL: "https://github.com/DKAnord/kmd-fjernvarme-ha",
+      documentationURL: "https://github.com/DKAnord/fjernvarme-dk-ha",
     });
   }
   console.info(`%c KMD-EASY-ENERGY-CARD %c v${VER} `, "background:#ea580c;color:#fff;font-weight:700", "background:#0f172a;color:#fff");

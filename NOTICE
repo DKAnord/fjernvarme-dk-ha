@@ -55,7 +55,8 @@ redirect, rotating refresh token), the API base URL and the endpoint and
 field names for water were learned from that project (upstream commit
 920e41f) and reimplemented for district heating; no code was copied
 verbatim. Heat endpoints and heat field names are not from the upstream
-project (it only covers water) and are unverified guesses.
+project (it only covers water); Aalborg Forsyning's heating endpoint and
+fields were verified live via community testing (PR #9 by @dkvand).
 
 The upstream copyright and permission notice (MIT License), reproduced as
 required:

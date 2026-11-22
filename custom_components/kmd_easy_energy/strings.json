@@ -2,7 +2,7 @@
   "config": {
     "step": {
       "user": {
-        "title": "KMD Easy Energy — Select Utility",
+        "title": "Dansk Fjernvarme — Select Utility",
         "description": "Choose your Danish district heating utility. Confirmed utilities are verified live; others are pending initial community testing.",
         "data": {
           "utility_id": "Utility"
@@ -10,7 +10,7 @@
       },
       "auth": {
         "title": "Login & Setup ({utility_name})",
-        "description": "Status: {status_badge}\nLogin portal: {portal_url}\n{notes}\n\nEnter your MitID User ID. Each sync is one MitID login: data since the last sync is fetched and the KMD access (valid ~1 hour) is discarded immediately and never stored. The integration does not poll KMD in the background.\n\nAfter Submit: add the \"Fjernvarme (KMD Easy Energy): Dashboard\" card to a dashboard and press 🚀 Gem & Start MitID-synkronisering there. No MitID login happens in this dialog.",
+        "description": "Status: {status_badge}\nLogin portal: {portal_url}\n{notes}\n\nEnter your MitID User ID. Each sync is one MitID login: data since the last sync is fetched and the KMD access (valid ~1 hour) is discarded immediately and never stored. The integration does not poll KMD in the background.\n\nAfter Submit: add the \"Dansk Fjernvarme: Dashboard\" card to a dashboard and press 🚀 Gem & Start MitID-synkronisering there. No MitID login happens in this dialog.",
         "data": {
           "portal_url": "Portal URL",
           "mitid_username": "MitID User ID (saved locally in HA)",

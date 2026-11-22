@@ -1,6 +1,13 @@
 # Changelog
 
-Alle væsentlige ændringer i **Fjernvarme (KMD Easy Energy) – HA Connector & Dashboard** dokumenteres her.
+Alle væsentlige ændringer i **Dansk Fjernvarme** (tidligere *Fjernvarme (KMD Easy Energy)*) dokumenteres her.
+
+## [0.3.5] - 2026-11-22
+
+### Navneskifte & HACS Marketplace-forberedelse (ikke breaking)
+- **Nyt navn og repo:** Integrationen hedder nu **Dansk Fjernvarme** i HACS og Home Assistant, og GitHub-repoet er flyttet til [`DKAnord/fjernvarme-dk-ha`](https://github.com/DKAnord/fjernvarme-dk-ha) (GitHub omdirigerer automatisk fra det gamle navn).
+- **100 % ikke-breaking:** Teknisk `domain` (`kmd_easy_energy`), kort-type (`custom:kmd-easy-energy-card`) og alle entitet-/statistik-ID'er er bevaret uændret, så eksisterende opsætninger og Energy-historik fortsætter uden afbrydelse.
+- **Tak & Credits:** Tilføjet en samlet credits-sektion i `README.md` til [kpoppel/homeassistant-eforsyning](https://github.com/kpoppel/homeassistant-eforsyning) (Apache-2.0), [TheRealBatBro/Home-Assistant-Novafos-V2](https://github.com/TheRealBatBro/Home-Assistant-Novafos-V2) (MIT), [Hundter/MitID-BrowserClient](https://github.com/Hundter/MitID-BrowserClient) (MIT) og [@dkvand](https://github.com/dkvand).
 
 ## [0.3.4] - 2026-11-22
 

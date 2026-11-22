@@ -438,7 +438,7 @@ class WattsOnClient:
 
 
 # ---------------------------------------------------------------------------
-# Parsing heat intervals (defensive; field names for heat are NOT verified)
+# Parsing heat intervals (Aalborg: SD/ED/En/Vol/TI/TO/MQ verified; other shapes still use the same key lists)
 # ---------------------------------------------------------------------------
 START_KEYS = ("sd", "startDate", "start", "from", "dateFrom", "fromDate", "timestamp")
 END_KEYS = ("ed", "endDate", "end", "to", "dateTo", "toDate")

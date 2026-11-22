@@ -205,12 +205,12 @@ async def test_heat_endpoint_probing_records_only_templates_and_status() -> None
 
 
 def _aalborg_items() -> list[dict]:
-    """Shape of a real Aalborg Forsyning heat reply (values made up)."""
+    """Shape of an Aalborg Forsyning heat reply (synthetic values, not a live meter hour)."""
     return [
-        {"Id": fx.HEAT_DEVICE, "SD": "2026-11-22T13:00:00Z", "ED": "2026-11-22T14:00:00Z",
-         "En": 4, "Vol": 0.05806, "Fl": 0.04, "TI": 69.48, "TO": 27.36, "CD": 42.12, "MQ": "measured"},
-        {"Id": fx.HEAT_DEVICE, "SD": "2026-11-22T14:00:00Z", "ED": "2026-11-22T15:00:00Z",
-         "En": 2, "Vol": 0.04194, "Fl": 0.03, "TI": 69.66, "TO": 27.75, "CD": 41.91, "MQ": "measured"},
+        {"Id": fx.HEAT_DEVICE, "SD": "2026-01-15T13:00:00Z", "ED": "2026-01-15T14:00:00Z",
+         "En": 4, "Vol": 0.05806, "Fl": 0.04, "TI": 68.25, "TO": 29.50, "CD": 38.75, "MQ": "measured"},
+        {"Id": fx.HEAT_DEVICE, "SD": "2026-01-15T14:00:00Z", "ED": "2026-01-15T15:00:00Z",
+         "En": 3, "Vol": 0.04444, "Fl": 0.03, "TI": 67.10, "TO": 28.20, "CD": 38.90, "MQ": "measured"},
     ]
 
 
@@ -234,7 +234,7 @@ def test_parse_aalborg_heat_items_with_ti_to_temperatures() -> None:
     assert not p.skipped and not p.assumptions and p.energy_unit == "kWh"
     first = p.intervals[0]
     assert first["kwh"] == 4.0 and first["m3"] == 0.0581 and first["hours"] == 1.0
-    assert first["t_fwd"] == 69.48 and first["t_ret"] == 27.36
+    assert first["t_fwd"] == 68.25 and first["t_ret"] == 29.50
     assert p.has_energy and p.has_volume and p.has_temps
 
 

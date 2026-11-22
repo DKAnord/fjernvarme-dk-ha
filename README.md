@@ -7,7 +7,7 @@ Komplet, **100% lokal** Home Assistant-integration (`kmd_easy_energy`) og **Plug
 Log ind med **MitID direkte i Home Assistant** i ren Python (OIDC PKCE + NemLog-in + MitID SRP) — **ingen Chromium, ingen ekstern server eller add-on** påkrævet. Kører direkte på Raspberry Pi, Home Assistant OS og Docker.
 
 > [!NOTE]
-> **`v0.3.2` er stabil for KMD / Kredsløb.** Integrationen er testet live hos **Kredsløb**. De øvrige 16 KMD-værker og brugerdefineret portal-URL afventer stadig live-test. **E|Forsyning** (Hjørring Varmeforsyning) og **Watts On** (Aalborg Forsyning) er eksperimentelle og ikke afprøvet live. Alle tilbagemeldinger er guld værd — også *"det virker ikke hos mit værk"*. Brug feedback-knappen på kortet eller [opret et issue](https://github.com/DKAnord/kmd-fjernvarme-ha/issues) med navnet på dit værk.
+> **`v0.3.2` er stabil for KMD / Kredsløb.** Integrationen er testet live hos **Kredsløb**. De øvrige 16 KMD-værker og brugerdefineret portal-URL afventer stadig live-test. **E|Forsyning** (Hjørring Varmeforsyning) er eksperimentel og ikke afprøvet live. **Watts On** (Aalborg Forsyning) er eksperimentel og uofficiel; varme-endpointet er verificeret live af en beta-tester i Aalborg. Alle tilbagemeldinger er guld værd — også *"det virker ikke hos mit værk"*. Brug feedback-knappen på kortet eller [opret et issue](https://github.com/DKAnord/kmd-fjernvarme-ha/issues) med navnet på dit værk.
 
 ---
 
@@ -62,7 +62,7 @@ Log ind med **MitID direkte i Home Assistant** i ren Python (OIDC PKCE + NemLog-
 
 Se [E|Forsyning-backend](#-eforsyning-backend-eksperimentel) nedenfor.
 
-### 🧪 Watts On (eksperimentel — beta-tester fra Aalborg søges)
+### 🧪 Watts On (eksperimentel — verificeret live i Aalborg)
 - **Aalborg Forsyning** (fjernvarme vist i Watts On-appen)
 
 Se [Watts On-backend](#-watts-on-backend-aalborg-forsyning-eksperimentel) nedenfor. *Forsyning Helsingør* viser også fjernvarme i Watts On ([fh.dk/watts](https://www.fh.dk/watts)), men står her fortsat som KMD-værk og er ikke ændret.
@@ -138,13 +138,14 @@ Nogle værker bruger ikke KMD Easy Energy men **E|Forsyning** (eforsyning.dk / D
 ## 🧪 Watts On-backend (Aalborg Forsyning, eksperimentel)
 
 > [!WARNING]
-> **Ikke testet live og uofficiel.** Watts On har ingen offentlig API eller dokumenterede API-vilkår, som vi har kunnet finde. Integrationen bruger samme API som Watts On-appen og kan holde op med at virke, hvis Watts ændrer den. Watts' generelle vilkår forbyder bl.a. reverse engineering af Watts' teknologi *i kommerciel henseende* — denne integration er et ikke-kommercielt hobbyprojekt, der kun henter **dine egne** forbrugsdata med **din egen** login, ca. én gang i døgnet. Brug den på eget ansvar. Er du beta-tester fra Aalborg, så meld gerne tilbage i et GitHub-issue (uden persondata — diagnostics viser kun feltnavne og endpoint-status).
+> **Eksperimentel og uofficiel.** Watts On har ingen offentlig API eller dokumenterede API-vilkår, som vi har kunnet finde. Integrationen bruger samme API som Watts On-appen og kan holde op med at virke, hvis Watts ændrer den. Watts' generelle vilkår forbyder bl.a. reverse engineering af Watts' teknologi *i kommerciel henseende* — denne integration er et ikke-kommercielt hobbyprojekt, der kun henter **dine egne** forbrugsdata med **din egen** login, ca. én gang i døgnet. Brug den på eget ansvar. En beta-tester i Aalborg har verificeret varme-endpointet live; tilbagemeldinger fra andre Watts On-værker er stadig velkomne i et GitHub-issue (uden persondata — diagnostics viser kun feltnavne og endpoint-status).
 
 Aalborg Forsyning bruger ikke KMD-portalen, men viser fjernvarme i **Watts On**-appen (Watts A/S). Backenden er bygget med [TheRealBatBro/Home-Assistant-Novafos-V2](https://github.com/TheRealBatBro/Home-Assistant-Novafos-V2) som inspiration (Novafos-**vand** via Watts On, MIT-licens) — tak til TheRealBatBro! Login-flowet, API-adressen og vandets felt-/endpointnavne er lært derfra og genimplementeret; se [NOTICE](NOTICE) og `custom_components/kmd_easy_energy/api/LICENSE-novafos-v2-MIT.txt`.
 
-**Hvad er verificeret, og hvad er gættet?**
+**Hvad er verificeret, og hvad er stadig åbent?**
 - ✅ *Verificeret i Novafos-V2 (for vand):* login via Watts' Azure AD B2C-app-registrering (PKCE, `msauth://`-redirect), refresh token der **roteres** ved hver fornyelse, API på `p.watts-energy.dk`, `users/api/v3/User`, lokationer/enheder, timedata med felterne `sd`/`ed`/`vol`/`mq` (`vol` er m³, selv om måleren siger liter; `-1` = ingen data; kun `mq = Measured` bruges).
-- ❓ *Gættet for fjernvarme (skal bekræftes af en beta-tester):* hvilken adresse varmedata ligger på (vi prøver `heating/…`, `districtheating/…` og `heat/…` efter samme mønster som vand), feltnavne for energi og frem-/returtemperatur, enheden (kWh/MWh/GJ — Watts nævner alle tre for varme), og hvordan varmemåleren genkendes (`utilityType` med "heat"/"varme").
+- ✅ *Verificeret live for Aalborg Forsyning-fjernvarme (beta-tester, 22. nov. 2026):* timedata på `heating/api/v1/devices/{device_id}/consumption/recent` med `?newerThan=` (`?startDate=` giver HTTP 400). Punkterne har felterne `Id`, `SD`, `ED`, `En` (kWh, hele tal, matcher enhedens `unit: "kWh"`), `Vol` (m³), `Fl`, `TI`/`TO` (frem-/returtemperatur i °C), `CD` (afkøling, TI − TO) og `MQ`. Varmemåleren vises med `utilityType: "districtHeating"`. Historikken rækker ca. 26 måneder tilbage.
+- ❓ *Stadig åbent:* andre Watts On-værker (fx Forsyning Helsingør, der stadig står som KMD-værk her og ikke er ændret); de øvrige app-stier (`…/consumption` uden `/recent`, forecasts, utilisations) og deres parametre; felterne `Fl` og `CD` vises endnu ikke. De gamle gættede stier (`heating/api/consumptions/…` osv.) beholdes som fallback.
 - Det, vi ikke genkender, bliver **ikke vist**: ingen gættede tal. Kortet og sensorerne viser kun det, der faktisk blev fundet (kapabiliteter), og diagnostics viser feltnavnene (ikke værdierne), så vi kan rette mappingen.
 
 **Opsætning (uden MitID, uden at Home Assistant ser din Watts-adgangskode):**
@@ -158,7 +159,7 @@ Aalborg Forsyning bruger ikke KMD-portalen, men viser fjernvarme i **Watts On**-
 - **Automatisk daglig synkronisering** (ca. kl. 06:17, kan ændres/slås fra). Første gang hentes timedata fra 1. januar, derefter fra to døgn før seneste time (så sene rettelser kommer med). Weekend-påmindelsen er slået fra som standard.
 - Hvor længe login holder uden synkronisering, bestemmer Watts (overview-attributten `login_expires_at` viser det, hvis Watts oplyser det). Udløber login, viser kortet en rolig besked: vælg **Genkonfigurer** på integrationen og log ind igen (ingen reparation/push).
 - Timedata → Energy-statistik pr. time, timeprofil og døgn-/måneds-/årstal (årstal kun ved fuld dækning). Ingen saldo/regning eller budgetprognose.
-- Indstillinger (avanceret): *energienhed* (auto/kWh/MWh/GJ) hvis tallene er 1000× forkerte, og en *endpoint-skabelon* (fx `heating/api/consumptions/<device_id>`), hvis en beta-tester finder den rigtige adresse.
+- Indstillinger (avanceret): *energienhed* (auto/kWh/MWh/GJ) hvis tallene er 1000× forkerte, og en *endpoint-skabelon* hvis et andet værk bruger en anden adresse. Til stier der ender på `/recent` sendes `newerThan`; ellers `startDate`. Aalborg behøver ingen skabelon — den verificerede sti prøves først.
 - Aalborg Forsyning har også en officiel, betalt måler-API til **erhvervskunder** ([datadeling](https://aalborgforsyning.dk/services/forbrug/datadeling-for-fjernaflaeste-maalere/)); den bruges ikke her.
 
 ---

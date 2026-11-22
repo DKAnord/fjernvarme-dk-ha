@@ -8,6 +8,9 @@ Alle væsentlige ændringer i **Fjernvarme (KMD Easy Energy) – HA Connector & 
 - Efter MitID-godkendelse kunne login hos visse KMD-værker ende med `OIDC authorization code not returned` og URL'en `/Identity/Account/ExternalLogin?…client_id=48…`. `48…` er Kredsløbs OIDC-klient. For andre værker (fx **Energi Ikast**, som bruger **Min Forsyning 2**) faldt opdagelsen tavst tilbage til Kredsløbs klient, så MitID lykkedes, men værkets portal ikke kendte brugeren. Fra v0.3.2 opdages Min Forsyning 2 (`login_type=mf`, fælles klient, `utility` fra plant-nummer) automatisk, og en mislykket opdagelse er en tydelig fejl i stedet for et stille Kredsløb-fald tilbage.
 - Auto-POST af SAML/callback-formularer følger nu også formularer uden `action` (de postes til den aktuelle URL) og tager named submit-knapper med. Interaktive sider (første login, opret bruger, vilkår) postes ikke automatisk; kortet viser en dansk besked om at logge ind én gang i en almindelig browser først. Side-titel og eventuelle `error`/`remoteError` logges renset (uden e-mail, tokens eller CPR).
 
+### Watts On / Aalborg Forsyning
+- Varme-endpointet er verificeret live af en beta-tester i Aalborg: `heating/api/v1/devices/{device_id}/consumption/recent` med `?newerThan=`. Feltnavne `En` (kWh), `Vol` (m³) og `TI`/`TO` (frem-/returtemperatur) genkendes. De gamle gættede stier beholdes som fallback.
+
 ## [0.3.1] - 2026-11-22
 
 ### Rettet

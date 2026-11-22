@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from .const import BACKEND_EFORSYNING, BACKEND_KMD
+from .const import BACKEND_EFORSYNING, BACKEND_KMD, BACKEND_WATTSON
 
 CAP_HOURLY = "hourly"
 CAP_DAILY = "daily"
@@ -53,6 +53,27 @@ BACKEND_CAPABILITIES: dict[str, frozenset[str]] = {
             CAP_AUTO_SYNC,
         }
     ),
+    # Watts On (Aalborg Forsyning): expected hourly heat data, but the heat
+    # field names are not verified, so hourly/temperatures/volume only count
+    # once a sync has actually detected them (see DETECTED_CAPABILITIES).
+    BACKEND_WATTSON: frozenset(
+        {
+            CAP_HOURLY,
+            CAP_DAILY,
+            CAP_MONTHLY,
+            CAP_TEMPERATURES,
+            CAP_VOLUME,
+            CAP_COST,
+            CAP_REMINDER,
+            CAP_AUTO_SYNC,
+        }
+    ),
+}
+
+# Capabilities that a backend may or may not deliver: their entities are only
+# created after a sync detected matching data (the entry reloads once then).
+DETECTED_CAPABILITIES: dict[str, frozenset[str]] = {
+    BACKEND_WATTSON: frozenset({CAP_HOURLY, CAP_TEMPERATURES, CAP_VOLUME}),
 }
 
 _DATA_CAPS = (
@@ -69,6 +90,20 @@ _DATA_CAPS = (
 
 def backend_capabilities(backend: str | None) -> frozenset[str]:
     return BACKEND_CAPABILITIES.get(backend or BACKEND_KMD, BACKEND_CAPABILITIES[BACKEND_KMD])
+
+
+def entity_capabilities(backend: str | None, detected: Any = None) -> frozenset[str]:
+    """Capabilities that decide which entities exist.
+
+    Static for KMD/E|Forsyning. For backends with unverified data (Watts On)
+    the optional capabilities are only included once ``detected`` lists them.
+    """
+    static = backend_capabilities(backend)
+    optional = DETECTED_CAPABILITIES.get(backend or BACKEND_KMD)
+    if not optional:
+        return static
+    found = {str(c) for c in (detected or [])}
+    return frozenset(c for c in static if c not in optional or c in found)
 
 
 def _has(value: Any) -> bool:

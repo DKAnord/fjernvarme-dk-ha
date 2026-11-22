@@ -284,7 +284,7 @@ async def _async_entry_updated(hass: HomeAssistant, entry: ConfigEntry) -> None:
     coord: KMDEasyEnergyCoordinator | None = hass.data.get(DOMAIN, {}).get(entry.entry_id)
     if coord is None:
         return
-    if coord.is_eforsyning and coord.auto_sync_signature != coord.started_auto_sync_signature:
+    if not coord.uses_mitid and coord.auto_sync_signature != coord.started_auto_sync_signature:
         # Auto-sync on/off or hour changed: re-create the timer via reload.
         hass.config_entries.async_schedule_reload(entry.entry_id)
         return

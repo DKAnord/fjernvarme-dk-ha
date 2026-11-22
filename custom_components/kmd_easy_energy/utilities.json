@@ -257,6 +257,20 @@
       "longitude": 9.982,
       "notes": "E|Forsyning (eksperimentel, ikke testet live). forsyningid aflæst fra den offentlige side https://eforsyning.dk/hjvarme og bekræftet med den offentlige GetVaerkSettings (AppServerUri https://apiapp.dff-edb.dk/hjorring/). Login med forbrugernummer + webpinkode fra regningen; data er daglige aflæsninger.",
       "tariffs": []
+    },
+    {
+      "id": "aalborg-forsyning",
+      "name": "Aalborg Forsyning",
+      "city": "Aalborg",
+      "portal_url": "https://aalborgforsyning.dk/services/forbrug/watts-on/",
+      "status": "pending_test",
+      "tier": "verified_portal",
+      "auth_method": "Watts On-konto (browser-login, ingen MitID)",
+      "backend": "wattson",
+      "latitude": 57.048,
+      "longitude": 9.919,
+      "notes": "Watts On (eksperimentel, ikke testet live). Aalborg Forsyning viser fjernvarme i Watts On-appen (aalborgforsyning.dk/services/forbrug/watts-on). Login- og API-flow lært fra TheRealBatBro/Home-Assistant-Novafos-V2 (MIT, Novafos-vand); varme-endpoints og feltnavne er IKKE verificeret. Varmemåleren skal være tilføjet i Watts On-appen.",
+      "tariffs": []
     }
   ],
   "last_updated": "2026-11-21"

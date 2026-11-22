@@ -1,4 +1,4 @@
-// Node harness: capability-driven rendering + E|Forsyning backend (no real HA / network).
+// Node harness: capability-driven rendering + E|Forsyning / Watts On backends (no real HA / network).
 "use strict";
 const fs = require("fs");
 const path = require("path");
@@ -111,5 +111,40 @@ card = render({ capabilities: ALL_KMD, initial_setup_complete: false, annual: {}
 html = card.shadowRoot.innerHTML;
 assert.ok(html.includes('id="mitidUserInput"'), "KMD wizard");
 assert.ok(!html.includes('value="hjorring-varmeforsyning"'), "E|Forsyning utility not in MitID wizard");
+
+// 7) Watts On (Aalborg): hourly data detected -> hourly sections shown, no MitID,
+//    no "daglige aflæsninger", data-source note, sync service.
+const W_ATTRS = {
+  backend: "wattson", data_source: "Watts On", utility: "Aalborg Forsyning",
+  utility_id: "aalborg-forsyning", portal_url: "https://aalborgforsyning.dk/services/forbrug/watts-on/",
+  auto_sync: true, auto_sync_hour: 6, hourly: { kwh: Array(24).fill(2), period: "nov-2026 MTD (3 dage)" },
+  billing: {}, forecast: {}, return_temp: { annual: { "2026": 32 }, monthly_2026: { Nov: 32 } },
+  capabilities: ["auto_sync", "daily", "hourly", "monthly", "temperatures", "volume"],
+};
+calls = [];
+card = render(W_ATTRS, calls);
+html = card.shadowRoot.innerHTML;
+assert.ok(sections(html).includes("hourly") && sections(html).includes("daily"), "Watts On hourly + daily shown");
+assert.ok(html.includes("Data fra Watts On") && !html.includes("daglige aflæsninger"), "Watts On note, hourly");
+assert.ok(!/MitID/.test(html) && !html.includes("Saldo"), "no MitID / billing for Watts On");
+card.shadowRoot.getElementById("syncBtn").listeners.click();
+assert.deepStrictEqual(calls.pop(), ["kmd_easy_energy", "sync", { entry_id: "e1" }], "Watts On uses sync service");
+
+// 8) Watts On where heat field names were not recognised: only energy -> temps/volume/hourly hidden.
+calls = [];
+card = render(Object.assign({}, W_ATTRS, { hourly: {}, return_temp: {}, capabilities: ["auto_sync", "daily", "monthly"] }), calls);
+html = card.shadowRoot.innerHTML;
+const wsecs = sections(html);
+assert.ok(!wsecs.includes("hourly") && !wsecs.includes("return-temp") && !wsecs.includes("ins-temp"), "unknown fields hidden");
+assert.ok(wsecs.includes("daily") && wsecs.includes("monthly"), "energy still shown");
+
+// 9) Watts On onboarding mentions the Watts On login (not forbrugernummer), no MitID wizard.
+calls = [];
+card = render(Object.assign({}, W_ATTRS, { initial_setup_complete: false, annual: {}, monthly: {}, daily: {} }), calls);
+html = card.shadowRoot.innerHTML;
+assert.ok(html.includes('id="efSyncBtn"') && html.includes("Watts On-konto"), "Watts On onboarding");
+assert.ok(!html.includes("forbrugernummer") && !html.includes('id="mitidUserInput"'), "no E|Forsyning/MitID wording");
+card = render({ capabilities: ALL_KMD, initial_setup_complete: false, annual: {}, monthly: {}, daily: {} }, []);
+assert.ok(!card.shadowRoot.innerHTML.includes('value="aalborg-forsyning"'), "Aalborg not in MitID wizard");
 
 console.log("card_capabilities.test.js: OK");

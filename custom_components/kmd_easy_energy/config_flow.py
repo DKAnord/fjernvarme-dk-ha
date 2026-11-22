@@ -30,10 +30,21 @@ from homeassistant.helpers.selector import (
 )
 
 from .api.eforsyning_client import EforsyningClient, EforsyningError, EforsyningLoginError
+from .api.wattson_client import (
+    PkceLogin,
+    WattsOnAuthError,
+    WattsOnClient,
+    WattsOnError,
+    async_exchange_code,
+    code_from_redirect,
+    new_login,
+)
 
 from .const import (
     BACKEND_EFORSYNING,
     BACKEND_KMD,
+    BACKEND_WATTSON,
+    BACKENDS,
     CONF_AUTO_SYNC,
     CONF_AUTO_SYNC_HOUR,
     CONF_BACKEND,
@@ -61,6 +72,13 @@ from .const import (
     CONF_UTILITY,
     CONF_UTILITY_ID,
     CONF_UTILITY_STATUS,
+    CONF_WATTS_DEVICE_ID,
+    CONF_WATTS_ENDPOINT,
+    CONF_WATTS_ENERGY_UNIT,
+    CONF_WATTS_REFRESH_EXPIRES_AT,
+    CONF_WATTS_REFRESH_TOKEN,
+    CONF_WATTS_USER_ID,
+    WATTS_ENERGY_UNITS,
     DEFAULT_AUTO_SYNC,
     DEFAULT_AUTO_SYNC_HOUR,
     DEFAULT_SYNC_REMINDER,
@@ -98,7 +116,24 @@ _PASSWORD_SELECTOR = TextSelector(TextSelectorConfig(type=TextSelectorType.PASSW
 
 def utility_backend(u: dict[str, Any] | None) -> str:
     backend = str((u or {}).get("backend") or BACKEND_KMD).strip().lower()
-    return backend if backend in (BACKEND_KMD, BACKEND_EFORSYNING) else BACKEND_KMD
+    return backend if backend in BACKENDS else BACKEND_KMD
+
+
+CONF_WATTS_REDIRECT_URL = "wattson_redirect_url"
+
+
+def wattson_unique_id(user_id: str) -> str:
+    """One entry per Watts On account, without storing the user id in clear."""
+    return "wattson:" + hashlib.sha256(str(user_id).strip().encode()).hexdigest()[:16]
+
+
+def _watts_device_label(dev: dict[str, Any]) -> str:
+    kind = {"heat": "🔥 Varme", "water": "💧 Vand", "electricity": "⚡ El"}.get(
+        str(dev.get("kind")), "❔ Ukendt"
+    )
+    unit = f", {dev['unit']}" if dev.get("unit") else ""
+    typ = f" ({dev['type']}{unit})" if dev.get("type") else (f" ({dev['unit']})" if unit else "")
+    return f"{kind}{typ} · …{str(dev.get('id'))[-6:]}"
 
 
 def eforsyning_unique_id(supplier_id: str, username: str) -> str:
@@ -152,6 +187,8 @@ def _format_utility_label(u: dict[str, Any]) -> str:
     city = f" ({u['city']})" if u.get("city") else ""
     if utility_backend(u) == BACKEND_EFORSYNING:
         return f"🧪 {u['name']}{city} — E|Forsyning (eksperimentel)"
+    if utility_backend(u) == BACKEND_WATTSON:
+        return f"🧪 {u['name']}{city} — Watts On (eksperimentel)"
     if u.get("status") == "confirmed":
         return f"✅ {u['name']}{city} — Bekræftet / Confirmed"
     if tier == "candidate":
@@ -254,6 +291,9 @@ class KMDEasyEnergyConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self._selected_utility: dict[str, Any] = dict(CUSTOM_UTILITY)
         self._ef_pending: dict[str, Any] = {}
         self._ef_installations: list[dict[str, Any]] = []
+        self._watts_login: PkceLogin | None = None
+        self._watts_pending: dict[str, Any] = {}
+        self._watts_devices: list[dict[str, Any]] = []
 
     async def _async_set_entry_unique_id(
         self, utility_id: str | None, portal_url: str | None
@@ -287,6 +327,8 @@ class KMDEasyEnergyConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 )
             if utility_backend(self._selected_utility) == BACKEND_EFORSYNING:
                 return await self.async_step_eforsyning()
+            if utility_backend(self._selected_utility) == BACKEND_WATTSON:
+                return await self.async_step_wattson()
             return await self.async_step_auth()
 
         options: list[SelectOptionDict] = [
@@ -495,6 +537,197 @@ class KMDEasyEnergyConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             },
         )
 
+    # ------------------------------------------------------------------
+    # Watts On (Aalborg Forsyning): browser login, paste the msauth:// redirect
+    # ------------------------------------------------------------------
+    def _watts_form_login(self) -> PkceLogin:
+        if self._watts_login is None:
+            self._watts_login = new_login()
+        return self._watts_login
+
+    async def _async_watts_login(
+        self, user_input: dict[str, Any]
+    ) -> tuple[WattsOnClient | None, list[dict[str, Any]], str | None, str | None]:
+        """Validate pasted redirect URL (or advanced refresh token).
+
+        Returns (client, devices, refresh_expires_at, error_key). Never logs
+        the pasted URL, the code or any token.
+        """
+        session = async_get_clientsession(self.hass)
+        pasted = str(user_input.get(CONF_WATTS_REDIRECT_URL) or "").strip()
+        token = str(user_input.get(CONF_WATTS_REFRESH_TOKEN) or "").strip()
+        expires: str | None = None
+        login = self._watts_form_login()
+        try:
+            if pasted:
+                try:
+                    code = code_from_redirect(pasted, login.state)
+                except WattsOnAuthError as err:
+                    return None, [], None, {
+                        "no_code": "wattson_no_code",
+                        "state_mismatch": "wattson_state_mismatch",
+                        "b2c_error": "wattson_login_cancelled",
+                    }.get(str(err), "wattson_no_code")
+                # The code is single-use: a fresh login link is made after any attempt.
+                self._watts_login = None
+                tokens = await async_exchange_code(session, code, login.verifier)
+                expires = tokens.get("refresh_expires_at")
+                client = WattsOnClient(
+                    session,
+                    str(tokens["refresh_token"]),
+                    access_token=str(tokens["access_token"]),
+                    access_expires_in=int(tokens.get("expires_in") or 3600),
+                )
+            elif token:
+                client = WattsOnClient(session, token)
+            else:
+                return None, [], None, "wattson_missing"
+            await client.async_user_id()
+            devices = await client.async_devices()
+        except WattsOnAuthError:
+            return None, [], None, "wattson_code_rejected" if pasted else "wattson_token_rejected"
+        except WattsOnError:
+            return None, [], None, "wattson_cannot_connect"
+        except Exception:  # noqa: BLE001
+            _LOGGER.exception("Unexpected Watts On error during login")
+            return None, [], None, "unknown"
+        return client, devices, expires, None
+
+    def _watts_schema(self) -> vol.Schema:
+        return vol.Schema(
+            {
+                vol.Optional(CONF_WATTS_REDIRECT_URL, default=""): TextSelector(
+                    TextSelectorConfig(type=TextSelectorType.TEXT, multiline=True)
+                ),
+                vol.Optional(CONF_WATTS_REFRESH_TOKEN, default=""): _PASSWORD_SELECTOR,
+            }
+        )
+
+    async def async_step_wattson(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Watts On: open the login link, paste the final msauth:// address."""
+        errors: dict[str, str] = {}
+        u = self._selected_utility
+        if user_input is not None:
+            client, devices, expires, error = await self._async_watts_login(user_input)
+            if error:
+                errors["base"] = error
+            else:
+                assert client is not None
+                await self.async_set_unique_id(wattson_unique_id(client.user_id or ""))
+                self._abort_if_unique_id_configured()
+                self._watts_pending = {
+                    CONF_BACKEND: BACKEND_WATTSON,
+                    CONF_UTILITY: u.get("name") or "Watts On",
+                    CONF_UTILITY_ID: u.get("id", "aalborg-forsyning"),
+                    CONF_UTILITY_STATUS: u.get("status", "pending_test"),
+                    CONF_PORTAL_URL: u.get("portal_url") or "https://aalborgforsyning.dk/",
+                    CONF_LOCATION_NAME: u.get("city", ""),
+                    CONF_WATTS_REFRESH_TOKEN: client.refresh_token,
+                    CONF_WATTS_USER_ID: client.user_id,
+                }
+                if expires:
+                    self._watts_pending[CONF_WATTS_REFRESH_EXPIRES_AT] = expires
+                if u.get("latitude") is not None:
+                    self._watts_pending[CONF_UTILITY_LATITUDE] = u["latitude"]
+                    self._watts_pending[CONF_UTILITY_LONGITUDE] = u["longitude"]
+                client.discard()
+                heat = [d for d in devices if d.get("kind") == "heat"]
+                if len(heat) == 1:
+                    self._watts_pending[CONF_WATTS_DEVICE_ID] = heat[0]["id"]
+                    return self._create_wattson_entry()
+                # Several heat meters, or none we could recognise: let the user pick
+                # (only devices that are not clearly water/electricity).
+                self._watts_devices = heat or [
+                    d for d in devices if d.get("kind") not in ("water", "electricity")
+                ]
+                if not self._watts_devices:
+                    errors["base"] = "wattson_no_heat_meter"
+                else:
+                    return await self.async_step_wattson_device()
+        login = self._watts_form_login()
+        return self.async_show_form(
+            step_id="wattson",
+            data_schema=self._watts_schema(),
+            errors=errors,
+            description_placeholders={
+                "utility_name": str(u.get("name") or "Watts On"),
+                "auth_url": login.url,
+            },
+        )
+
+    async def async_step_wattson_device(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Pick the heat meter when there are several (or none recognised)."""
+        if user_input is not None:
+            self._watts_pending[CONF_WATTS_DEVICE_ID] = str(user_input[CONF_WATTS_DEVICE_ID])
+            return self._create_wattson_entry()
+        options = [
+            SelectOptionDict(value=str(d["id"]), label=_watts_device_label(d))
+            for d in self._watts_devices
+        ]
+        return self.async_show_form(
+            step_id="wattson_device",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(CONF_WATTS_DEVICE_ID, default=options[0]["value"]): SelectSelector(
+                        SelectSelectorConfig(options=options, mode=SelectSelectorMode.DROPDOWN)
+                    )
+                }
+            ),
+        )
+
+    def _create_wattson_entry(self) -> FlowResult:
+        data = dict(self._watts_pending)
+        self._watts_pending = {}
+        self._watts_devices = []
+        return self.async_create_entry(
+            title=str(data.get(CONF_UTILITY) or "Watts On"),
+            data=data,
+            options={
+                CONF_AUTO_SYNC: DEFAULT_AUTO_SYNC,
+                CONF_AUTO_SYNC_HOUR: DEFAULT_AUTO_SYNC_HOUR,
+                CONF_SYNC_REMINDER: DEFAULT_SYNC_REMINDER_BY_BACKEND[BACKEND_WATTSON],
+                CONF_WATTS_ENERGY_UNIT: "auto",
+            },
+        )
+
+    async def async_step_reconfigure_wattson(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Log in to Watts On again (e.g. after the session expired)."""
+        errors: dict[str, str] = {}
+        entry = self._get_reconfigure_entry()
+        if user_input is not None:
+            client, _devices, expires, error = await self._async_watts_login(user_input)
+            if error:
+                errors["base"] = error
+            else:
+                assert client is not None
+                if entry.unique_id and wattson_unique_id(client.user_id or "") != entry.unique_id:
+                    errors["base"] = "wattson_wrong_account"
+                else:
+                    updates: dict[str, Any] = {
+                        CONF_WATTS_REFRESH_TOKEN: client.refresh_token,
+                        CONF_WATTS_USER_ID: client.user_id,
+                    }
+                    if expires:
+                        updates[CONF_WATTS_REFRESH_EXPIRES_AT] = expires
+                    client.discard()
+                    return self.async_update_reload_and_abort(entry, data_updates=updates)
+        login = self._watts_form_login()
+        return self.async_show_form(
+            step_id="reconfigure_wattson",
+            data_schema=self._watts_schema(),
+            errors=errors,
+            description_placeholders={
+                "utility_name": str(entry.data.get(CONF_UTILITY) or entry.title),
+                "auth_url": login.url,
+            },
+        )
+
     async def async_step_reconfigure(
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
@@ -505,6 +738,8 @@ class KMDEasyEnergyConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         utility_name = str(current_data.get(CONF_UTILITY) or entry.title or "KMD Easy Energy")
         if entry.data.get(CONF_BACKEND) == BACKEND_EFORSYNING:
             return await self.async_step_reconfigure_eforsyning(user_input)
+        if entry.data.get(CONF_BACKEND) == BACKEND_WATTSON:
+            return await self.async_step_reconfigure_wattson(user_input)
 
         if user_input is not None:
             portal_url = (user_input.get(CONF_PORTAL_URL) or current_data.get(CONF_PORTAL_URL) or "").strip()
@@ -697,7 +932,7 @@ class KMDEasyEnergyOptionsFlow(config_entries.OptionsFlow):
                 ): bool,
             }
         )
-        if backend == BACKEND_EFORSYNING:
+        if backend in (BACKEND_EFORSYNING, BACKEND_WATTSON):
             schema = schema.extend(
                 {
                     vol.Optional(
@@ -708,6 +943,23 @@ class KMDEasyEnergyOptionsFlow(config_entries.OptionsFlow):
                         CONF_AUTO_SYNC_HOUR,
                         default=int(opts.get(CONF_AUTO_SYNC_HOUR, DEFAULT_AUTO_SYNC_HOUR)),
                     ): vol.All(vol.Coerce(int), vol.Range(min=0, max=23)),
+                }
+            )
+        if backend == BACKEND_WATTSON:
+            schema = schema.extend(
+                {
+                    vol.Optional(
+                        CONF_WATTS_ENERGY_UNIT,
+                        default=str(opts.get(CONF_WATTS_ENERGY_UNIT) or "auto"),
+                    ): SelectSelector(
+                        SelectSelectorConfig(
+                            options=list(WATTS_ENERGY_UNITS), mode=SelectSelectorMode.DROPDOWN
+                        )
+                    ),
+                    vol.Optional(
+                        CONF_WATTS_ENDPOINT,
+                        default=str(opts.get(CONF_WATTS_ENDPOINT) or ""),
+                    ): str,
                 }
             )
         return self.async_show_form(step_id="init", data_schema=schema, errors=errors)

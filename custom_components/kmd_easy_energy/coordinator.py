@@ -99,7 +99,9 @@ from .kmd_supply import (
     MSG_NO_HEAT,
     KMDSupplySelectionError,
     classify_kmd_meter,
+    meter_point_id,
     select_heat_meter,
+    supply_key,
 )
 from .insights import (
     compact_hourly_point,
@@ -161,31 +163,25 @@ def _parse_iso_dt(value: str | None) -> datetime | None:
         return None
 
 
-def _compute_weather_and_insights(
-    state: dict[str, Any], daily_temp: dict[str, float]
+def _approx_monthly_hdd(monthly_avg_t: dict[str, float]) -> dict[str, float]:
+    """HDD17 from monthly mean temperature when the daily archive is not in cache."""
+    out: dict[str, float] = {}
+    for ym, temp in monthly_avg_t.items():
+        try:
+            year, month = int(ym[:4]), int(ym[5:7])
+            days = calendar.monthrange(year, month)[1]
+        except (TypeError, ValueError):
+            continue
+        out[ym] = round(max(0.0, HDD_BASE - float(temp)) * days, 1)
+    return out
+
+
+def _insights_from_monthly(
+    state: dict[str, Any],
+    monthly_avg_t: dict[str, float],
+    mon_hdd: dict[str, float],
 ) -> dict[str, Any]:
-    """Compute monthly/daily temp, R², baseload, and kWh/HDD17 from archive temps."""
-    if not daily_temp:
-        return {"weather": state.get("weather") or {}, "insights": state.get("insights") or {}}
-
-    mon_t: dict[str, list[float]] = {}
-    mon_hdd: dict[str, float] = {}
-    for d, t in daily_temp.items():
-        ym = d[:7]
-        mon_t.setdefault(ym, []).append(t)
-        mon_hdd[ym] = mon_hdd.get(ym, 0.0) + max(0.0, HDD_BASE - t)
-
-    monthly_avg_t = {ym: round(sum(vs) / len(vs), 1) for ym, vs in sorted(mon_t.items())}
-    cur_yr = str(copenhagen_today().year)
-    prev_yr = str(copenhagen_today().year - 1)
-    compact_m_temp = {
-        ym: v
-        for ym, v in monthly_avg_t.items()
-        if ym.startswith((prev_yr + "-", cur_yr + "-"))
-    }
-    recent_d_temp = dict(sorted(daily_temp.items())[-120:])
-    weather = {"monthly_temp": compact_m_temp, "daily_temp": recent_d_temp}
-
+    """R², baseload and kWh/HDD from the current monthly series and stored temps."""
     pairs: list[tuple[float, float]] = []
     summer_vals: list[float] = []
     yr_totals: dict[str, dict[str, Any]] = {}
@@ -234,13 +230,140 @@ def _compute_weather_and_insights(
             continue
         kwh_per_hdd[y] = round(space / st["hdd"], 2)
 
-    insights = {
+    return {
         "temp_r2_pct": r2,
         "temp_r2_reliable": bool(r2 is not None and r2 >= 25),
         "baseload_kwh_mo": baseload,
         "kwh_per_hdd": kwh_per_hdd,
     }
+
+
+def refresh_insights(state: dict[str, Any]) -> None:
+    """Rebuild insights from the current monthly series and cached weather.
+
+    The weather archive is fetched at most once a day, but monthly kWh can
+    change later the same day (e.g. after switching from El to Varme). Always
+    recompute rather than keep yesterday's R² / baseload / kWh/HDD.
+    """
+    weather = state.get("weather") or {}
+    monthly_avg_t = {
+        str(k): float(v)
+        for k, v in (weather.get("monthly_temp") or {}).items()
+        if isinstance(v, (int, float)) and not isinstance(v, bool)
+    }
+    if not monthly_avg_t:
+        return
+    mon_hdd = {
+        str(k): float(v)
+        for k, v in (weather.get("monthly_hdd") or {}).items()
+        if isinstance(v, (int, float)) and not isinstance(v, bool)
+    }
+    if not mon_hdd:
+        mon_hdd = _approx_monthly_hdd(monthly_avg_t)
+    state["insights"] = _insights_from_monthly(state, monthly_avg_t, mon_hdd)
+
+
+def _compute_weather_and_insights(
+    state: dict[str, Any], daily_temp: dict[str, float]
+) -> dict[str, Any]:
+    """Compute monthly/daily temp, R², baseload, and kWh/HDD17 from archive temps."""
+    if not daily_temp:
+        weather = state.get("weather") or {}
+        refresh_insights(state)
+        return {"weather": weather, "insights": state.get("insights") or {}}
+
+    mon_t: dict[str, list[float]] = {}
+    mon_hdd: dict[str, float] = {}
+    for d, t in daily_temp.items():
+        ym = d[:7]
+        mon_t.setdefault(ym, []).append(t)
+        mon_hdd[ym] = mon_hdd.get(ym, 0.0) + max(0.0, HDD_BASE - t)
+
+    monthly_avg_t = {ym: round(sum(vs) / len(vs), 1) for ym, vs in sorted(mon_t.items())}
+    cur_yr = str(copenhagen_today().year)
+    prev_yr = str(copenhagen_today().year - 1)
+    year_prefixes = (prev_yr + "-", cur_yr + "-")
+    compact_m_temp = {
+        ym: v for ym, v in monthly_avg_t.items() if ym.startswith(year_prefixes)
+    }
+    compact_m_hdd = {
+        ym: round(v, 1) for ym, v in mon_hdd.items() if ym.startswith(year_prefixes)
+    }
+    recent_d_temp = dict(sorted(daily_temp.items())[-120:])
+    weather = {
+        "monthly_temp": compact_m_temp,
+        "monthly_hdd": compact_m_hdd,
+        "daily_temp": recent_d_temp,
+    }
+    insights = _insights_from_monthly(state, monthly_avg_t, mon_hdd)
     return {"weather": weather, "insights": insights}
+
+
+# Private cache keys that belong to one meter / kundeforhold. Weather is kept
+# (it is outdoor temperature, not consumption).
+_CONSUMPTION_CACHE_KEYS = (
+    "monthly",
+    "annual",
+    "daily",
+    "daily_m3",
+    "daily_kwh_history",
+    "daily_history_fetched_on",
+    "hourly",
+    "hourly_kwh",
+    "hourly_m3",
+    "hourly_temp",
+    "hourly_kwh_points",
+    "hourly_backfill_fetched_on",
+    "insights",
+    "cost_estimate",
+    "forecast",
+    "overview",
+    "settlement_period",
+    "billing",
+    "balance",
+    "return_temp",
+    "latest_reading",
+    "statistics_imported_on",
+    "statistics_imported",
+    "daily_hdd",
+)
+
+
+def clear_consumption_cache(state: dict[str, Any]) -> None:
+    """Drop cached consumption so the next fetch is for the selected meter only."""
+    for key in _CONSUMPTION_CACHE_KEYS:
+        state.pop(key, None)
+
+
+def consumption_history_stale(state: dict[str, Any], tolerance: float = 0.25) -> bool:
+    """True when daily/hourly history does not add up to the current monthly series.
+
+    Typical after a kundeforhold switch: ZoomLevel=1 monthly bars were
+    overwritten with Varme, but daily_kwh_history / hourly_kwh still hold El.
+    """
+    history = state.get("daily_kwh_history") or {}
+    monthly = state.get("monthly") or {}
+    if not isinstance(history, dict) or not isinstance(monthly, dict):
+        return False
+    for year, mmap in monthly.items():
+        if not isinstance(mmap, dict):
+            continue
+        for idx, mk in enumerate(M_KEYS, 1):
+            expected = mmap.get(mk)
+            if not isinstance(expected, (int, float)) or isinstance(expected, bool) or expected <= 0:
+                continue
+            prefix = f"{year}-{idx:02d}-"
+            days = [
+                float(v)
+                for k, v in history.items()
+                if str(k).startswith(prefix) and isinstance(v, (int, float)) and not isinstance(v, bool)
+            ]
+            if len(days) < 20:
+                continue
+            got = sum(days)
+            if abs(got - float(expected)) / float(expected) > tolerance:
+                return True
+    return False
 
 
 
@@ -938,6 +1061,9 @@ class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         state["weather_source_sig"] = signature
         state["outdoor_temp_parts"] = info
         state["outdoor_temp_sensor_status"] = sensor_status if entity_id else None
+        # Insights depend on monthly kWh, which may have changed since the
+        # archive was fetched earlier today.
+        refresh_insights(state)
 
     def _outdoor_temp_summary(self, state: dict[str, Any]) -> dict[str, Any]:
         """Non-recorded attribute: which source the temperatures come from (no coordinates)."""
@@ -1066,6 +1192,19 @@ class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 str(cnum) if cnum else None,
             )
             meters = list(account.get("meters") or [mp])
+            new_supply = supply_key(
+                str(cid) if cid else None,
+                meter_point_id(mp),
+            )
+            prev_supply = state.get("selected_supply_key")
+            if prev_supply and new_supply and prev_supply != new_supply:
+                _LOGGER.info(
+                    "KMD selected meter changed (kundeforhold %s); clearing cached consumption",
+                    account.get("customer_index"),
+                )
+                clear_consumption_cache(state)
+                first_sync = True
+            state["selected_supply_key"] = new_supply
             units = mp.get("Units") or []
             available_units = [
                 {
@@ -1130,6 +1269,26 @@ class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                             )
                     except Exception as err:  # noqa: BLE001
                         _LOGGER.warning("Monthly fetch (%s) failed: %s", yr_s, err)
+
+                if consumption_history_stale(state):
+                    _LOGGER.info(
+                        "KMD daily/hourly history does not match monthly totals; "
+                        "clearing cached history for a full heat-meter backfill"
+                    )
+                    for key in (
+                        "daily_kwh_history",
+                        "daily_history_fetched_on",
+                        "hourly_kwh",
+                        "hourly_m3",
+                        "hourly_temp",
+                        "hourly_kwh_points",
+                        "hourly_backfill_fetched_on",
+                        "hourly",
+                        "statistics_imported_on",
+                        "statistics_imported",
+                    ):
+                        state.pop(key, None)
+                    first_sync = True
 
                 # 2. Daily (ZoomLevel=2) for current month
                 d_raw = await self.client.get_consumption_timeseries(
@@ -1254,6 +1413,10 @@ class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                             len(h_series),
                             raw_sample,
                         )
+                        # Do not keep a previous meter's daily-rhythm profile.
+                        state.pop("hourly", None)
+                    else:
+                        state.pop("hourly", None)
 
             if m3_unit:
                 start_mo = datetime(yr, mo, 1)

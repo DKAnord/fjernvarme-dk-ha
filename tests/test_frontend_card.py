@@ -22,8 +22,8 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def test_integration_version_matches_manifest() -> None:
-    assert integration_version() == "1.0.0"
-    assert card_resource_url() == "/local/js/kmd-easy-energy-card.js?v=1.0.0"
+    assert integration_version() == "1.0.1"
+    assert card_resource_url() == "/local/js/kmd-easy-energy-card.js?v=1.0.1"
     assert card_resource_url("0.3.0") == "/local/js/kmd-easy-energy-card.js?v=0.3.0"
 
 
@@ -212,8 +212,8 @@ def test_ensure_resource_removes_duplicates(monkeypatch: pytest.MonkeyPatch) -> 
 
 def test_readme_documents_versioned_resource() -> None:
     readme = (ROOT / "README.md").read_text()
-    assert "/local/js/kmd-easy-energy-card.js?v=1.0.0" in readme
+    assert "/local/js/kmd-easy-energy-card.js?v=1.0.1" in readme
     assert "31 dage" in readme or "31 days" in readme
     changelog = (ROOT / "CHANGELOG.md").read_text()
-    assert "## [1.0.0]" in changelog
+    assert "## [1.0.1]" in changelog
     assert CARD_RESOURCE_PATH in changelog or "kmd-easy-energy-card.js?v=" in changelog

@@ -35,6 +35,7 @@ TO_REDACT = {
     "measurement_point_id",
     "kmd_supply",
     "key",
+    "selected_supply_key",
     "MeterId",
     "meter_id",
     "MeterNumber",
@@ -164,6 +165,7 @@ def _summarize_coordinator(data: dict[str, Any] | None) -> dict[str, Any]:
         "hourly_temp_points": _series_len(data.get("hourly_temp")),
         "meter_count": _series_len(data.get("meters")),
         "kmd_supplies": diagnostics_supplies(data.get("kmd_supplies")),
+        "has_selected_supply": bool(data.get("selected_supply_key")),
         "available_unit_names": [
             u.get("Name") or u.get("Description")
             for u in (data.get("available_units") or [])

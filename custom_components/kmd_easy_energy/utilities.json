@@ -8,6 +8,7 @@
       "status": "confirmed",
       "tier": "confirmed",
       "auth_method": "MitID",
+      "backend": "kmd",
       "latitude": 56.153,
       "longitude": 10.106,
       "notes": "Confirmed working live against easy-energy-plugin-api.kmd.dk (monthly, daily, hourly kWh, settlement forecast, balance).",
@@ -42,6 +43,7 @@
       "status": "pending_test",
       "tier": "verified_portal",
       "auth_method": "MitID",
+      "backend": "kmd",
       "latitude": 56.159,
       "longitude": 9.917,
       "notes": "Shares the Min Varme / Kredsløb KMD Easy Energy platform."
@@ -54,6 +56,7 @@
       "status": "pending_test",
       "tier": "verified_portal",
       "auth_method": "MitID",
+      "backend": "kmd",
       "latitude": 56.139,
       "longitude": 9.158,
       "notes": "Official KMD Easy Energy / minForsyning portal."
@@ -66,6 +69,7 @@
       "status": "pending_test",
       "tier": "verified_portal",
       "auth_method": "MitID",
+      "backend": "kmd",
       "latitude": 56.492,
       "longitude": 8.594,
       "notes": "Min Forsyning (KMD). MitID or email + activation code."
@@ -78,6 +82,7 @@
       "status": "pending_test",
       "tier": "verified_portal",
       "auth_method": "MitID",
+      "backend": "kmd",
       "latitude": 55.403,
       "longitude": 11.354,
       "notes": "Long-term KMD Easy Energy / minForsyning portal for heat, water, and electricity."
@@ -90,6 +95,7 @@
       "status": "pending_test",
       "tier": "verified_portal",
       "auth_method": "MitID",
+      "backend": "kmd",
       "latitude": 57.441,
       "longitude": 10.536,
       "notes": "Uses minForsyning (KMD) with MitID login."
@@ -102,6 +108,7 @@
       "status": "pending_test",
       "tier": "verified_portal",
       "auth_method": "MitID",
+      "backend": "kmd",
       "latitude": 56.36,
       "longitude": 8.616,
       "notes": "Uses minForsyning with MitID or email login."
@@ -114,6 +121,7 @@
       "status": "pending_test",
       "tier": "verified_portal",
       "auth_method": "MitID",
+      "backend": "kmd",
       "latitude": 55.1,
       "longitude": 14.7,
       "notes": "Explicit minForsyning portal with MitID or email login."
@@ -126,6 +134,7 @@
       "status": "pending_test",
       "tier": "verified_portal",
       "auth_method": "MitID",
+      "backend": "kmd",
       "latitude": 55.68,
       "longitude": 11.089,
       "notes": "Min Forsyning portal with MitID login for heat and water."
@@ -138,6 +147,7 @@
       "status": "pending_test",
       "tier": "verified_portal",
       "auth_method": "Email / Kundenr.",
+      "backend": "kmd",
       "latitude": 55.657,
       "longitude": 12.357,
       "notes": "Confirmed KMD Easy Energy billing/customer master; self-service uses email + customer number/password."
@@ -150,6 +160,7 @@
       "status": "pending_test",
       "tier": "candidate",
       "auth_method": "MitID",
+      "backend": "kmd",
       "latitude": 55.922,
       "longitude": 11.671,
       "notes": "Named in KMD press release as migrated to KMD Easy Energy."
@@ -162,6 +173,7 @@
       "status": "pending_test",
       "tier": "candidate",
       "auth_method": "MitID",
+      "backend": "kmd",
       "latitude": 54.938,
       "longitude": 10.71,
       "notes": "Migrated to KMD Easy Energy / minForsyning."
@@ -174,6 +186,7 @@
       "status": "pending_test",
       "tier": "candidate",
       "auth_method": "MitID",
+      "backend": "kmd",
       "latitude": 56.036,
       "longitude": 12.614,
       "notes": "Uses Mit FH portal; listed with minForsyning."
@@ -186,6 +199,7 @@
       "status": "pending_test",
       "tier": "candidate",
       "auth_method": "MitID",
+      "backend": "kmd",
       "latitude": 55.253,
       "longitude": 9.489,
       "notes": "Uses MinForsyning portal."
@@ -198,6 +212,7 @@
       "status": "pending_test",
       "tier": "candidate",
       "auth_method": "MitID",
+      "backend": "kmd",
       "latitude": 56.035,
       "longitude": 9.932,
       "notes": "MinForsyning portal with KMD activation."
@@ -210,6 +225,7 @@
       "status": "pending_test",
       "tier": "candidate",
       "auth_method": "MitID",
+      "backend": "kmd",
       "latitude": 55.862,
       "longitude": 9.85,
       "notes": "MinForsyning portal with KMD activation."
@@ -222,9 +238,25 @@
       "status": "pending_test",
       "tier": "candidate",
       "auth_method": "MitID",
+      "backend": "kmd",
       "latitude": 56.955,
       "longitude": 8.694,
       "notes": "Chose KMD Easy Energy in 2023 (primarily electricity)."
+    },
+    {
+      "id": "hjorring-varmeforsyning",
+      "name": "Hjørring Varmeforsyning",
+      "city": "Hjørring",
+      "portal_url": "https://eforsyning.dk/hjvarme/",
+      "status": "pending_test",
+      "tier": "verified_portal",
+      "auth_method": "Forbrugernummer + webpinkode",
+      "backend": "eforsyning",
+      "eforsyning_supplier_id": "B30A6948-2461-4827-B8EB-5D93169CCB8B",
+      "latitude": 57.464,
+      "longitude": 9.982,
+      "notes": "E|Forsyning (eksperimentel, ikke testet live). forsyningid aflæst fra den offentlige side https://eforsyning.dk/hjvarme og bekræftet med den offentlige GetVaerkSettings (AppServerUri https://apiapp.dff-edb.dk/hjorring/). Login med forbrugernummer + webpinkode fra regningen; data er daglige aflæsninger.",
+      "tariffs": []
     }
   ],
   "last_updated": "2026-11-21"

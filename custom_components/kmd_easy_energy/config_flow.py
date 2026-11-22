@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 from pathlib import Path
@@ -12,15 +13,30 @@ import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.core import callback
 from homeassistant.data_entry_flow import FlowResult
+from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.selector import (
     SelectOptionDict,
     SelectSelector,
     SelectSelectorConfig,
     SelectSelectorMode,
+    TextSelector,
+    TextSelectorConfig,
+    TextSelectorType,
 )
 
+from .api.eforsyning_client import EforsyningClient, EforsyningError, EforsyningLoginError
+
 from .const import (
+    BACKEND_EFORSYNING,
+    BACKEND_KMD,
+    CONF_AUTO_SYNC,
+    CONF_AUTO_SYNC_HOUR,
+    CONF_BACKEND,
     CONF_BONUS_TEMP,
+    CONF_EF_INSTALLATION_ID,
+    CONF_EF_PASSWORD,
+    CONF_EF_SUPPLIER_ID,
+    CONF_EF_USERNAME,
     CONF_CUSTOMER_ID,
     CONF_LATITUDE,
     CONF_LONGITUDE,
@@ -37,7 +53,10 @@ from .const import (
     CONF_UTILITY,
     CONF_UTILITY_ID,
     CONF_UTILITY_STATUS,
+    DEFAULT_AUTO_SYNC,
+    DEFAULT_AUTO_SYNC_HOUR,
     DEFAULT_SYNC_REMINDER,
+    DEFAULT_SYNC_REMINDER_BY_BACKEND,
     DOMAIN,
 )
 from .util import unique_id_for
@@ -53,6 +72,49 @@ CUSTOM_UTILITY: dict[str, Any] = {
     "tier": "custom",
     "notes": "Enter your utility's KMD Easy Energy self-service login URL.",
 }
+
+
+CUSTOM_EFORSYNING: dict[str, Any] = {
+    "id": "eforsyning-custom",
+    "name": "Andet E|Forsyning-værk",
+    "city": "",
+    "portal_url": "https://eforsyning.dk/",
+    "status": "pending_test",
+    "tier": "custom",
+    "backend": BACKEND_EFORSYNING,
+    "notes": "Angiv værkets forsyningid (se hjælpeteksten).",
+}
+
+_PASSWORD_SELECTOR = TextSelector(TextSelectorConfig(type=TextSelectorType.PASSWORD))
+
+
+def utility_backend(u: dict[str, Any] | None) -> str:
+    backend = str((u or {}).get("backend") or BACKEND_KMD).strip().lower()
+    return backend if backend in (BACKEND_KMD, BACKEND_EFORSYNING) else BACKEND_KMD
+
+
+def eforsyning_unique_id(supplier_id: str, username: str) -> str:
+    """One entry per supplier + forbrugernummer, without storing the number in clear."""
+    digest = hashlib.sha256(f"{supplier_id.strip().lower()}|{username.strip()}".encode()).hexdigest()
+    return f"eforsyning:{supplier_id.strip().lower()}:{digest[:12]}"
+
+
+async def async_validate_eforsyning(
+    hass: Any, username: str, password: str, supplier_id: str
+) -> list[dict[str, Any]]:
+    """Log in once and return the installations (credentials are not logged)."""
+    client = EforsyningClient(async_get_clientsession(hass), username, password, supplier_id)
+    try:
+        await client.async_login()
+        return await client.async_get_installations()
+    finally:
+        client.discard_credentials()
+
+
+def _installation_label(inst: dict[str, Any]) -> str:
+    addr = str(inst.get("Adresse") or "").strip()
+    nr = inst.get("InstallationNr")
+    return f"{addr} (installation {nr})" if addr else f"Installation {nr}"
 
 
 def _load_utilities() -> list[dict[str, Any]]:
@@ -80,6 +142,8 @@ def _load_utilities() -> list[dict[str, Any]]:
 def _format_utility_label(u: dict[str, Any]) -> str:
     tier = u.get("tier") or ("confirmed" if u.get("status") == "confirmed" else "verified_portal")
     city = f" ({u['city']})" if u.get("city") else ""
+    if utility_backend(u) == BACKEND_EFORSYNING:
+        return f"🧪 {u['name']}{city} — E|Forsyning (eksperimentel)"
     if u.get("status") == "confirmed":
         return f"✅ {u['name']}{city} — Bekræftet / Confirmed"
     if tier == "candidate":
@@ -135,6 +199,8 @@ class KMDEasyEnergyConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     def __init__(self) -> None:
         self._selected_utility: dict[str, Any] = dict(CUSTOM_UTILITY)
+        self._ef_pending: dict[str, Any] = {}
+        self._ef_installations: list[dict[str, Any]] = []
 
     async def _async_set_entry_unique_id(
         self, utility_id: str | None, portal_url: str | None
@@ -159,11 +225,15 @@ class KMDEasyEnergyConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             selected_id = user_input[CONF_UTILITY_ID]
             if selected_id == "custom":
                 self._selected_utility = dict(CUSTOM_UTILITY)
+            elif selected_id == CUSTOM_EFORSYNING["id"]:
+                self._selected_utility = dict(CUSTOM_EFORSYNING)
             else:
                 self._selected_utility = next(
                     (u for u in utilities if u.get("id") == selected_id),
                     dict(CUSTOM_UTILITY),
                 )
+            if utility_backend(self._selected_utility) == BACKEND_EFORSYNING:
+                return await self.async_step_eforsyning()
             return await self.async_step_auth()
 
         options: list[SelectOptionDict] = [
@@ -174,6 +244,12 @@ class KMDEasyEnergyConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             SelectOptionDict(
                 value="custom",
                 label="⚙️ Andet KMD Easy Energy værk (brugerdefineret URL)",
+            )
+        )
+        options.append(
+            SelectOptionDict(
+                value=CUSTOM_EFORSYNING["id"],
+                label="⚙️ Andet E|Forsyning-værk (eksperimentel, kræver forsyningid)",
             )
         )
         default_id = utilities[0]["id"] if utilities else "kredslob"
@@ -254,6 +330,116 @@ class KMDEasyEnergyConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             },
         )
 
+    async def async_step_eforsyning(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """E|Forsyning: forbrugernummer + webpinkode instead of MitID."""
+        errors: dict[str, str] = {}
+        u = self._selected_utility
+        known_supplier = str(u.get("eforsyning_supplier_id") or "").strip()
+
+        if user_input is not None:
+            username = str(user_input.get(CONF_EF_USERNAME) or "").strip()
+            password = str(user_input.get(CONF_EF_PASSWORD) or "")
+            supplier_id = (
+                known_supplier or str(user_input.get(CONF_EF_SUPPLIER_ID) or "").strip()
+            )
+            location_name = (user_input.get(CONF_LOCATION_NAME) or u.get("city") or "").strip()
+            if not username or not password:
+                errors["base"] = "eforsyning_missing"
+            elif not supplier_id:
+                errors[CONF_EF_SUPPLIER_ID] = "eforsyning_supplier_required"
+            else:
+                await self.async_set_unique_id(eforsyning_unique_id(supplier_id, username))
+                self._abort_if_unique_id_configured()
+                try:
+                    installs = await async_validate_eforsyning(
+                        self.hass, username, password, supplier_id
+                    )
+                except EforsyningLoginError:
+                    errors["base"] = "invalid_auth"
+                except EforsyningError:
+                    errors["base"] = "cannot_connect"
+                except Exception:  # noqa: BLE001
+                    _LOGGER.exception("Unexpected E|Forsyning error during setup")
+                    errors["base"] = "unknown"
+                else:
+                    self._ef_pending = {
+                        CONF_BACKEND: BACKEND_EFORSYNING,
+                        CONF_UTILITY: u.get("name") or "E|Forsyning",
+                        CONF_UTILITY_ID: u.get("id", CUSTOM_EFORSYNING["id"]),
+                        CONF_UTILITY_STATUS: u.get("status", "pending_test"),
+                        CONF_PORTAL_URL: u.get("portal_url") or "https://eforsyning.dk/",
+                        CONF_LOCATION_NAME: location_name,
+                        CONF_EF_USERNAME: username,
+                        CONF_EF_PASSWORD: password,
+                        CONF_EF_SUPPLIER_ID: supplier_id,
+                    }
+                    if u.get("latitude") is not None:
+                        self._ef_pending[CONF_LATITUDE] = u["latitude"]
+                        self._ef_pending[CONF_LONGITUDE] = u["longitude"]
+                    self._ef_installations = installs
+                    if len(installs) > 1:
+                        return await self.async_step_eforsyning_installation()
+                    if installs and installs[0].get("InstallationNr") is not None:
+                        self._ef_pending[CONF_EF_INSTALLATION_ID] = str(
+                            installs[0]["InstallationNr"]
+                        )
+                    return self._create_eforsyning_entry()
+
+        fields: dict[Any, Any] = {
+            vol.Required(CONF_EF_USERNAME, default=""): str,
+            vol.Required(CONF_EF_PASSWORD): _PASSWORD_SELECTOR,
+        }
+        if not known_supplier:
+            fields[vol.Required(CONF_EF_SUPPLIER_ID, default="")] = str
+        fields[vol.Optional(CONF_LOCATION_NAME, default=u.get("city", ""))] = str
+        return self.async_show_form(
+            step_id="eforsyning",
+            data_schema=vol.Schema(fields),
+            errors=errors,
+            description_placeholders={
+                "utility_name": str(u.get("name") or "E|Forsyning"),
+                "portal_url": str(u.get("portal_url") or "https://eforsyning.dk/"),
+                "example_url": "https://eforsyning.dk/hjvarme",
+            },
+        )
+
+    async def async_step_eforsyning_installation(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Pick the installation when the account has more than one."""
+        if user_input is not None:
+            self._ef_pending[CONF_EF_INSTALLATION_ID] = str(user_input[CONF_EF_INSTALLATION_ID])
+            return self._create_eforsyning_entry()
+        options = [
+            SelectOptionDict(value=str(i.get("InstallationNr")), label=_installation_label(i))
+            for i in self._ef_installations
+        ]
+        return self.async_show_form(
+            step_id="eforsyning_installation",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(CONF_EF_INSTALLATION_ID, default=options[0]["value"]): SelectSelector(
+                        SelectSelectorConfig(options=options, mode=SelectSelectorMode.DROPDOWN)
+                    )
+                }
+            ),
+        )
+
+    def _create_eforsyning_entry(self) -> FlowResult:
+        data = dict(self._ef_pending)
+        self._ef_pending = {}
+        return self.async_create_entry(
+            title=str(data.get(CONF_UTILITY) or "E|Forsyning"),
+            data=data,
+            options={
+                CONF_AUTO_SYNC: DEFAULT_AUTO_SYNC,
+                CONF_AUTO_SYNC_HOUR: DEFAULT_AUTO_SYNC_HOUR,
+                CONF_SYNC_REMINDER: DEFAULT_SYNC_REMINDER_BY_BACKEND[BACKEND_EFORSYNING],
+            },
+        )
+
     async def async_step_reconfigure(
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
@@ -262,6 +448,8 @@ class KMDEasyEnergyConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         entry = self._get_reconfigure_entry()
         current_data = {**entry.data, **entry.options}
         utility_name = str(current_data.get(CONF_UTILITY) or entry.title or "KMD Easy Energy")
+        if entry.data.get(CONF_BACKEND) == BACKEND_EFORSYNING:
+            return await self.async_step_reconfigure_eforsyning(user_input)
 
         if user_input is not None:
             portal_url = (user_input.get(CONF_PORTAL_URL) or current_data.get(CONF_PORTAL_URL) or "").strip()
@@ -323,6 +511,56 @@ class KMDEasyEnergyConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         )
 
 
+    async def async_step_reconfigure_eforsyning(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Change forbrugernummer / webpinkode / forsyningid (empty pinkode = keep)."""
+        errors: dict[str, str] = {}
+        entry = self._get_reconfigure_entry()
+        data = dict(entry.data)
+        if user_input is not None:
+            username = str(user_input.get(CONF_EF_USERNAME) or "").strip()
+            password = str(user_input.get(CONF_EF_PASSWORD) or "") or str(
+                data.get(CONF_EF_PASSWORD) or ""
+            )
+            supplier_id = str(
+                user_input.get(CONF_EF_SUPPLIER_ID) or data.get(CONF_EF_SUPPLIER_ID) or ""
+            ).strip()
+            try:
+                await async_validate_eforsyning(self.hass, username, password, supplier_id)
+            except EforsyningLoginError:
+                errors["base"] = "invalid_auth"
+            except EforsyningError:
+                errors["base"] = "cannot_connect"
+            except Exception:  # noqa: BLE001
+                _LOGGER.exception("Unexpected E|Forsyning error during reconfigure")
+                errors["base"] = "unknown"
+            else:
+                return self.async_update_reload_and_abort(
+                    entry,
+                    data_updates={
+                        CONF_EF_USERNAME: username,
+                        CONF_EF_PASSWORD: password,
+                        CONF_EF_SUPPLIER_ID: supplier_id,
+                    },
+                )
+        schema = vol.Schema(
+            {
+                vol.Required(CONF_EF_USERNAME, default=str(data.get(CONF_EF_USERNAME) or "")): str,
+                vol.Optional(CONF_EF_PASSWORD, default=""): _PASSWORD_SELECTOR,
+                vol.Required(
+                    CONF_EF_SUPPLIER_ID, default=str(data.get(CONF_EF_SUPPLIER_ID) or "")
+                ): str,
+            }
+        )
+        return self.async_show_form(
+            step_id="reconfigure_eforsyning",
+            data_schema=schema,
+            errors=errors,
+            description_placeholders={"utility_name": str(data.get(CONF_UTILITY) or entry.title)},
+        )
+
+
 class KMDEasyEnergyOptionsFlow(config_entries.OptionsFlow):
     """Handle options for KMD Easy Energy."""
 
@@ -333,6 +571,8 @@ class KMDEasyEnergyOptionsFlow(config_entries.OptionsFlow):
             return self.async_create_entry(title="", data=user_input)
 
         opts = {**self.config_entry.data, **self.config_entry.options}
+        backend = str(self.config_entry.data.get(CONF_BACKEND) or BACKEND_KMD)
+        reminder_default = DEFAULT_SYNC_REMINDER_BY_BACKEND.get(backend, DEFAULT_SYNC_REMINDER)
         schema = vol.Schema(
             {
                 vol.Required(
@@ -383,8 +623,21 @@ class KMDEasyEnergyOptionsFlow(config_entries.OptionsFlow):
                 ): vol.Coerce(float),
                 vol.Optional(
                     CONF_SYNC_REMINDER,
-                    default=bool(opts.get(CONF_SYNC_REMINDER, DEFAULT_SYNC_REMINDER)),
+                    default=bool(opts.get(CONF_SYNC_REMINDER, reminder_default)),
                 ): bool,
             }
         )
+        if backend == BACKEND_EFORSYNING:
+            schema = schema.extend(
+                {
+                    vol.Optional(
+                        CONF_AUTO_SYNC,
+                        default=bool(opts.get(CONF_AUTO_SYNC, DEFAULT_AUTO_SYNC)),
+                    ): bool,
+                    vol.Optional(
+                        CONF_AUTO_SYNC_HOUR,
+                        default=int(opts.get(CONF_AUTO_SYNC_HOUR, DEFAULT_AUTO_SYNC_HOUR)),
+                    ): vol.All(vol.Coerce(int), vol.Range(min=0, max=23)),
+                }
+            )
         return self.async_show_form(step_id="init", data_schema=schema)

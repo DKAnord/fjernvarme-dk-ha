@@ -135,3 +135,14 @@ start_mitid_sync:
       required: false
       selector:
         text:
+
+sync:
+  name: Sync now
+  description: Fetch new data. KMD utilities - one MitID login (same as start_mitid_sync). E|Forsyning utilities - login with consumer number and web PIN.
+  fields:
+    entry_id:
+      name: Config entry ID
+      description: Optional – defaults to the first entry
+      required: false
+      selector:
+        text:

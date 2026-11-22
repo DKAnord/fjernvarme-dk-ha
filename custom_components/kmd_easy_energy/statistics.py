@@ -72,6 +72,10 @@ def import_hourly_statistics(
     check_config). Uses async_add_external_statistics so the Energy dashboard
     can pick `kmd_easy_energy:energy_<entry>` / `:volume_<entry>` instead of
     the month-to-date entity sensors.
+
+    Backends without hourly data (E|Forsyning) provide ``daily_stat_kwh`` /
+    ``daily_stat_m3``: one row per day at local midnight, so the Energy
+    dashboard shows correct daily totals (not an hourly profile).
     """
     components = getattr(getattr(hass, "config", None), "components", None)
     if not components or "recorder" not in components:
@@ -89,7 +93,7 @@ def import_hourly_statistics(
     series = (
         (
             "energy",
-            state.get("hourly_kwh") or [],
+            state.get("hourly_kwh") or state.get("daily_stat_kwh") or [],
             energy_statistic_id(entry.entry_id),
             f"{title} energy (hourly)",
             UnitOfEnergy.KILO_WATT_HOUR,
@@ -97,7 +101,7 @@ def import_hourly_statistics(
         ),
         (
             "volume",
-            state.get("hourly_m3") or [],
+            state.get("hourly_m3") or state.get("daily_stat_m3") or [],
             volume_statistic_id(entry.entry_id),
             f"{title} volume (hourly)",
             UnitOfVolume.CUBIC_METERS,

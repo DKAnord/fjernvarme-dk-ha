@@ -57,6 +57,14 @@ TO_REDACT = {
     "latitude",
     "longitude",
     "notify_service",
+    # E|Forsyning credentials / identifiers
+    "eforsyning_username",
+    "eforsyning_password",
+    "eforsyning_installation_id",
+    "ForbrugerNr",
+    "MålerNr",
+    "Adresse",
+    "EjendomNr",
 }
 
 
@@ -76,6 +84,16 @@ def _summarize_coordinator(data: dict[str, Any] | None) -> dict[str, Any]:
         "utility": data.get("utility"),
         "utility_id": data.get("utility_id"),
         "utility_status": data.get("utility_status"),
+        "backend": data.get("backend", "kmd"),
+        "data_granularity": data.get("data_granularity", "hourly"),
+        "auto_sync": data.get("auto_sync"),
+        "daily_kwh_days": _series_len(data.get("daily_kwh_history")),
+        "eforsyning": {
+            "years": (data.get("eforsyning") or {}).get("years"),
+            "readings_last_fetch": (data.get("eforsyning") or {}).get("readings_last_fetch"),
+        }
+        if data.get("eforsyning")
+        else None,
         "location": data.get("location"),
         "last_sync": data.get("last_sync"),
         "sync_reminder": data.get("sync_reminder"),

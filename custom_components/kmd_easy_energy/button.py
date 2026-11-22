@@ -33,12 +33,15 @@ class KMDSyncButton(CoordinatorEntity[KMDEasyEnergyCoordinator], ButtonEntity):
         super().__init__(coordinator)
         self._entry = entry
         self._attr_unique_id = f"{entry.entry_id}_sync"
+        # E|Forsyning needs no MitID: "Synkroniser nu" instead of "Synkroniser (MitID)".
+        if getattr(coordinator, "is_eforsyning", False) is True:
+            self._attr_translation_key = "sync_now"
         self._attr_device_info = {
             "identifiers": {(DOMAIN, entry.entry_id)},
             "name": entry.title or "KMD Easy Energy",
-            "manufacturer": "KMD",
+            "manufacturer": "E|Forsyning" if getattr(coordinator, "is_eforsyning", False) is True else "KMD",
         }
 
     async def async_press(self) -> None:
-        """Start pure-Python MitID sync directly inside Home Assistant."""
-        await self.coordinator.async_start_mitid_sync()
+        """Sync now: MitID login (KMD) or forbrugernummer login (E|Forsyning)."""
+        await self.coordinator.async_start_sync()

@@ -13,6 +13,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
+from .capabilities import CAP_DAILY, CAP_REMINDER, CAP_TEMPERATURES
 from .const import DOMAIN
 from .coordinator import KMDEasyEnergyCoordinator
 from .insights import STATUS_PENALTY
@@ -25,13 +26,15 @@ async def async_setup_entry(
 ) -> None:
     """Set up KMD Easy Energy binary sensors."""
     coordinator: KMDEasyEnergyCoordinator = hass.data[DOMAIN][entry.entry_id]
-    async_add_entities(
-        [
-            KMDMotivationPenaltyBinarySensor(coordinator, entry),
-            KMDAbnormalConsumptionBinarySensor(coordinator, entry),
-            KMDSyncReminderBinarySensor(coordinator, entry),
-        ]
-    )
+    entities: list[BinarySensorEntity] = []
+    # Only create what the backend can fill (no permanently "unknown" entities).
+    if CAP_TEMPERATURES in coordinator.backend_capabilities:
+        entities.append(KMDMotivationPenaltyBinarySensor(coordinator, entry))
+    if CAP_DAILY in coordinator.backend_capabilities:
+        entities.append(KMDAbnormalConsumptionBinarySensor(coordinator, entry))
+    if CAP_REMINDER in coordinator.backend_capabilities:
+        entities.append(KMDSyncReminderBinarySensor(coordinator, entry))
+    async_add_entities(entities)
 
 
 class KMDBaseBinarySensor(

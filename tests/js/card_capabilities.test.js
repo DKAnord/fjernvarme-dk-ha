@@ -1,0 +1,115 @@
+// Node harness: capability-driven rendering + E|Forsyning backend (no real HA / network).
+"use strict";
+const fs = require("fs");
+const path = require("path");
+const assert = require("assert");
+
+class FakeShadow {
+  constructor() { this.innerHTML = ""; this.els = {}; }
+  getElementById(id) {
+    if (!this.innerHTML.includes(`id="${id}"`)) return null;
+    if (!this.els[id]) this.els[id] = { id, value: "", listeners: {}, addEventListener(ev, fn) { this.listeners[ev] = fn; }, setAttribute() {}, style: {}, classList: { add() {}, remove() {}, toggle() {} } };
+    return this.els[id];
+  }
+  querySelector() { return null; }
+  querySelectorAll() { return []; }
+}
+global.HTMLElement = class { attachShadow() { this.shadowRoot = new FakeShadow(); return this.shadowRoot; } };
+const defined = {};
+global.customElements = { get: (n) => defined[n], define: (n, c) => { defined[n] = c; } };
+global.window = global;
+global.document = { createElement: () => ({}) };
+global.setInterval = () => 0;
+global.clearInterval = () => {};
+eval(fs.readFileSync(path.join(__dirname, "../../custom_components/kmd_easy_energy/frontend/kmd-easy-energy-card.js"), "utf8"));
+const Card = defined["kmd-easy-energy-card"];
+
+function mkHass(attrs, calls) {
+  return {
+    states: {
+      "sensor.kredslob_overview": {
+        entity_id: "sensor.kredslob_overview", state: "1234",
+        attributes: Object.assign({
+          utility_id: "kredslob", entry_id: "e1", portal_url: "https://minvarme.kredslob.dk/",
+          initial_setup_complete: true,
+          annual: { "2026": 1234 }, monthly: { "2026": { Jan: 100 } }, daily: { days: { "1": 10, "2": 11 }, month: "November 2026", total: 21, gennemsnit: 10.5 },
+        }, attrs),
+      },
+    },
+    services: { notify: {} },
+    language: "da",
+    connection: { subscribeMessage: () => Promise.resolve(() => {}) },
+    callService: async (d, s, data) => { calls.push([d, s, data]); },
+  };
+}
+
+
+const ALL_KMD = ["billing", "cost", "daily", "forecast", "hourly", "mitid", "monthly", "reminder", "temperatures", "volume"];
+const EF_ATTRS = {
+  backend: "eforsyning", data_source: "E|Forsyning", utility: "Hjørring Varmeforsyning",
+  utility_id: "hjorring-varmeforsyning", portal_url: "https://eforsyning.dk/hjvarme/",
+  auto_sync: true, auto_sync_hour: 6, hourly: {}, billing: {}, forecast: {},
+  return_temp: { annual: { "2026": 31.2 }, monthly_2026: { Nov: 31.2 } },
+  capabilities: ["auto_sync", "cost", "daily", "monthly", "temperatures", "volume"],
+};
+const render = (attrs, calls) => { const c = new Card(); c.setConfig({}); c.hass = mkHass(attrs, calls); return c; };
+const sections = (html) => (html.match(/data-section="([^"]+)"/g) || []).map((m) => m.slice(14, -1));
+
+// 1) KMD with all capabilities: every section present, MitID wording available.
+let calls = [];
+let card = render({ capabilities: ALL_KMD, backend: "kmd", hourly: { kwh: Array(24).fill(1) } }, calls);
+let html = card.shadowRoot.innerHTML;
+for (const s of ["monthly", "return-temp", "hourly", "mtd-ytd", "daily", "ins-hourly", "ins-temp"]) {
+  assert.ok(sections(html).includes(s), `KMD shows ${s}`);
+}
+assert.ok(html.includes("Afregning") || html.includes("kr."), "billing tile shown for KMD");
+assert.ok(!html.includes('class="src-note"'), "no data-source note for KMD");
+
+// 2) E|Forsyning: no hourly graph/insight, no billing/forecast tiles, note shown, no MitID.
+calls = [];
+card = render(EF_ATTRS, calls);
+html = card.shadowRoot.innerHTML;
+const secs = sections(html);
+assert.ok(!secs.includes("hourly") && !secs.includes("ins-hourly"), "no hourly sections without hourly data");
+assert.ok(secs.includes("daily") && secs.includes("monthly") && secs.includes("return-temp"), "daily/monthly/temp shown");
+assert.ok(!html.includes("Saldo"), "no billing tile");
+assert.ok(!/budget/.test(html), "no forecast tile");
+assert.ok(html.includes("Data fra E|Forsyning"), "data-source note");
+assert.ok(html.includes("daglige aflæsninger"), "granularity note");
+assert.ok(!/MitID/.test(html), "no MitID UI or wording for E|Forsyning");
+assert.ok(html.includes("Hjørring Varmeforsyning"), "utility name from integration");
+card.shadowRoot.getElementById("syncBtn").listeners.click();
+assert.deepStrictEqual(calls.pop(), ["kmd_easy_energy", "sync", { entry_id: "e1" }], "sync service, not start_mitid_sync");
+
+// 3) No temperatures capability -> no temp KPI, panel or insight.
+calls = [];
+card = render(Object.assign({}, EF_ATTRS, { capabilities: ["daily", "monthly"] }), calls);
+html = card.shadowRoot.innerHTML;
+assert.ok(!sections(html).includes("return-temp") && !sections(html).includes("ins-temp"), "temp sections hidden");
+assert.ok(!html.includes("Bonus-zone") && !html.includes("Grænser:"), "temp KPI hidden");
+
+// 4) E|Forsyning first-time setup: simple onboarding, no MitID wizard.
+calls = [];
+card = render(Object.assign({}, EF_ATTRS, { initial_setup_complete: false, annual: {}, monthly: {}, daily: {} }), calls);
+html = card.shadowRoot.innerHTML;
+assert.ok(html.includes('id="efSyncBtn"'), "E|Forsyning onboarding button");
+assert.ok(!html.includes('id="mitidUserInput"') && !html.includes("startMitidBtn"), "no MitID wizard");
+card.shadowRoot.getElementById("efSyncBtn").listeners.click();
+assert.deepStrictEqual(calls.pop()[1], "sync");
+
+// 5) Legacy attributes without capabilities -> everything shown (backwards compatible).
+calls = [];
+card = render({ hourly: { kwh: Array(24).fill(1) } }, calls);
+html = card.shadowRoot.innerHTML;
+assert.ok(sections(html).includes("hourly") && html.includes("Saldo"), "legacy: all sections");
+card.shadowRoot.getElementById("syncBtn").listeners.click();
+assert.strictEqual(calls.pop()[1], "start_mitid_sync");
+
+// 6) MitID wizard utility list only offers KMD utilities.
+calls = [];
+card = render({ capabilities: ALL_KMD, initial_setup_complete: false, annual: {}, monthly: {}, daily: {} }, calls);
+html = card.shadowRoot.innerHTML;
+assert.ok(html.includes('id="mitidUserInput"'), "KMD wizard");
+assert.ok(!html.includes('value="hjorring-varmeforsyning"'), "E|Forsyning utility not in MitID wizard");
+
+console.log("card_capabilities.test.js: OK");

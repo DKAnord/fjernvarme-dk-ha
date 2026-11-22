@@ -583,7 +583,26 @@
       const qrSvg = this._mitidQr || "";
       const hasMitidUser = Boolean(a.has_mitid_username);
       const mitidMasked = a.mitid_username_masked || "";
-      const notifySvc = this._wizNotify ?? (a.notify_service || "");
+      const notifySvc = String(this._wizNotify ?? (a.notify_service || "")).replace(/^notify\./, "").trim();
+      const rawNotify = Object.keys(this._hass?.services?.notify || {})
+        .filter((s) => !["persistent_notification", "send_message", "notify"].includes(s));
+      const mobileNotify = rawNotify.filter((s) => s.startsWith("mobile_app_")).sort();
+      const otherNotify = rawNotify.filter((s) => !s.startsWith("mobile_app_")).sort();
+      const allNotifyIds = [...mobileNotify, ...otherNotify];
+      const isCustomNotify = Boolean(this._wizNotifyCustom) || (Boolean(notifySvc) && !allNotifyIds.includes(notifySvc));
+      const fmtMobileLabel = (s) => `📱 ${s.slice("mobile_app_".length).replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())} (${s})`;
+      const mobileNotifyOpts = mobileNotify
+        .map((s) => `<option value="${esc(s)}" ${!isCustomNotify && s === notifySvc ? "selected" : ""}>${esc(fmtMobileLabel(s))}</option>`).join("");
+      const otherNotifyOpts = otherNotify
+        .map((s) => `<option value="${esc(s)}" ${!isCustomNotify && s === notifySvc ? "selected" : ""}>🔔 ${esc(s)}</option>`).join("");
+      const notifySelectHtml = `
+        <select id="notifySel" aria-label="Select notify service">
+          <option value="" ${!isCustomNotify && !notifySvc ? "selected" : ""}>— Ingen mobil-push (kun notifikation i HA) —</option>
+          ${mobileNotifyOpts ? `<optgroup label="📱 Telefoner (Home Assistant App)">${mobileNotifyOpts}</optgroup>` : ""}
+          ${otherNotifyOpts ? `<optgroup label="🔔 Øvrige notify-tjenester">${otherNotifyOpts}</optgroup>` : ""}
+          <option value="__custom__" ${isCustomNotify ? "selected" : ""}>✏️ Andet (indtast manuelt)…</option>
+        </select>
+        ${isCustomNotify ? `<input id="notifyInput" value="${esc(notifySvc)}" placeholder="f.eks. mobile_app_min_telefon" style="margin-top:6px" />` : ""}`;
       const tokenExpired = Boolean(a.token_expired);
       const hasData = Boolean(
         st && (Object.keys(ann).length > 0 || Object.keys(mon).length > 0 || Object.keys(dy.days || {}).length > 0)
@@ -829,7 +848,7 @@
                 <input id="mitidUserInput" value="${esc(this._wizMitidUser || "")}" placeholder="${hasMitidUser ? `Gemt i HA (${esc(mitidMasked)}) — udfyld kun for at ændre` : "Indtast dit MitID Bruger-ID"}" />
               </label>
               <label class="ob-field">Mobil Push-service (valgfri, til kode på telefon)
-                <input id="notifyInput" value="${esc(notifySvc)}" placeholder="f.eks. mobile_app_min_telefon" />
+                ${notifySelectHtml}
               </label>
             </div>
             <div class="ob-step">2. Forbind med 1-klik MitID-synkronisering (Anbefalet — 100% i Home Assistant)</div>
@@ -1058,13 +1077,17 @@
         });
       }
       const readWizPayload = (startSync, completeSetup) => {
+        const notifySelEl = this.shadowRoot.getElementById("notifySel");
+        const notifyVal = notifySelEl && notifySelEl.value !== "__custom__"
+          ? notifySelEl.value.trim()
+          : (this.shadowRoot.getElementById("notifyInput")?.value?.trim() ?? notifySvc);
         const p = {
           utility_id: this._selectedUtilId || activeUtilId,
           portal_url: this.shadowRoot.getElementById("portalUrlInput")?.value?.trim() || wizPortalUrl,
           location_name: this.shadowRoot.getElementById("locInput")?.value?.trim() ?? wizLocation,
           bonus_temp: Number(this.shadowRoot.getElementById("bonusInput")?.value ?? wizBonus),
           penalty_temp: Number(this.shadowRoot.getElementById("penaltyInput")?.value ?? wizPenalty),
-          notify_service: this.shadowRoot.getElementById("notifyInput")?.value?.trim() ?? notifySvc,
+          notify_service: notifyVal,
           start_sync: startSync,
           complete_setup: completeSetup,
         };
@@ -1072,6 +1095,18 @@
         if (mu) p.mitid_username = mu;
         return p;
       };
+      const notifySel = this.shadowRoot.getElementById("notifySel");
+      if (notifySel) {
+        notifySel.addEventListener("change", (ev) => {
+          if (ev.target.value === "__custom__") {
+            this._wizNotifyCustom = true;
+          } else {
+            this._wizNotifyCustom = false;
+            this._wizNotify = ev.target.value;
+          }
+          this._render();
+        });
+      }
       [
         ["mitidUserInput", "_wizMitidUser"],
         ["portalUrlInput", "_wizPortalUrl"],

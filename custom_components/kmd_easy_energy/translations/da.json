@@ -70,6 +70,7 @@
         "data": {
           "portal_url": "Portal-URL",
           "location_name": "By / Lokationsnavn",
+          "notify_service": "Mobil push-service (valgfri, til MitID-kode)",
           "bonus_temp": "Bonusgrænse returtemperatur (°C)",
           "penalty_temp": "Gebyrgrænse returtemperatur (°C)",
           "latitude": "Breddegrad (Open-Meteo vejr)",

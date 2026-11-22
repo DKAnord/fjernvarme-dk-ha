@@ -18,3 +18,4 @@ jobs:
         with:
           files: dist/kmd-easy-energy-card.js
           generate_release_notes: true
+          prerelease: ${{ contains(github.ref_name, '-') }}

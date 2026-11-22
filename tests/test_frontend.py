@@ -29,3 +29,9 @@ def test_card_keeps_upstream_peak_detection() -> None:
     assert "identifyPeakHours" in js
     assert "_renderHourlyAvgSvg" in js
     assert "spidstimer" in js
+
+
+def test_card_has_notify_service_dropdown() -> None:
+    js = CARD.read_text()
+    assert "notifySel" in js
+    assert "services?.notify" in js

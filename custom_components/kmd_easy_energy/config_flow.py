@@ -89,6 +89,45 @@ def _format_utility_label(u: dict[str, Any]) -> str:
     return f"🧪 {u['name']}{city} — Afventer 1. test / Pending test"
 
 
+def _notify_service_selector(hass: Any, current: str = "") -> SelectSelector:
+    """Build a dropdown selector of available Home Assistant notify services."""
+    services_map: dict[str, Any] = {}
+    try:
+        all_services = hass.services.async_services() if hass and hasattr(hass, "services") else {}
+        if isinstance(all_services, dict):
+            raw_notify = all_services.get("notify") or {}
+            if isinstance(raw_notify, dict):
+                services_map = raw_notify
+    except Exception:  # noqa: BLE001
+        services_map = {}
+
+    excluded = {"persistent_notification", "send_message", "notify"}
+    names = [str(k) for k in services_map if str(k) not in excluded]
+    mobile = sorted(n for n in names if n.startswith("mobile_app_"))
+    other = sorted(n for n in names if not n.startswith("mobile_app_"))
+
+    options: list[SelectOptionDict] = [
+        SelectOptionDict(value="", label="— Ingen mobil-push / None —"),
+    ]
+    for svc in mobile:
+        friendly = svc[len("mobile_app_") :].replace("_", " ").title()
+        options.append(SelectOptionDict(value=svc, label=f"📱 {friendly} ({svc})"))
+    for svc in other:
+        options.append(SelectOptionDict(value=svc, label=f"🔔 {svc}"))
+
+    cur = str(current or "").replace("notify.", "").strip()
+    if cur and cur not in names:
+        options.append(SelectOptionDict(value=cur, label=cur))
+
+    return SelectSelector(
+        SelectSelectorConfig(
+            options=options,
+            mode=SelectSelectorMode.DROPDOWN,
+            custom_value=True,
+        )
+    )
+
+
 class KMDEasyEnergyConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Handle a 2-step config flow for KMD Easy Energy."""
 
@@ -285,7 +324,7 @@ class KMDEasyEnergyConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             {
                 vol.Required(CONF_PORTAL_URL, default=u.get("portal_url", "https://")): str,
                 vol.Optional(CONF_MITID_USERNAME, default=""): str,
-                vol.Optional(CONF_NOTIFY_SERVICE, default=""): str,
+                vol.Optional(CONF_NOTIFY_SERVICE, default=""): _notify_service_selector(self.hass),
                 vol.Optional(CONF_ACCESS_TOKEN, default=""): str,
                 vol.Optional(CONF_CUSTOMER_ID, default=""): str,
                 vol.Optional(CONF_LOCATION_NAME, default=u.get("city", "")): str,
@@ -360,8 +399,10 @@ class KMDEasyEnergyConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 ): str,
                 vol.Optional(
                     CONF_NOTIFY_SERVICE,
-                    default=current_data.get(CONF_NOTIFY_SERVICE, ""),
-                ): str,
+                    default=str(current_data.get(CONF_NOTIFY_SERVICE, "")).replace("notify.", "").strip(),
+                ): _notify_service_selector(
+                    self.hass, str(current_data.get(CONF_NOTIFY_SERVICE, ""))
+                ),
                 vol.Optional(CONF_ACCESS_TOKEN, default=""): str,
                 vol.Optional(
                     CONF_CUSTOMER_ID,
@@ -458,8 +499,10 @@ class KMDEasyEnergyConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 ): str,
                 vol.Optional(
                     CONF_NOTIFY_SERVICE,
-                    default=current.get(CONF_NOTIFY_SERVICE, ""),
-                ): str,
+                    default=str(current.get(CONF_NOTIFY_SERVICE, "")).replace("notify.", "").strip(),
+                ): _notify_service_selector(
+                    self.hass, str(current.get(CONF_NOTIFY_SERVICE, ""))
+                ),
                 vol.Optional(CONF_ACCESS_TOKEN, default=""): str,
                 vol.Optional(
                     CONF_CUSTOMER_ID,
@@ -549,6 +592,12 @@ class KMDEasyEnergyOptionsFlow(config_entries.OptionsFlow):
                     CONF_LOCATION_NAME,
                     default=opts.get(CONF_LOCATION_NAME, ""),
                 ): str,
+                vol.Optional(
+                    CONF_NOTIFY_SERVICE,
+                    default=str(opts.get(CONF_NOTIFY_SERVICE, "")).replace("notify.", "").strip(),
+                ): _notify_service_selector(
+                    self.hass, str(opts.get(CONF_NOTIFY_SERVICE, ""))
+                ),
                 vol.Optional(
                     CONF_BONUS_TEMP,
                     default=float(opts.get(CONF_BONUS_TEMP, 30.0)),

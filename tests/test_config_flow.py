@@ -60,3 +60,30 @@ def test_strings_cover_reauth() -> None:
 def test_services_include_start_mitid_sync() -> None:
     text = (ROOT / "custom_components/kmd_easy_energy/services.yaml").read_text()
     assert "start_mitid_sync:" in text
+
+
+def test_notify_service_selector_discovers_mobile_first() -> None:
+    from types import SimpleNamespace
+    from unittest.mock import MagicMock
+    from kmd_easy_energy.config_flow import _notify_service_selector
+
+    hass = SimpleNamespace(
+        services=SimpleNamespace(
+            async_services=MagicMock(
+                return_value={
+                    "notify": {
+                        "persistent_notification": {},
+                        "send_message": {},
+                        "slack_alerts": {},
+                        "mobile_app_phone_b": {},
+                        "mobile_app_phone_a": {},
+                    }
+                }
+            )
+        )
+    )
+    sel = _notify_service_selector(hass, current="notify.legacy_custom")
+    opts = sel.config["options"]
+    vals = [o["value"] for o in opts]
+    assert vals == ["", "mobile_app_phone_a", "mobile_app_phone_b", "slack_alerts", "legacy_custom"]
+    assert sel.config["custom_value"] is True

@@ -70,6 +70,7 @@
         "data": {
           "portal_url": "Portal URL",
           "location_name": "City / Location label",
+          "notify_service": "Mobile push notify service (optional)",
           "bonus_temp": "Return temp bonus threshold (°C)",
           "penalty_temp": "Return temp penalty threshold (°C)",
           "latitude": "Latitude (Open-Meteo weather)",

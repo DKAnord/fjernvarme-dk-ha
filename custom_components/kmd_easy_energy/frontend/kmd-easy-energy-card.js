@@ -78,7 +78,7 @@
   const UTILITIES = [
     { id: "kredslob", name: "Kredsløb", city: "Aarhus", url: "https://minvarme.kredslob.dk/", status: "confirmed" },
     { id: "galten-varmevaerk", name: "Galten Varmeværk", city: "Galten", url: "https://minvarme.kredslob.dk/", status: "pending_test" },
-    { id: "energi-ikast", name: "Energi Ikast", city: "Ikast", url: "https://energi-ikast.dk/", status: "pending_test" },
+    { id: "energi-ikast", name: "Energi Ikast", city: "Ikast", url: "https://energi-ikast.dk/", status: "confirmed" },
     { id: "struer-energi", name: "Struer Energi", city: "Struer", url: "https://struerenergi.dk/selvbetjening/", status: "pending_test" },
     { id: "envafors", name: "Envafors / SK Forsyning", city: "Slagelse / Næstved", url: "https://skenergi.dk/minforsyning/", status: "pending_test" },
     { id: "frederikshavn-forsyning", name: "Frederikshavn Forsyning", city: "Frederikshavn", url: "https://www.forsyningen.dk/selvbetjening", status: "pending_test" },
@@ -1415,6 +1415,11 @@
       }
       const buildFeedbackBody = (kind) => {
         const units = Array.isArray(a.available_units) ? a.available_units.map((u) => u.Name).filter(Boolean).join(", ") : "ukendt";
+        const authMethodLabel = backend === "wattson"
+          ? "Watts On (OAuth PKCE)"
+          : backend === "eforsyning"
+            ? "E|Forsyning (Forbrugernummer + webpinkode)"
+            : "Pure-HA MitID (SRP + OIDC PKCE)";
         return [
           `### Utility Verification Report (${kind})`,
           `- **Utility ID:** \`${activeUtilId}\``,
@@ -1423,7 +1428,7 @@
           `- **Status:** ${kind}`,
           `- **Discovered Units:** ${units || "none"}`,
           `- **Direct Temp Unit:** ${Boolean(a.has_direct_temp)}`,
-          `- **Auth Method:** Pure-HA MitID (SRP + OIDC PKCE)`,
+          `- **Auth Method:** ${authMethodLabel}`,
           `- **Card/Integration Version:** ${VER}`,
           ``,
           `_Sanitized report: contains no MitID ID, tokens, customer numbers, or consumption values._`,

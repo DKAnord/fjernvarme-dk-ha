@@ -7,7 +7,7 @@ Komplet, **100% lokal** Home Assistant-integration (`kmd_easy_energy`) og **Plug
 Log ind med **MitID direkte i Home Assistant** i ren Python (OIDC PKCE + NemLog-in + MitID SRP) — **ingen Chromium, ingen ekstern server eller add-on** påkrævet. Kører direkte på Raspberry Pi, Home Assistant OS og Docker.
 
 > [!NOTE]
-> **`v0.3.6` er stabil for KMD / Kredsløb og for Watts On hos Aalborg Forsyning.** Integrationen er testet live hos **Kredsløb** og **Aalborg Forsyning** (Watts On). De øvrige 15 KMD-værker og brugerdefineret portal-URL afventer stadig live-test. **E|Forsyning** (Hjørring Varmeforsyning) er eksperimentel og ikke afprøvet live. **Watts On** er eksperimentel og uofficiel: Aalborg er bekræftet live; Forsyning Helsingør, Fjernvarme Fyn og Hillerød Forsyning afventer første test — beta-testere søges. Alle tilbagemeldinger er guld værd — også *"det virker ikke hos mit værk"*. Brug feedback-knappen på kortet eller [opret et issue](https://github.com/DKAnord/fjernvarme-dk-ha/issues) med navnet på dit værk.
+> **`v0.3.6` er stabil for KMD (Kredsløb og Energi Ikast / Min Forsyning 2) og for Watts On hos Aalborg Forsyning.** Integrationen er testet live hos **Kredsløb**, **Energi Ikast** og **Aalborg Forsyning** (Watts On). De øvrige 14 KMD-værker og brugerdefineret portal-URL afventer stadig live-test. **E|Forsyning** (Hjørring Varmeforsyning) er eksperimentel og ikke afprøvet live. **Watts On** er eksperimentel og uofficiel: Aalborg er bekræftet live; Forsyning Helsingør, Fjernvarme Fyn og Hillerød Forsyning afventer første test — beta-testere søges. Alle tilbagemeldinger er guld værd — også *"det virker ikke hos mit værk"*. Brug feedback-knappen på kortet eller [opret et issue](https://github.com/DKAnord/fjernvarme-dk-ha/issues) med navnet på dit værk.
 
 ---
 
@@ -40,13 +40,13 @@ Log ind med **MitID direkte i Home Assistant** i ren Python (OIDC PKCE + NemLog-
 | Værk | By | Login-portal | Status |
 |---|---|---|---|
 | **Kredsløb** | Aarhus / Brabrand | https://minvarme.kredslob.dk/ | ✅ Bekræftet (KMD) |
+| **Energi Ikast** | Ikast | https://energi-ikast.dk/ | ✅ Bekræftet (KMD / Min Forsyning 2) |
 | **Aalborg Forsyning** | Aalborg | https://aalborgforsyning.dk/services/forbrug/watts-on/ | ✅ Bekræftet (Watts On) |
 
 ### 🧪 Afventer første test (Verificerede KMD / Min Forsyning-portaler)
 | Værk | By | Login-portal | Status |
 |---|---|---|---|
 | **Galten Varmeværk** | Galten | https://minvarme.kredslob.dk/ | 🧪 Afventer 1. test |
-| **Energi Ikast** | Ikast | https://energi-ikast.dk/ | 🧪 Afventer 1. test |
 | **Struer Energi** | Struer | https://struerenergi.dk/selvbetjening/ | 🧪 Afventer 1. test |
 | **Envafors / SK Forsyning** | Slagelse / Næstved / Sorø | https://skenergi.dk/minforsyning/ | 🧪 Afventer 1. test |
 | **Frederikshavn Forsyning** | Frederikshavn | https://www.forsyningen.dk/selvbetjening | 🧪 Afventer 1. test |
@@ -304,5 +304,6 @@ En stor tak til de udviklere og brugere, der har gjort denne integration mulig p
 - **[TheRealBatBro/Home-Assistant-Novafos-V2](https://github.com/TheRealBatBro/Home-Assistant-Novafos-V2)** *(MIT)* — Oprindelig Home Assistant-integration til **Watts On** (Novafos vand). Azure AD B2C + PKCE-loginflowet og Watts On API-strukturen er lært derfra og genimplementeret i `api/wattson_client.py`.
 - **[Hundter/MitID-BrowserClient](https://github.com/Hundter/MitID-BrowserClient)** *(MIT)* — MitID SRP-klienten, der gør 100 % lokalt MitID-login muligt direkte i Home Assistant uden ekstern browser.
 - **[@dkvand](https://github.com/dkvand)** — Live-test, sparring, PR #9 (Aalborg Forsynings varme-endpoint og felter på Watts On) samt inspiration til kr.-estimatpanelet på dashboardet.
+- **[@BenzDK](https://github.com/BenzDK)** — Live-test og bekræftelse af **Energi Ikast** / Min Forsyning 2 ([issue #19](https://github.com/DKAnord/fjernvarme-dk-ha/issues/19)).
 
 Se [NOTICE](NOTICE) for fulde licens- og copyright-tekster.

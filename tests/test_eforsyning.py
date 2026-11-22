@@ -371,7 +371,9 @@ def test_utilities_json_backend_field_and_hjorring() -> None:
     assert hj["backend"] == "eforsyning"
     assert hj["eforsyning_supplier_id"] == "B30A6948-2461-4827-B8EB-5D93169CCB8B"
     assert hj["portal_url"] == "https://eforsyning.dk/hjvarme/"
-    others = {"hjorring-varmeforsyning", "aalborg-forsyning"}  # aalborg: Watts On backend
+    wattson = {u["id"] for u in data["utilities"] if u.get("backend") == "wattson"}
+    others = {"hjorring-varmeforsyning"} | wattson
+    assert wattson >= {"aalborg-forsyning", "forsyning-helsingor", "fjernvarme-fyn", "hillerod-forsyning"}
     assert all(u["backend"] == "kmd" for k, u in by_id.items() if k not in others)
 
 

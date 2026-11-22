@@ -44,9 +44,16 @@ TOKEN_WARN_AGE = timedelta(minutes=40)
 # Private HA Store version (config/.storage/kmd_easy_energy.<entry_id>)
 STORAGE_VERSION = 1
 
-# Bus event used to show a live MitID challenge in the Lovelace card
-# (OTP / QR are never written to entity state or recorder).
+# Bus event with the MitID sync *status only* (sync_state / sync_message and
+# has_otp / has_qr flags). The recorder stores every bus event, so the OTP and
+# QR are never put on the bus, on entity state, or in the recorder.
 EVENT_MITID_CHALLENGE = "kmd_easy_energy_mitid_challenge"
+
+# Internal dispatcher signal + websocket subscription that deliver the live
+# MitID challenge (4-digit OTP or both animated QR frames) to the Lovelace card.
+# Dispatcher signals and websocket messages are not recorded.
+SIGNAL_MITID_CHALLENGE = "kmd_easy_energy_mitid_challenge_live"
+WS_TYPE_MITID_SUBSCRIBE = "kmd_easy_energy/mitid/subscribe"
 
 # Volume is the district-heating circulating water (m³), not drinking water.
 # SensorDeviceClass.WATER lets the entity be added on the Energy dashboard

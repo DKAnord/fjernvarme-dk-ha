@@ -46,7 +46,7 @@
       },
       "reauth_mitid": {
         "title": "MitID login in progress",
-        "description": "Status: {sync_state}\n{sync_message}\n\nOne-time code (if shown by MitID): {otp_hint}\n\nOpen the MitID app, approve the login, then press Submit to refresh this status."
+        "description": "Status: {sync_state}\n{sync_message}\n\nOne-time code (if shown by MitID): {otp_hint}\n\nOpen the MitID app on your phone. If MitID shows a QR code, scan it on the Fjernvarme dashboard card (works when you set up from a tablet or computer). Approve the login, then press Submit to refresh this status."
       }
     },
     "error": {

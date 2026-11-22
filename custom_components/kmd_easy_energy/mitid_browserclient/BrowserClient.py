@@ -692,9 +692,8 @@ class BrowserClient:
 
             if r.status_code == 200 and r.json()["status"] == "channel_validation_otp":
                 self.status_message = f"Please use the following OTP code in the app: {r.json()['channelBindingValue']}"
-                _LOGGER.info(
-                    f"Please use the following OTP code in the app: {r.json()['channelBindingValue']}"
-                )
+                # Never log the one-time code itself.
+                _LOGGER.info("MitID OTP code is ready in the app flow")
                 continue
 
             if r.status_code == 200 and r.json()["status"] == "channel_validation_tqr":

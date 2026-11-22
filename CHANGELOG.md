@@ -2,12 +2,26 @@
 
 Alle væsentlige ændringer i **Fjernvarme (KMD Easy Energy) – HA Connector & Dashboard** dokumenteres her.
 
+## [Unreleased] (efter 0.3.0-beta.1)
+
+### MitID: QR fra tablet/computer og tydeligere vejledning
+- Kort, README og tekster siger nu tydeligt, at skiftet til 4-cifret engangskode **kun** er nødvendigt, når opsætningen sker på **samme telefon** som MitID-appen. Opsætter man på en tablet eller computer, scanner man bare QR-koden på kortet med MitID-appen.
+- MitID's animerede QR består af to billeder (p=1/p=2), som appen skal se begge. Backend sender nu begge billeder, og kortet skifter mellem dem hvert sekund i browseren. Før skiftede billedet kun, når MitID's long-poll svarede, så appen kunne have svært ved at læse koden.
+- QR-koden vises større (op til 240 px med hvid kant) og med skarpe kanter (`crispEdges`), så den er lettere at scanne fra en skærm.
+- Live-kode/QR leveres nu via integrationens eget websocket-abonnement `kmd_easy_energy/mitid/subscribe` i stedet for et bus-event:
+  - Recorderen gemmer alle bus-events, så engangskode og QR endte tidligere i databasen. Eventet `kmd_easy_energy_mitid_challenge` indeholder nu kun status (`sync_state`, `sync_message`, `has_otp`, `has_qr`).
+  - Virker også for ikke-admin-brugere (typisk vægtablet). `subscribe_events` på et custom event kræver admin.
+  - En tablet, der åbner kortet midt i et login, får den aktuelle QR/kode med det samme.
+- HA-notifikationen oprettes via helperen i stedet for tjenestekaldet `persistent_notification.create` (der ville lægge koden i et `call_service`-event i recorderen). QR-notifikationen oprettes kun én gang pr. login, og QR/kode sendes kun til kortet, når den faktisk ændrer sig.
+- Notifikationen fjernes også ved fejl. Status `verified` (kode/QR godkendt) sendes én gang.
+- Den vendorede `BrowserClient` logger ikke længere selve engangskoden.
+
 ## [0.3.0] - 2026-11-22
 
 ### Sikkerhed og privatliv
 - Forbrugscache skrives nu til Home Assistants private `.storage` (`kmd_easy_energy.<entry_id>`), ikke til den uautentificerede `www/`-mappe (`/local/varme/...`).
 - Eksisterende `www/varme/kmd_easy_energy_cache*.json` migreres automatisk og slettes bagefter. Filen `www/varme/data.json` bruges ikke længere som seed.
-- MitID-engangskode og QR-kode lægges ikke længere på sensorattributter (og dermed ikke i recorder). De vises via et midlertidigt `kmd_easy_energy_mitid_challenge`-event, en persistent_notification og (valgfrit) push, hvor koden kun står i beskeden — aldrig i titlen.
+- MitID-engangskode og QR-kode lægges ikke længere på sensorattributter (og dermed ikke i recorder). De vises via et midlertidigt `kmd_easy_energy_mitid_challenge`-event (fra næste version: websocket-abonnement, se ovenfor), en persistent_notification og (valgfrit) push, hvor koden kun står i beskeden — aldrig i titlen.
 - URL'er med `code=` / tokens redigeres i logs og logges på DEBUG.
 - `async_remove_entry` rydder privat storage og eventuelle efterladte `www/`-cachefiler.
 

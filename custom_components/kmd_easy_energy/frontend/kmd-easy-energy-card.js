@@ -163,33 +163,67 @@
       return null;
     }
 
+    // Live MitID challenge (4-digit OTP or both animated QR frames) via the
+    // integration's own websocket subscription "kmd_easy_energy/mitid/subscribe".
+    // Works for non-admin users (wall tablets) and never touches the event bus /
+    // recorder. The bus event kmd_easy_energy_mitid_challenge only carries status.
     _subscribeMitid(hass) {
-      if (this._unsubMitid || !hass?.connection?.subscribeEvents) return;
-      this._unsubMitid = hass.connection.subscribeEvents((ev) => {
-        const d = ev.data || {};
+      if (this._unsubMitid || !hass?.connection?.subscribeMessage) return;
+      const onMsg = (d) => {
+        d = d || {};
         const st = this._resolveEntity();
         const entryId = st?.attributes?.entry_id;
         const utilId = st?.attributes?.utility_id || this._config?.utility_id;
         if (d.entry_id && entryId && d.entry_id !== entryId) return;
         if (!d.entry_id && d.utility_id && utilId && d.utility_id !== utilId) return;
         this._mitidOtp = d.otp_code || "";
-        this._mitidQr = d.qr_svg || "";
-        if (d.sync_state === "idle" || d.sync_state === "error") {
-          if (d.sync_state === "idle") {
-            this._mitidOtp = "";
-            this._mitidQr = "";
-          }
-        }
+        const frames = Array.isArray(d.qr_frames) ? d.qr_frames.filter(Boolean) : [];
+        this._mitidQrFrames = frames;
+        this._mitidQr = frames[0] || "";
+        this._mitidQrIdx = 0;
         this._lastSig = null;
         this._render();
-      }, "kmd_easy_energy_mitid_challenge");
+        this._syncQrAnimation();
+      };
+      const p = hass.connection.subscribeMessage(onMsg, { type: "kmd_easy_energy/mitid/subscribe" });
+      this._unsubMitid = p;
+      if (p && typeof p.catch === "function") {
+        p.catch((err) => {
+          console.warn("kmd-easy-energy-card: MitID live subscription failed", err);
+          this._unsubMitid = null;
+        });
+      }
+    }
+
+    // MitID's QR is animated: two frames (each half of the channel binding) that
+    // the MitID app must both see. Alternate them every second by swapping only
+    // the <img> src, so the card is not re-rendered on every frame.
+    _syncQrAnimation() {
+      const frames = this._mitidQrFrames || [];
+      if (frames.length < 2) {
+        if (this._qrTimer) { clearInterval(this._qrTimer); this._qrTimer = null; }
+        return;
+      }
+      if (this._qrTimer) return;
+      this._qrTimer = setInterval(() => {
+        const fr = this._mitidQrFrames || [];
+        if (fr.length < 2) { clearInterval(this._qrTimer); this._qrTimer = null; return; }
+        this._mitidQrIdx = ((this._mitidQrIdx || 0) + 1) % fr.length;
+        const img = this.shadowRoot && this.shadowRoot.getElementById("mitidQrImg");
+        if (img) img.src = this._qrDataUrl(fr[this._mitidQrIdx]);
+      }, 1000);
+    }
+
+    _qrDataUrl(svg) {
+      return `data:image/svg+xml;utf8,${encodeURIComponent(svg || "")}`;
     }
 
     disconnectedCallback() {
       const unsub = this._unsubMitid;
       this._unsubMitid = null;
+      if (this._qrTimer) { clearInterval(this._qrTimer); this._qrTimer = null; }
       if (typeof unsub === "function") unsub();
-      else if (unsub && typeof unsub.then === "function") unsub.then((fn) => fn && fn());
+      else if (unsub && typeof unsub.then === "function") unsub.then((fn) => fn && fn()).catch(() => {});
     }
 
     set hass(hass) {
@@ -615,7 +649,7 @@
       const wizPenalty = this._wizPenalty ?? penaltyT;
       const mitidLiveBox = otpCode
         ? `<div class="mitid-box otp"><div>🔑 Indtast denne 4-cifrede engangskode i MitID-appen:</div><div class="otp-digits">${esc(otpCode.split("").join(" "))}</div></div>`
-        : (qrSvg ? `<div class="mitid-box qr"><div>📲 Scan QR-koden med MitID-appen <i>(eller skift til Engangskoder i appens indstillinger)</i>:</div><div class="qr-wrap"><img src="data:image/svg+xml;utf8,${esc(encodeURIComponent(qrSvg))}" alt="MitID QR-kode" /></div></div>` : "");
+        : (qrSvg ? `<div class="mitid-box qr"><div>📲 Scan QR-koden med MitID-appen på din telefon:</div><div class="qr-wrap"><img id="mitidQrImg" src="${esc(this._qrDataUrl((this._mitidQrFrames || [])[this._mitidQrIdx || 0] || qrSvg))}" alt="MitID QR-kode" /></div><div class="qr-hint">Koden skifter hvert sekund — hold telefonen roligt foran skærmen. Står kortet på samme telefon som MitID-appen, kan QR-koden ikke scannes — slå i stedet engangskoder til i MitID-appen (Menu → Godkend med QR- eller engangskoder → Engangskoder).</div></div>` : "");
 
       // Dynamic Mushroom-style banner state
       let bannerIcon = isToday ? "✓" : "↻";
@@ -796,8 +830,9 @@
             background: rgba(14,165,233,0.14); border: 2px solid rgba(14,165,233,0.5);
           }
           .otp-digits { font-size: 32px; font-weight: 900; letter-spacing: 6px; margin-top: 6px; color: #0284c7; }
-          .qr-wrap { margin: 10px auto 0; width: 170px; height: 170px; background: #fff; padding: 8px; border-radius: 12px; }
-          .qr-wrap img, .qr-wrap svg { width: 100%; height: 100%; display: block; }
+          .qr-wrap { margin: 10px auto 0; width: min(240px, 70vw); aspect-ratio: 1 / 1; box-sizing: content-box; background: #fff; padding: 14px; border-radius: 12px; }
+          .qr-wrap img, .qr-wrap svg { width: 100%; height: 100%; display: block; image-rendering: pixelated; }
+          .qr-hint { margin-top: 8px; font-size: 12px; font-weight: 600; color: var(--secondary-text-color); }
           details.ob-manual { font-size: 12.5px; color: var(--secondary-text-color); padding-top: 4px; border-top: 1px solid rgba(148,163,184,0.22); }
           details.ob-manual summary { cursor: pointer; font-weight: 700; padding: 4px 0; }
           button.btn.primary { background: rgba(34,197,94,0.20); border-color: rgba(34,197,94,0.45); }
@@ -855,8 +890,8 @@
             <div class="ob-guide">
               <ol>
                 <li>Udfyld dit <b>MitID Bruger-ID</b> ovenfor og tryk på <b>🚀 Gem &amp; Start MitID-synkronisering</b> herunder <i>(åbn ikke selv værkets hjemmeside i browseren)</i>.</li>
-                <li><b>Åbn straks MitID-appen på din telefon og lås den op</b> <i>(vigtigt: MitID genererer først den 4-cifrede kode / QR-koden i det øjeblik, du åbner MitID-appen!)</i>.</li>
-                <li>Aflæs de <b>4 cifre</b> direkte her på kortet (eller i push-notifikationen) — eller scan QR-koden — og godkend i MitID-appen!</li>
+                <li><b>Åbn straks MitID-appen på din telefon og lås den op</b> <i>(vigtigt: MitID genererer først QR-koden / den 4-cifrede kode i det øjeblik, du åbner MitID-appen!)</i>.</li>
+                <li><b>Opsætter du på en tablet eller computer:</b> scan QR-koden her på kortet med MitID-appen på telefonen og godkend. <b>Opsætter du på samme telefon som MitID-appen:</b> indtast de <b>4 cifre</b> fra kortet (eller push-notifikationen) i MitID-appen og godkend — det kræver engangskoder slået til (se herunder).</li>
               </ol>
             </div>
             ${this._mitidErr ? `<div class="ob-live red">⚠️ ${esc(this._mitidErr)}</div>` : ""}
@@ -867,10 +902,10 @@
               ${hasData ? `<button class="btn" id="completeNowBtn">⚡ Hurtig-test: Vis dashboard med eksisterende data</button>` : ""}
             </div>
             <details class="ob-manual">
-              <summary>📲 Vigtigt for nye brugere: Slå 4-cifret Engangskode til i MitID-appen (i stedet for QR-kode)</summary>
+              <summary>📲 Kun hvis du opsætter på samme telefon som MitID-appen: Slå 4-cifret engangskode til</summary>
               <div class="ob-note" style="margin:8px 0">
-                Når du logger ind fra en anden enhed (headless browser), viser MitID som standard en animeret <b>QR-kode</b>, som ikke kan scannes fra en push-notifikation på samme telefon.<br/>
-                Skift i stedet til 4-cifret kode én gang for alle:<br/>
+                <b>Tablet eller computer + MitID-app på telefonen:</b> Du behøver ikke ændre noget. Scan blot QR-koden, der vises her på kortet, med MitID-appen og godkend.<br/>
+                <b>Samme telefon:</b> MitID viser som standard en animeret <b>QR-kode</b>, og den kan ikke scannes med den telefon, den står på. Skift derfor til 4-cifrede engangskoder én gang for alle:<br/>
                 <b>MitID-app → Menu (⚙️ øverst) → Godkend med QR- eller engangskoder → Engangskoder</b>.<br/>
                 <i>Bemærk: MitID har af sikkerhedshensyn 24 timers ventetid ved første skift fra QR-kode til engangskode, hvorefter du bekræfter skiftet i appen.</i>
               </div>

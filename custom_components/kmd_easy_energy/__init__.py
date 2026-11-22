@@ -8,9 +8,13 @@ import shutil
 from pathlib import Path
 from typing import Any
 
+import voluptuous as vol
+
+from homeassistant.components import websocket_api
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant, ServiceCall
+from homeassistant.core import HomeAssistant, ServiceCall, callback
 from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
+from homeassistant.helpers.dispatcher import async_dispatcher_connect
 
 from .const import (
     CONF_BONUS_TEMP,
@@ -25,6 +29,8 @@ from .const import (
     CONF_UTILITY_ID,
     CONF_UTILITY_STATUS,
     DOMAIN,
+    SIGNAL_MITID_CHALLENGE,
+    WS_TYPE_MITID_SUBSCRIBE,
 )
 from .coordinator import KMDEasyEnergyCoordinator
 from .util import store_for, unique_id_for, delete_legacy_www_cache, legacy_www_cache_paths
@@ -190,6 +196,57 @@ async def _async_setup_services(hass: HomeAssistant) -> None:
             hass.services.async_register(DOMAIN, svc_name, handler)
 
 
+_WS_REGISTERED = f"{DOMAIN}_ws_registered"
+# Sync states where a live challenge (or its status) is worth replaying to a
+# card that subscribes mid-flow, e.g. a wall tablet that opens the dashboard
+# after the sync was started from another device.
+_ACTIVE_SYNC_STATES = {"starting", "waiting_app", "otp_ready", "qr_ready", "verified", "fetching_data"}
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): WS_TYPE_MITID_SUBSCRIBE,
+        vol.Optional("entry_id"): str,
+    }
+)
+@callback
+def ws_subscribe_mitid_challenge(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Stream the live MitID challenge (OTP / QR frames) to the Lovelace card.
+
+    Unlike ``subscribe_events`` this also works for non-admin users (typical
+    wall tablet), and nothing passes the event bus, so the OTP / QR never
+    reach the recorder.
+    """
+    want = msg.get("entry_id")
+
+    @callback
+    def forward(payload: dict[str, Any]) -> None:
+        if want and payload.get("entry_id") != want:
+            return
+        connection.send_message(websocket_api.event_message(msg["id"], payload))
+
+    connection.subscriptions[msg["id"]] = async_dispatcher_connect(
+        hass, SIGNAL_MITID_CHALLENGE, forward
+    )
+    connection.send_result(msg["id"])
+
+    for coord in list(hass.data.get(DOMAIN, {}).values()):
+        if getattr(coord, "sync_state", "idle") in _ACTIVE_SYNC_STATES:
+            forward(coord.mitid_challenge_payload())
+
+
+@callback
+def _async_register_websocket(hass: HomeAssistant) -> None:
+    if hass.data.get(_WS_REGISTERED):
+        return
+    websocket_api.async_register_command(hass, ws_subscribe_mitid_challenge)
+    hass.data[_WS_REGISTERED] = True
+
+
 def _install_frontend_card(www_js_dir: Path) -> None:
     """Copy bundled Lovelace card JS to <config>/www/js/ (run in executor)."""
     src = Path(__file__).parent / "frontend" / "kmd-easy-energy-card.js"
@@ -256,6 +313,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             raise
 
     await _async_setup_services(hass)
+    _async_register_websocket(hass)
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     return True
 

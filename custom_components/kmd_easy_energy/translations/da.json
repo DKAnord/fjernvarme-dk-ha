@@ -46,7 +46,7 @@
       },
       "reauth_mitid": {
         "title": "MitID-login i gang",
-        "description": "Status: {sync_state}\n{sync_message}\n\nEngangskode (hvis MitID viser en): {otp_hint}\n\nÅbn MitID-appen, godkend, og tryk på Send for at opdatere status."
+        "description": "Status: {sync_state}\n{sync_message}\n\nEngangskode (hvis MitID viser en): {otp_hint}\n\nÅbn MitID-appen på din telefon. Viser MitID en QR-kode, så scan den på Fjernvarme-kortet på dashboardet (virker, når du opsætter fra en tablet eller computer). Godkend, og tryk på Send for at opdatere status."
       }
     },
     "error": {

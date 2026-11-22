@@ -22,6 +22,7 @@ TO_REDACT = {
     "mitid_username",
     "mitid_otp_code",
     "mitid_qr_svg",
+    "mitid_qr_frames",
     "customer_id",
     "customer_number",
     "CustomerId",

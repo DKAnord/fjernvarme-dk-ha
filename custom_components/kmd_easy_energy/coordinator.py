@@ -13,10 +13,12 @@ from zoneinfo import ZoneInfo
 
 import aiohttp
 
+from homeassistant.components import persistent_notification
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.util import dt as dt_util
 
@@ -39,6 +41,7 @@ from .const import (
     CONF_UTILITY_STATUS,
     DOMAIN,
     EVENT_MITID_CHALLENGE,
+    SIGNAL_MITID_CHALLENGE,
     TOKEN_WARN_AGE,
     UPDATE_INTERVAL,
 )
@@ -205,6 +208,7 @@ class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self.sync_message: str = ""
         self.mitid_otp_code: str | None = None
         self.mitid_qr_svg: str | None = None
+        self.mitid_qr_frames: list[str] = []
         self._sync_task: asyncio.Task[None] | None = None
         self._build_client()
 
@@ -279,8 +283,26 @@ class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             delete_legacy_www_cache, self._legacy_paths
         )
 
+    def mitid_challenge_payload(self) -> dict[str, Any]:
+        """Live MitID challenge for the card (contains the OTP / QR frames).
+
+        Only delivered via the dispatcher signal + websocket subscription,
+        never on the event bus (the recorder stores every bus event).
+        """
+        frames = list(getattr(self, "mitid_qr_frames", None) or [])
+        if not frames and self.mitid_qr_svg:
+            frames = [self.mitid_qr_svg]
+        return {
+            "entry_id": self.entry.entry_id,
+            "utility_id": self._utility_id,
+            "sync_state": self.sync_state,
+            "sync_message": self.sync_message,
+            "otp_code": self.mitid_otp_code,
+            "qr_frames": frames,
+        }
+
     def _fire_mitid_event(self) -> None:
-        """Publish a transient MitID challenge (not stored on entities)."""
+        """Publish the MitID sync status (bus) and the live challenge (dispatcher)."""
         self.hass.bus.async_fire(
             EVENT_MITID_CHALLENGE,
             {
@@ -288,9 +310,12 @@ class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 "utility_id": self._utility_id,
                 "sync_state": self.sync_state,
                 "sync_message": self.sync_message,
-                "otp_code": self.mitid_otp_code,
-                "qr_svg": self.mitid_qr_svg,
+                "has_otp": bool(self.mitid_otp_code),
+                "has_qr": bool(self.mitid_qr_svg or getattr(self, "mitid_qr_frames", None)),
             },
+        )
+        async_dispatcher_send(
+            self.hass, SIGNAL_MITID_CHALLENGE, self.mitid_challenge_payload()
         )
 
     async def _fetch_open_meteo_7d(self, lat: float, lon: float) -> float | None:
@@ -934,6 +959,7 @@ class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             self.sync_message = ""
             self.mitid_otp_code = None
             self.mitid_qr_svg = None
+            self.mitid_qr_frames = []
         state = dict(self.data or await self._async_load_cache())
         state.update(self._base_meta())
         state["initial_setup_complete"] = complete
@@ -948,11 +974,16 @@ class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         sync_message: str,
         otp_code: str | None = None,
         qr_svg: str | None = None,
+        qr_frames: list[str] | None = None,
     ) -> None:
         self.sync_state = sync_state
         self.sync_message = sync_message
         self.mitid_otp_code = otp_code
-        self.mitid_qr_svg = qr_svg
+        frames = [f for f in (qr_frames or []) if f]
+        if not frames and qr_svg:
+            frames = [qr_svg]
+        self.mitid_qr_frames = frames
+        self.mitid_qr_svg = frames[0] if frames else None
         cur = dict(self.data or {})
         cur.update(self._base_meta())
         if self._initial_setup_complete is not None:
@@ -964,31 +995,27 @@ class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         return f"{DOMAIN}_mitid_{self.entry.entry_id}"
 
     async def _async_mitid_notification(self, message: str) -> None:
-        """Show a transient persistent notification (code only in the body, not the title)."""
+        """Show a transient persistent notification (code only in the body, not the title).
+
+        Uses the helper directly instead of the ``persistent_notification.create``
+        service: a service call fires a ``call_service`` bus event with the
+        message, which the recorder would store.
+        """
         try:
-            await self.hass.services.async_call(
-                "persistent_notification",
-                "create",
-                {
-                    "title": "MitID-godkendelse",
-                    "message": message,
-                    "notification_id": self._mitid_notification_id(),
-                },
-                blocking=False,
+            persistent_notification.async_create(
+                self.hass,
+                message,
+                title="MitID-godkendelse",
+                notification_id=self._mitid_notification_id(),
             )
         except Exception as err:  # noqa: BLE001
-            _LOGGER.debug("persistent_notification.create failed: %s", err)
+            _LOGGER.debug("persistent_notification create failed: %s", err)
 
     async def _async_dismiss_mitid_notification(self) -> None:
         try:
-            await self.hass.services.async_call(
-                "persistent_notification",
-                "dismiss",
-                {"notification_id": self._mitid_notification_id()},
-                blocking=False,
-            )
+            persistent_notification.async_dismiss(self.hass, self._mitid_notification_id())
         except Exception as err:  # noqa: BLE001
-            _LOGGER.debug("persistent_notification.dismiss failed: %s", err)
+            _LOGGER.debug("persistent_notification dismiss failed: %s", err)
 
     async def _async_notify(self, notify_svc: str, title: str, message: str) -> None:
         if not notify_svc:
@@ -1061,20 +1088,25 @@ class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             )
 
             otp_notified = False
+            last_otp: str | None = None
+            last_qr_frames: list[str] | None = None
             deadline = asyncio.get_running_loop().time() + 120
             while asyncio.get_running_loop().time() < deadline:
                 res = await self.hass.async_add_executor_job(auth.poll_once)
                 st = res.get("status")
                 if st == "otp_ready" and res.get("otp_code"):
                     code = str(res["otp_code"])
-                    self._push_sync_ui(
-                        "otp_ready",
-                        "Indtast 4-cifret kode i MitID-appen (se notifikation eller dashboard-kortet).",
-                        otp_code=code,
-                    )
-                    await self._async_mitid_notification(
-                        f"Indtast engangskoden {code} i MitID-appen og godkend."
-                    )
+                    if code != last_otp:
+                        last_otp = code
+                        last_qr_frames = None
+                        self._push_sync_ui(
+                            "otp_ready",
+                            "Indtast 4-cifret kode i MitID-appen (se notifikation eller dashboard-kortet).",
+                            otp_code=code,
+                        )
+                        await self._async_mitid_notification(
+                            f"Indtast engangskoden {code} i MitID-appen og godkend."
+                        )
                     if not otp_notified:
                         await self._async_notify(
                             notify_svc,
@@ -1082,17 +1114,33 @@ class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                             f"Indtast de 4 cifre ({code}) i MitID-appen og godkend.",
                         )
                         otp_notified = True
-                elif st == "qr_ready" and res.get("qr_svg"):
-                    self._push_sync_ui(
-                        "qr_ready",
-                        "Scan QR-koden på Fjernvarme-kortet med MitID-appen (eller skift til Engangskoder i appen).",
-                        qr_svg=str(res["qr_svg"]),
-                    )
-                    await self._async_mitid_notification(
-                        "Scan QR-koden på Fjernvarme-kortet med MitID-appen, eller skift til engangskoder i appen."
-                    )
+                elif st == "qr_ready" and (res.get("qr_frames") or res.get("qr_svg")):
+                    frames = [str(f) for f in (res.get("qr_frames") or [res["qr_svg"]]) if f]
+                    if frames != last_qr_frames:
+                        first_qr = last_qr_frames is None
+                        last_qr_frames = frames
+                        last_otp = None
+                        self._push_sync_ui(
+                            "qr_ready",
+                            "Scan QR-koden på Fjernvarme-kortet med MitID-appen på din telefon.",
+                            qr_frames=frames,
+                        )
+                        if first_qr:
+                            await self._async_mitid_notification(
+                                "Scan QR-koden på Fjernvarme-kortet med MitID-appen på din telefon. "
+                                "Opsætter du på samme telefon som MitID-appen, så slå engangskoder "
+                                "til i MitID-appen i stedet (se kortet)."
+                            )
                 elif st == "verified":
-                    self._push_sync_ui("verified", "Kode/QR godkendt — bekræft i MitID-appen…")
+                    # QR scanned / code entered: no code needed any more, just wait
+                    # for the user to approve in the MitID app.
+                    if self.sync_state != "verified":
+                        last_otp = None
+                        last_qr_frames = None
+                        self._push_sync_ui("verified", "Kode/QR godkendt — bekræft i MitID-appen…")
+                        await self._async_mitid_notification(
+                            "Kode/QR er godkendt — bekræft login i MitID-appen."
+                        )
                 elif st == "completed":
                     break
                 elif st == "error":
@@ -1107,6 +1155,7 @@ class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             self.sync_message = ""
             self.mitid_otp_code = None
             self.mitid_qr_svg = None
+            self.mitid_qr_frames = []
             self._fire_mitid_event()
             await self._async_dismiss_mitid_notification()
             await self.async_update_token(access_token)
@@ -1114,4 +1163,5 @@ class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         except Exception as err:  # noqa: BLE001
             _LOGGER.warning("Native MitID sync failed: %s", err)
             self._push_sync_ui("error", f"Fejl: {str(err)[:160]}")
+            await self._async_dismiss_mitid_notification()
             await self._async_notify(notify_svc, f"⚠️ {util_name} sync fejlede", str(err)[:160])

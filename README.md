@@ -62,14 +62,15 @@ Log ind med **MitID direkte i Home Assistant** i ren Python (OIDC PKCE + NemLog-
 
 ### Sådan gør du (3 enkle trin)
 1. Indtast dit **MitID Bruger-ID** i opsætningskortet på dashboardet *(gemmes kun lokalt i Home Assistant)*, og tryk på **🚀 Gem & Start MitID-synkronisering**. *(Åbn ikke selv værkets hjemmeside i browseren samtidig — det giver MitID-fejl `CAP008`).*
-2. **Åbn straks MitID-appen på din telefon og lås den op** — MitID danner først engangskoden / QR-koden i det øjeblik, appen åbnes.
-3. Aflæs de **4 cifre** direkte på dashboard-kortet (eller i push-notifikationen) — eller scan QR-koden — og godkend i MitID-appen!
+2. **Åbn straks MitID-appen på din telefon og lås den op** — MitID danner først QR-koden / engangskoden i det øjeblik, appen åbnes.
+3. **Opsætter du på en tablet eller computer:** scan QR-koden på dashboard-kortet med MitID-appen på telefonen, og godkend. **Opsætter du på samme telefon som MitID-appen:** indtast de **4 cifre** fra kortet (eller push-notifikationen) i MitID-appen, og godkend — det kræver, at engangskoder er slået til (se nedenfor).
 
 > [!TIP]
-> **4-cifret engangskode vs. QR-kode på telefonen**
-> Når du starter synkroniseringen fra din telefon, kan du ikke scanne en QR-kode på samme skærm. I MitID-appen kan du skifte fra QR-kode til 4-cifrede engangskoder:
+> **Kun hvis du opsætter på samme telefon som MitID-appen: slå 4-cifret engangskode til**
+> Bruger du en tablet eller computer til opsætningen og har MitID-appen på telefonen, skal du ikke ændre noget — scan blot QR-koden på kortet.
+> Står kortet derimod på samme telefon som MitID-appen, kan QR-koden ikke scannes. Skift derfor fra QR-kode til 4-cifrede engangskoder i MitID-appen:
 > **MitID-app → Menu (⚙️) → Godkend med QR- eller engangskoder → Engangskoder**.
-> *Bemærk: MitID har af sikkerhedshensyn 24 timers ventetid ved første skift.*
+> *Bemærk: MitID har af sikkerhedshensyn 24 timers ventetid ved første skift fra QR-kode til engangskode, hvorefter du bekræfter skiftet i appen.*
 
 ---
 
@@ -116,11 +117,11 @@ Download diagnostics fra integrationen, hvis du skal have support: tokens, MitID
 
 ## 🇬🇧 English notes (new in 0.3.0)
 
-This is a Denmark-only Home Assistant integration for district heating on the KMD Easy Energy platform. Version **0.3.0** (unreleased, based on v0.2.1) moves the usage cache to private `.storage`, keeps MitID OTP/QR off sensor attributes (use event `kmd_easy_energy_mitid_challenge` or the bundled card), starts reauth on 401/403, and can set up from cache after a transient first-refresh failure.
+This is a Denmark-only Home Assistant integration for district heating on the KMD Easy Energy platform. Version **0.3.0** (unreleased, based on v0.2.1) moves the usage cache to private `.storage`, keeps MitID OTP/QR off sensor attributes and off the event bus (the bundled card gets them via the websocket subscription `kmd_easy_energy/mitid/subscribe`; event `kmd_easy_energy_mitid_challenge` carries status only), starts reauth on 401/403, and can set up from cache after a transient first-refresh failure.
 
 For the Energy dashboard, add the imported hourly statistics `kmd_easy_energy:energy_<entry>` / `:volume_<entry>`, not the month-to-date entities. Heat price (DKK/kWh) is an option; Kredsløb defaults come from the [official price page](https://www.kredslob.dk/privat/fjernvarme/fjernvarmepriser) for the current year. Motivation tariff, degree-day forecast and an abnormal-consumption binary sensor are included; the integration never sends leak notifications on its own.
 
-**Breaking for custom dashboards:** attributes `mitid_otp_code` and `mitid_qr_svg` are removed. Use card 0.3.0 or the event above. Not tested live with MitID / a real Kredsløb account in this change set.
+**Breaking for custom dashboards:** attributes `mitid_otp_code` and `mitid_qr_svg` are removed. Use the bundled card or the websocket subscription above. Setup from a tablet/PC works with MitID's default QR (both animated frames are shown on the card); only setup on the same phone as the MitID app needs one-time codes enabled in the MitID app. Not tested live with MitID / a real Kredsløb account in this change set.
 
 ---
 
@@ -129,7 +130,8 @@ For the Energy dashboard, add the imported hourly statistics `kmd_easy_energy:en
 - Integrationen kommunikerer **kun direkte** mellem din Home Assistant-instans og KMD Easy Energy / NemLog-in / MitID / Open-Meteo.
 - MitID Bruger-ID og access tokens lagres kun lokalt i Home Assistants `.storage/core.config_entries` (i klartekst i den krypterede HA-konfiguration — det er standard for config entries).
 - Forbrugsdata caches i den private fil `.storage/kmd_easy_energy.<entry_id>` — **ikke** i `/local/` / `www/`.
-- MitID-engangskode og QR vises midlertidigt i en notifikation og på dashboard-kortet. De gemmes **ikke** på sensorattributter og havner derfor ikke i historikken. Eventuelle push-beskeder har koden i *brødteksten*, aldrig i titlen.
+- MitID-engangskode og QR vises midlertidigt på dashboard-kortet (via integrationens egen websocket-abonnement `kmd_easy_energy/mitid/subscribe`) og i en HA-notifikation. De gemmes **ikke** på sensorattributter eller i hændelser på event-bussen og havner derfor ikke i historikken/recorder-databasen. Eventet `kmd_easy_energy_mitid_challenge` indeholder kun status (`sync_state`, `has_otp`, `has_qr`).
+- Vælger du en mobil push-service, sendes engangskoden i push-beskedens *brødtekst* (aldrig i titlen). Bemærk, at Home Assistant registrerer alle tjenestekald (`call_service`) i recorderen, så koden i en push-besked kan stå i databasen, indtil den ryddes. Koden er kun gyldig i den ene login-session. Vil du helt undgå det, så lad push-feltet stå tomt og aflæs koden på kortet.
 - Når tokenet udløber (~45–60 min), beder Home Assistant om gen-login (indsæt token eller start MitID). Sensorerne bliver stående på sidste cachede værdier, hvis de findes.
 - Den valgfrie feedback-knap til GitHub åbner kun en forudfyldt kladde i din browser uden personoplysninger, tokens, kundenumre eller forbrugstal.
 - **Diagnostics** (Indstillinger → integrationen → Download diagnostics) redigerer access tokens, MitID-brugernavn, kunde- og måler-id'er og adresser. Store forbrugsserier er kun talt, ikke inkluderet.

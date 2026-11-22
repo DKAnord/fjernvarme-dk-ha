@@ -13,7 +13,7 @@ from aiohttp import ClientResponseError
 from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
-from kmd_easy_energy.const import EVENT_MITID_CHALLENGE
+from kmd_easy_energy.const import EVENT_MITID_CHALLENGE, SIGNAL_MITID_CHALLENGE
 from kmd_easy_energy.coordinator import KMDEasyEnergyCoordinator
 from kmd_easy_energy.util import legacy_www_cache_paths, sanitize_cache
 
@@ -87,6 +87,7 @@ def make_coordinator(tmp_path: Path, store: FakeStore | None = None, **entry_dat
         coord.sync_message = ""
         coord.mitid_otp_code = None
         coord.mitid_qr_svg = None
+        coord.mitid_qr_frames = []
         coord._sync_task = None
         coord.data = {}
         coord.logger = MagicMock()
@@ -199,11 +200,16 @@ async def test_remove_storage_clears_store_and_legacy(tmp_path: Path) -> None:
     assert not public.exists()
 
 
-def test_push_sync_ui_fires_event_without_otp_in_state(tmp_path: Path) -> None:
+def test_push_sync_ui_keeps_otp_off_state_and_bus(tmp_path: Path) -> None:
+    """OTP/QR go to the dispatcher (websocket) only, never to state or the bus.
+
+    The recorder stores every bus event, so the bus event carries status only.
+    """
     coord, hass, *_ = make_coordinator(tmp_path)
     coord.data = {"annual": {"2026": 1}}
     coord.async_set_updated_data = MagicMock()
-    coord._push_sync_ui("otp_ready", "Indtast kode på kortet.", otp_code="1234", qr_svg="<svg />")
+    with patch("kmd_easy_energy.coordinator.async_dispatcher_send") as send:
+        coord._push_sync_ui("otp_ready", "Indtast kode på kortet.", otp_code="1234")
     assert coord.mitid_otp_code == "1234"
     published = coord.async_set_updated_data.call_args[0][0]
     assert "mitid_otp_code" not in published
@@ -211,7 +217,126 @@ def test_push_sync_ui_fires_event_without_otp_in_state(tmp_path: Path) -> None:
     hass.bus.async_fire.assert_called()
     ev_name, ev_data = hass.bus.async_fire.call_args[0]
     assert ev_name == EVENT_MITID_CHALLENGE
-    assert ev_data["otp_code"] == "1234"
+    assert "otp_code" not in ev_data and "qr_svg" not in ev_data and "qr_frames" not in ev_data
+    assert "1234" not in json.dumps(ev_data)
+    assert ev_data["has_otp"] is True and ev_data["has_qr"] is False
+    sig, payload = send.call_args[0][1:]
+    assert sig == SIGNAL_MITID_CHALLENGE
+    assert payload["otp_code"] == "1234"
+    assert payload["entry_id"] == "entry-1"
+
+
+def test_push_sync_ui_delivers_both_qr_frames(tmp_path: Path) -> None:
+    coord, hass, *_ = make_coordinator(tmp_path)
+    coord.async_set_updated_data = MagicMock()
+    with patch("kmd_easy_energy.coordinator.async_dispatcher_send") as send:
+        coord._push_sync_ui("qr_ready", "Scan", qr_frames=["<svg>1</svg>", "<svg>2</svg>"])
+    payload = send.call_args[0][2]
+    assert payload["qr_frames"] == ["<svg>1</svg>", "<svg>2</svg>"]
+    assert payload["otp_code"] is None
+    ev_data = hass.bus.async_fire.call_args[0][1]
+    assert ev_data["has_qr"] is True
+    assert "<svg" not in json.dumps(ev_data)
+
+
+class _FakeAuth:
+    """Scripted MitID authenticator (no network, no real MitID)."""
+
+    def __init__(self, script):
+        self.script = list(script)
+        self.started = None
+
+    def start_session(self, portal_url, username):
+        self.started = (portal_url, username)
+
+    def poll_once(self):
+        return self.script.pop(0)
+
+    def finalize_and_exchange_token(self):
+        return "fake-token-not-real"
+
+
+def _run_flow(tmp_path: Path, script):
+    coord, hass, *_ = make_coordinator(tmp_path)
+    coord.async_set_updated_data = MagicMock()
+    coord.async_update_token = AsyncMock()
+    auth = _FakeAuth(script)
+    pushed: list[dict] = []
+    with (
+        patch("kmd_easy_energy.coordinator.KMDMitIDAuthenticator", return_value=auth),
+        patch(
+            "kmd_easy_energy.coordinator.async_dispatcher_send",
+            side_effect=lambda h, sig, payload: pushed.append(dict(payload)),
+        ),
+        patch("kmd_easy_energy.coordinator.persistent_notification") as pn,
+        patch("kmd_easy_energy.coordinator.asyncio.sleep", AsyncMock()),
+    ):
+        hass.async_add_executor_job = AsyncMock(side_effect=lambda fn, *a: fn(*a))
+        import asyncio as _asyncio
+
+        _asyncio.run(coord._async_run_mitid_flow("mitid-user-test", ""))
+    return coord, hass, auth, pushed, pn
+
+
+def test_mitid_flow_qr_only_tablet_path_completes_without_code(tmp_path: Path) -> None:
+    """Tablet/PC setup: QR frames shown, scanned, approved — no OTP ever needed."""
+    frames_a = ["<svg>a1</svg>", "<svg>a2</svg>"]
+    frames_b = ["<svg>b1</svg>", "<svg>b2</svg>"]
+    script = [
+        {"status": "waiting"},
+        {"status": "qr_ready", "qr_frames": frames_a, "qr_svg": frames_a[0]},
+        {"status": "qr_ready", "qr_frames": frames_a, "qr_svg": frames_a[0]},  # unchanged
+        {"status": "qr_ready", "qr_frames": frames_b, "qr_svg": frames_b[0]},  # rotated
+        {"status": "verified"},
+        {"status": "verified"},
+        {"status": "completed"},
+    ]
+    coord, hass, auth, pushed, pn = _run_flow(tmp_path, script)
+    assert auth.started == ("https://minvarme.kredslob.dk/", "mitid-user-test")
+    coord.async_update_token.assert_awaited_once_with("fake-token-not-real")
+    qr_pushes = [p for p in pushed if p["sync_state"] == "qr_ready"]
+    # Pushed once per distinct QR (not once per poll), always both frames.
+    assert [p["qr_frames"] for p in qr_pushes] == [frames_a, frames_b]
+    assert all(p["otp_code"] is None for p in pushed)
+    assert [p["sync_state"] for p in pushed].count("verified") == 1
+    # Ends idle with the challenge cleared.
+    assert pushed[-1]["sync_state"] == "idle"
+    assert pushed[-1]["qr_frames"] == [] and pushed[-1]["otp_code"] is None
+    assert coord.mitid_qr_frames == [] and coord.mitid_qr_svg is None
+    # Nothing secret ever hits the bus (recorder) or a service call.
+    bus_blob = json.dumps([c.args for c in hass.bus.async_fire.call_args_list], default=str)
+    assert "<svg" not in bus_blob
+    hass.services.async_call.assert_not_called()
+    pn.async_dismiss.assert_called()
+
+
+def test_mitid_flow_otp_path_pushes_code_once(tmp_path: Path) -> None:
+    script = [
+        {"status": "otp_ready", "otp_code": "4821"},
+        {"status": "otp_ready", "otp_code": "4821"},
+        {"status": "verified"},
+        {"status": "completed"},
+    ]
+    coord, hass, auth, pushed, pn = _run_flow(tmp_path, script)
+    otp_pushes = [p for p in pushed if p["sync_state"] == "otp_ready"]
+    assert len(otp_pushes) == 1 and otp_pushes[0]["otp_code"] == "4821"
+    bus_blob = json.dumps([c.args for c in hass.bus.async_fire.call_args_list], default=str)
+    assert "4821" not in bus_blob
+    # Persistent notification created via helper (no call_service event to record).
+    assert any("4821" in str(c) for c in pn.async_create.call_args_list)
+    hass.services.async_call.assert_not_called()
+
+
+def test_mitid_flow_error_clears_challenge(tmp_path: Path) -> None:
+    script = [
+        {"status": "qr_ready", "qr_frames": ["<svg>x</svg>", "<svg>y</svg>"]},
+        {"status": "error", "message": "Authentication was not accepted"},
+    ]
+    coord, hass, auth, pushed, pn = _run_flow(tmp_path, script)
+    assert pushed[-1]["sync_state"] == "error"
+    assert pushed[-1]["qr_frames"] == []
+    coord.async_update_token.assert_not_awaited()
+    pn.async_dismiss.assert_called()
 
 
 def test_sanitize_matches_event_split() -> None:

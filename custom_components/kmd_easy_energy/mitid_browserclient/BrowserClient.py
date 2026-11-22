@@ -132,7 +132,7 @@ class BrowserClient:
                 "h": channel_binding[:half],
                 "uc": data["updateCount"],
             }
-            qr1 = qrcode.QRCode(border=1)
+            qr1 = qrcode.QRCode(border=4)
             qr1.add_data(json.dumps(qr_data_1, separators=(",", ":")))
             qr1.make()
 
@@ -143,7 +143,7 @@ class BrowserClient:
                 "h": channel_binding[half:],
                 "uc": data["updateCount"],
             }
-            qr2 = qrcode.QRCode(border=1)
+            qr2 = qrcode.QRCode(border=4)
             qr2.add_data(json.dumps(qr_data_2, separators=(",", ":")))
             qr2.make()
 

@@ -1264,6 +1264,8 @@ class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         otp_code: str | None = None,
         qr_svg: str | None = None,
         qr_frames: list[str] | None = None,
+        *,
+        update_state: bool = True,
     ) -> None:
         self.sync_state = sync_state
         self.sync_message = sync_message
@@ -1273,12 +1275,17 @@ class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             frames = [qr_svg]
         self.mitid_qr_frames = frames
         self.mitid_qr_svg = frames[0] if frames else None
-        cur = dict(self.data or {})
-        cur.update(self._base_meta())
-        if self._initial_setup_complete is not None:
-            cur["initial_setup_complete"] = self._initial_setup_complete
-        self.async_set_updated_data(cur)
-        self._fire_mitid_event()
+        if update_state:
+            cur = dict(self.data or {})
+            cur.update(self._base_meta())
+            if self._initial_setup_complete is not None:
+                cur["initial_setup_complete"] = self._initial_setup_complete
+            self.async_set_updated_data(cur)
+            self._fire_mitid_event()
+        else:
+            async_dispatcher_send(
+                self.hass, SIGNAL_MITID_CHALLENGE, self.mitid_challenge_payload()
+            )
 
     def _mitid_notification_id(self) -> str:
         return f"{DOMAIN}_mitid_{self.entry.entry_id}"
@@ -1388,7 +1395,9 @@ class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             last_qr_frames: list[str] | None = None
             deadline = asyncio.get_running_loop().time() + 120
             while asyncio.get_running_loop().time() < deadline:
+                t0 = asyncio.get_running_loop().time()
                 res = await self.hass.async_add_executor_job(auth.poll_once)
+                elapsed = asyncio.get_running_loop().time() - t0
                 st = res.get("status")
                 if st == "otp_ready" and res.get("otp_code"):
                     code = str(res["otp_code"])
@@ -1420,6 +1429,7 @@ class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                             "qr_ready",
                             "Scan QR-koden på Fjernvarme-kortet med MitID-appen på din telefon.",
                             qr_frames=frames,
+                            update_state=first_qr,
                         )
                         if first_qr:
                             await self._async_mitid_notification(
@@ -1441,7 +1451,7 @@ class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     break
                 elif st == "error":
                     raise RuntimeError(str(res.get("message") or "MitID afvist eller annulleret"))
-                await asyncio.sleep(1.2)
+                await asyncio.sleep(0.15 if elapsed < 0.2 else 0)
             else:
                 raise RuntimeError("MitID timeout (120s) — prøv igen")
 

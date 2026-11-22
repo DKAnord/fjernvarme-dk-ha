@@ -42,6 +42,7 @@ class ResolvedTariff:
     source: str | None
     source_note: str | None
     utility_id: str
+    motivation_pct_per_k: float | None = None
 
 
 def load_utilities() -> list[dict[str, Any]]:
@@ -126,12 +127,27 @@ def resolve_tariff(
     if normal is None or normal <= 0:
         normal = float((published or {}).get("normal_hdd_year") or DEFAULT_NORMAL_HDD_YEAR)
 
+    price = _pick(CONF_PRICE_DKK_PER_KWH, "price_dkk_per_kwh")
+    pct_raw = (published or {}).get("motivation_pct_per_k")
+    motivation_pct: float | None = None
+    if pct_raw is not None:
+        try:
+            pct_val = float(pct_raw)
+            if pct_val > 0:
+                motivation_pct = pct_val
+        except (TypeError, ValueError):
+            pass
+
+    motivation_rate = _pick(CONF_MOTIVATION_DKK_PER_KWH_PER_K, "motivation_dkk_per_kwh_per_k")
+    if motivation_rate is None and motivation_pct is not None and price is not None:
+        # Percent-based motivation tariffs (e.g. Aalborg Forsyning ±2 %/°C)
+        # scale automatically when the user changes heat price in options.
+        motivation_rate = round(price * (motivation_pct / 100.0), 6)
+
     return ResolvedTariff(
-        price_dkk_per_kwh=_pick(CONF_PRICE_DKK_PER_KWH, "price_dkk_per_kwh"),
+        price_dkk_per_kwh=price,
         price_dkk_per_m3=_pick(CONF_PRICE_DKK_PER_M3, "price_dkk_per_m3"),
-        motivation_dkk_per_kwh_per_k=_pick(
-            CONF_MOTIVATION_DKK_PER_KWH_PER_K, "motivation_dkk_per_kwh_per_k"
-        ),
+        motivation_dkk_per_kwh_per_k=motivation_rate,
         bonus_temp=bonus,
         penalty_temp=penalty,
         normal_hdd_year=normal,
@@ -139,4 +155,5 @@ def resolve_tariff(
         source=(published or {}).get("source"),
         source_note=(published or {}).get("source_note"),
         utility_id=utility_id,
+        motivation_pct_per_k=motivation_pct,
     )

@@ -379,3 +379,115 @@ def daily_hdd_from_temps(
             continue
         out[day] = max(0.0, base - float(temp))
     return out
+
+
+MONTH_LABELS_DA = (
+    "Jan",
+    "Feb",
+    "Mar",
+    "Apr",
+    "Maj",
+    "Jun",
+    "Jul",
+    "Aug",
+    "Sep",
+    "Okt",
+    "Nov",
+    "Dec",
+)
+
+
+def estimate_variable_costs(
+    *,
+    price_dkk_per_kwh: float | None,
+    bonus_temp: float,
+    penalty_temp: float,
+    motivation_rate: float | None,
+    current_return_temp: float | None,
+    daily: dict[str, Any] | None,
+    monthly_cur_year: dict[str, Any] | None,
+    return_temp_monthly: dict[str, Any] | None,
+    today: date | None = None,
+) -> dict[str, Any]:
+    """Estimate variable heating cost in DKK (excl. fixed fees) across all backends."""
+    if price_dkk_per_kwh is None or price_dkk_per_kwh <= 0:
+        return {}
+    today = today or copenhagen_today()
+    base_price = float(price_dkk_per_kwh)
+    adj = (
+        motivation_dkk_per_kwh(current_return_temp, bonus_temp, penalty_temp, motivation_rate)
+        or 0.0
+    )
+    effective_price = round(max(0.0, base_price + adj), 4)
+    adjustment_pct = round((adj / base_price) * 100.0, 1)
+
+    rt_map = return_temp_monthly or {}
+    monthly_map = monthly_cur_year or {}
+    monthly_dkk: dict[str, int] = {}
+    for label in MONTH_LABELS_DA:
+        raw_kwh = monthly_map.get(label)
+        if not isinstance(raw_kwh, (int, float)) or isinstance(raw_kwh, bool):
+            continue
+        raw_rt = rt_map.get(label)
+        m_rt = float(raw_rt) if isinstance(raw_rt, (int, float)) else current_return_temp
+        m_adj = motivation_dkk_per_kwh(m_rt, bonus_temp, penalty_temp, motivation_rate) or 0.0
+        m_price = max(0.0, base_price + m_adj)
+        monthly_dkk[label] = int(round(float(raw_kwh) * m_price))
+
+    cur_label = MONTH_LABELS_DA[today.month - 1]
+    daily_obj = daily or {}
+    current_month_dkk: int | None = monthly_dkk.get(cur_label)
+    current_month_kwh: float | None = (
+        float(monthly_map[cur_label])
+        if isinstance(monthly_map.get(cur_label), (int, float))
+        else None
+    )
+    if current_month_dkk is None and isinstance(daily_obj.get("total"), (int, float)):
+        current_month_kwh = float(daily_obj["total"])
+        current_month_dkk = int(round(current_month_kwh * effective_price))
+
+    ytd_dkk = int(sum(monthly_dkk.values())) if monthly_dkk else None
+
+    latest_day_dkk: int | None = None
+    latest_day_kwh: float | None = None
+    latest_day_label: str | None = None
+    days_map = daily_obj.get("days") or {}
+    numeric_days: list[tuple[int, float]] = []
+    for k, v in days_map.items():
+        if not isinstance(v, (int, float)) or isinstance(v, bool):
+            continue
+        try:
+            numeric_days.append((int(k), float(v)))
+        except (TypeError, ValueError):
+            continue
+    if numeric_days:
+        numeric_days.sort(key=lambda pair: pair[0])
+        if daily_obj.get("latest_complete") is False and len(numeric_days) > 1:
+            day_num, day_kwh = numeric_days[-2]
+        else:
+            day_num, day_kwh = numeric_days[-1]
+        latest_day_kwh = round(day_kwh, 1)
+        latest_day_dkk = int(round(day_kwh * effective_price))
+        month_name = str(daily_obj.get("month") or cur_label).strip()
+        latest_day_label = f"{day_num}. {month_name}"
+
+    return {
+        "year": today.year,
+        "base_price_dkk_per_kwh": round(base_price, 4),
+        "effective_price_dkk_per_kwh": effective_price,
+        "adjustment_dkk_per_kwh": round(adj, 5),
+        "adjustment_pct": adjustment_pct,
+        "current_return_temp": round(float(current_return_temp), 1)
+        if current_return_temp is not None
+        else None,
+        "latest_day_dkk": latest_day_dkk,
+        "latest_day_kwh": latest_day_kwh,
+        "latest_day_label": latest_day_label,
+        "current_month_dkk": current_month_dkk,
+        "current_month_kwh": round(current_month_kwh, 1)
+        if current_month_kwh is not None
+        else None,
+        "ytd_dkk": ytd_dkk,
+        "monthly_dkk": monthly_dkk,
+        "excludes_fixed_fees": True,
+    }

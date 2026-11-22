@@ -312,7 +312,7 @@
       return { language: "da", bonus_temp: 30, penalty_temp: 40, show_sync_bar: true };
     }
 
-    _renderMonthlySvg(mCur, mPrev, mTemp, curYr, prevYr, t) {
+    _renderMonthlySvg(mCur, mPrev, mTemp, curYr, prevYr, t, mCost = {}) {
       const W = 540, H = 235, pad = { l: 48, r: 38, t: 26, b: 32 };
       const cw = W - pad.l - pad.r, ch = H - pad.t - pad.b;
       const vals = MONTHS.flatMap((m) => [mCur[m], mPrev[m]]).filter((v) => typeof v === "number");
@@ -352,7 +352,8 @@
         }
         if (typeof vCur === "number") {
           const y = yKwh(vCur);
-          bars += `<rect x="${cx + 1}" y="${y}" width="${bw}" height="${Math.max(1, pad.t + ch - y)}" rx="3" fill="url(#gHeat)" data-tip="${m}: ${curYr} = ${fmtInt(vCur)} kWh${typeof vPrev === 'number' ? ` (${prevYr}: ${fmtInt(vPrev)} kWh)` : ''}${typeof tCur === 'number' ? ` · ${t.outdoor} ${fmtDec(tCur)}°C` : ''}"/>`;
+          const costTip = typeof mCost[m] === "number" ? ` · ~${fmtInt(mCost[m])} kr.` : "";
+          bars += `<rect x="${cx + 1}" y="${y}" width="${bw}" height="${Math.max(1, pad.t + ch - y)}" rx="3" fill="url(#gHeat)" data-tip="${m}: ${curYr} = ${fmtInt(vCur)} kWh${costTip}${typeof vPrev === 'number' ? ` (${prevYr}: ${fmtInt(vPrev)} kWh)` : ''}${typeof tCur === 'number' ? ` · ${t.outdoor} ${fmtDec(tCur)}°C` : ''}"/>`;
         }
         if (typeof tCur === "number") {
           pts.push([cx, yTmp(tCur), `${m} ${t.outdoor.toLowerCase()}: ${fmtDec(tCur)} °C`]);
@@ -616,6 +617,7 @@
       const ins = a.insights || {};
       const fc = a.forecast || {};
       const bl = a.billing || {};
+      const costEst = a.cost_estimate || {};
 
       // Capability-driven rendering: the integration reports which data the
       // backend actually delivered. Sections without data are hidden (no empty
@@ -1111,7 +1113,11 @@
               <div class="k-lbl">${esc(t.kpi_bill)} ${curYr}</div>
               <div class="k-val">${fmtInt(bl[`total_${curYr}_kr`] ?? bl.total_2026_kr ?? 0)} kr.</div>
               <div class="k-sub">Saldo ${fmtDec(bl.saldo_kr ?? 0, 2)} kr.${bl.last_bill_date ? ` · ${esc(bl.last_bill_date)}` : ""}</div>
-            </div>` : ""}
+            </div>` : (has("cost") && typeof costEst.ytd_dkk === "number" ? `<div class="kpi" data-section="cost-estimate">
+              <div class="k-lbl">Estimeret forbrug ${curYr}</div>
+              <div class="k-val">~${fmtInt(costEst.ytd_dkk)} kr.</div>
+              <div class="k-sub">${typeof costEst.current_month_dkk === "number" ? `Denne md: ~${fmtInt(costEst.current_month_dkk)} kr. · ` : ""}ekskl. faste afg.</div>
+            </div>` : "")}
           </div>
 
           ${(has("monthly") || has("temperatures")) ? `<div class="grid2">
@@ -1124,7 +1130,7 @@
                   <span><i class="dot" style="background:#38bdf8"></i>${esc(t.outdoor)} °C</span>
                 </div>
               </div>
-              ${this._renderMonthlySvg(mCur, mPrev, wx.monthly_temp || {}, curYr, prevYr, t)}
+              ${this._renderMonthlySvg(mCur, mPrev, wx.monthly_temp || {}, curYr, prevYr, t, costEst.monthly_dkk || {})}
             </div>` : ""}
 
             ${has("temperatures") ? `<div class="panel" data-section="return-temp">

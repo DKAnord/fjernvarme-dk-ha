@@ -170,6 +170,18 @@
       "energy_price": {
         "name": "Heat price"
       },
+      "effective_energy_price": {
+        "name": "Effective heat price"
+      },
+      "latest_day_cost": {
+        "name": "Estimated cost (latest day)"
+      },
+      "month_cost": {
+        "name": "Estimated cost (this month)"
+      },
+      "year_cost": {
+        "name": "Estimated cost (year to date)"
+      },
       "motivation_status": {
         "name": "Motivation tariff",
         "state": {

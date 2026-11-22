@@ -151,6 +151,9 @@ def apply_wattson_data(
 def _hourly_profile(store: dict[str, list[Any]], today: date) -> dict[str, Any]:
     """Average 24-hour kWh profile over recent complete days (as the KMD card expects)."""
     by_day: dict[str, dict[int, float]] = {}
+    # Return temperature per (day, hour), so the card can draw its "Retur °C"
+    # line (it reads ``ret_temp``; without it only the axis is drawn).
+    ret_by_day: dict[str, dict[int, float]] = {}
     first = (today - timedelta(days=PROFILE_DAYS)).isoformat()
     month_prefix = today.strftime("%Y-%m-")
     for start, values in store.items():
@@ -162,6 +165,9 @@ def _hourly_profile(store: dict[str, list[Any]], today: date) -> dict[str, Any]:
         if not (first <= day < today.isoformat()):
             continue
         by_day.setdefault(day, {})[loc.hour] = by_day.get(day, {}).get(loc.hour, 0.0) + kwh
+        t_ret = values[3] if len(values) > 3 else None
+        if t_ret is not None:
+            ret_by_day.setdefault(day, {})[loc.hour] = t_ret
     complete = {d: h for d, h in by_day.items() if len(h) >= 23}
     month_days = {d: h for d, h in complete.items() if d.startswith(month_prefix)}
     use = month_days if len(month_days) >= 3 else complete
@@ -178,8 +184,15 @@ def _hourly_profile(store: dict[str, list[Any]], today: date) -> dict[str, Any]:
         if use is month_days
         else f"seneste {len(use)} dage"
     )
-    return {
+    profile: dict[str, Any] = {
         "period": label,
         "days_averaged": len(use),
         "kwh": [round(sum(b) / len(b), 2) for b in buckets],
     }
+    ret_buckets: list[list[float]] = [[] for _ in range(24)]
+    for day in use:
+        for hr, val in ret_by_day.get(day, {}).items():
+            ret_buckets[hr].append(val)
+    if any(ret_buckets):
+        profile["ret_temp"] = [round(sum(b) / len(b), 1) if b else None for b in ret_buckets]
+    return profile

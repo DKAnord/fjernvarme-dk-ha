@@ -90,7 +90,8 @@ class FakeSession:
             "users/api/v3/User": USER,
             "/locations/loc-1": LOCATION_DETAIL,
             "/locations": LOCATIONS,
-            f"dk/heating/api/consumptions/{HEAT_DEVICE}": heat_items(),
+            # The verified Aalborg path (first candidate); answers ?newerThan=.
+            f"dk/heating/api/v1/devices/{HEAT_DEVICE}/consumption/recent": heat_items(),
         }
         self.routes.update(routes or {})
 

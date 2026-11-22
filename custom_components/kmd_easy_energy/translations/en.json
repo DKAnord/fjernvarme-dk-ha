@@ -131,13 +131,15 @@
           "auto_sync": "Automatic daily sync (E|Forsyning / Watts On)",
           "auto_sync_hour": "Automatic sync time (hour 0–23)",
           "wattson_energy_unit": "Watts On: energy unit (auto = meter metadata/heuristic)",
-          "wattson_endpoint": "Watts On: advanced endpoint template (empty = automatic, e.g. heating/api/consumptions/DEVICE_ID)"
+          "wattson_endpoint": "Watts On: advanced endpoint template (empty = automatic, e.g. heating/api/consumptions/DEVICE_ID)",
+          "kmd_supply": "Customer relationship / heat meter (KMD)"
         },
         "description": "Outdoor temperature (graddage/HDD17, kWh per degree day, temperature lines): an optional Home Assistant outdoor sensor is used first (local, from the recorder's long-term statistics). Days without sensor statistics use Open-Meteo (external weather service) at your Home Assistant home location, or at the coordinates below if you fill them in.",
         "data_description": {
           "outdoor_temp_entity": "Your own outdoor thermometer (temperature sensor with long-term statistics, state_class measurement). Daily means are read locally from the recorder. Days from before the sensor existed fall back to Open-Meteo. Leave empty to use Open-Meteo only.",
           "latitude": "Leave empty to use the Home Assistant home location (Settings → System → General). Only fill in to use another place for Open-Meteo. The utility's location is only used if Home Assistant has no home location.",
-          "longitude": "Fill in together with latitude, or leave both empty."
+          "longitude": "Fill in together with latitude, or leave both empty.",
+          "kmd_supply": "If Min Forsyning has several customer relationships (e.g. electricity and district heating + water), choose Heat (Varme). The list appears after the first sync. Electricity (E17) is never selected automatically."
         }
       }
     },

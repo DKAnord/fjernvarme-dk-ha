@@ -26,6 +26,29 @@ def test_summarize_omits_series_and_tokens() -> None:
             "available_units": [{"Name": "kWh", "Id": "u1"}],
             "daily": {"total": 12.5},
             "token_expired": False,
+            "kmd_supplies": {
+                "customer_count": 2,
+                "meter_count": 2,
+                "kinds": ["electricity", "heat"],
+                "selection": "auto",
+                "selected_kind": "heat",
+                "meters": [
+                    {
+                        "kind": "electricity",
+                        "units": ["kWh"],
+                        "customer_index": 1,
+                        "key": "cust-secret::mp-el",
+                        "selected": False,
+                    },
+                    {
+                        "kind": "heat",
+                        "units": ["kWh", "m3"],
+                        "customer_index": 2,
+                        "key": "cust-secret::mp-heat",
+                        "selected": True,
+                    },
+                ],
+            },
         }
     )
     dumped = str(summary)
@@ -38,6 +61,13 @@ def test_summarize_omits_series_and_tokens() -> None:
     assert summary["meter_count"] == 1
     assert summary["energy_mtd_kwh"] == 12.5
     assert "kWh" in summary["available_unit_names"]
+    assert summary["kmd_supplies"]["selected_kind"] == "heat"
+    assert summary["kmd_supplies"]["customer_count"] == 2
+    dumped = str(summary["kmd_supplies"])
+    assert "cust-secret" not in dumped
+    assert "mp-el" not in dumped
+    assert "mp-heat" not in dumped
+    assert "key" not in dumped
 
 
 @pytest.mark.asyncio

@@ -22,7 +22,7 @@ def test_card_uses_event_and_service() -> None:
     assert "start_mitid_sync" in js
     assert "mitid_otp_code" not in js
     assert "mitid_qr_svg" not in js
-    assert 'VER = "0.3.6"' in js
+    assert 'VER = "0.3.7"' in js
     assert "data-kmd-card-version" in js
     # Must not guess button.<utility_id>_sync as the only path
     assert "button.${activeUtilId" not in js

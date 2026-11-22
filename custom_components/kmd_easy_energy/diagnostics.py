@@ -10,6 +10,7 @@ from homeassistant.core import HomeAssistant
 
 from .const import DOMAIN
 from .coordinator import KMDEasyEnergyCoordinator
+from .kmd_supply import diagnostics_supplies
 
 # Keys that must never appear in a diagnostics download (tokens, MitID user,
 # meter/customer identifiers, addresses and other personal data).
@@ -31,6 +32,9 @@ TO_REDACT = {
     "Customer-Number",
     "InstallationId",
     "MeasurementPointId",
+    "measurement_point_id",
+    "kmd_supply",
+    "key",
     "MeterId",
     "meter_id",
     "MeterNumber",
@@ -159,6 +163,7 @@ def _summarize_coordinator(data: dict[str, Any] | None) -> dict[str, Any]:
         "hourly_m3_points": _series_len(data.get("hourly_m3")),
         "hourly_temp_points": _series_len(data.get("hourly_temp")),
         "meter_count": _series_len(data.get("meters")),
+        "kmd_supplies": diagnostics_supplies(data.get("kmd_supplies")),
         "available_unit_names": [
             u.get("Name") or u.get("Description")
             for u in (data.get("available_units") or [])

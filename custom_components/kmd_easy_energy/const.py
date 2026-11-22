@@ -1,0 +1,34 @@
+"""Constants for KMD Easy Energy integration."""
+
+DOMAIN = "kmd_easy_energy"
+
+CONF_ACCESS_TOKEN = "access_token"
+CONF_UTILITY = "utility"
+CONF_UTILITY_ID = "utility_id"
+CONF_UTILITY_STATUS = "utility_status"
+CONF_PORTAL_URL = "portal_url"
+CONF_CUSTOMER_NUMBER = "customer_number"
+CONF_CUSTOMER_ID = "customer_id"
+CONF_LATITUDE = "latitude"
+CONF_LONGITUDE = "longitude"
+CONF_LOCATION_NAME = "location_name"
+CONF_BONUS_TEMP = "bonus_temp"
+CONF_PENALTY_TEMP = "penalty_temp"
+CONF_MITID_USERNAME = "mitid_username"
+CONF_NOTIFY_SERVICE = "notify_service"
+
+# KMD plugin API
+KMD_API_BASE = "https://easy-energy-plugin-api.kmd.dk"
+
+# Zoom levels matching Novafos / KMD Easy Energy client
+ZOOM_YEAR = 0
+ZOOM_MONTH = 1
+ZOOM_DAY = 2
+ZOOM_HOUR = 3
+
+# Consumption type IDs
+CONSUMPTION_TYPE_HEATING = 5
+CONSUMPTION_TYPE_WATER = 6
+
+UPDATE_INTERVAL = 3600  # seconds
+TOKEN_MAX_AGE_SECONDS = 45 * 60

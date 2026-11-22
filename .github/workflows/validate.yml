@@ -1,0 +1,48 @@
+name: Validate
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  hacs:
+    name: HACS validation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hacs/action@1ebf01c408f29afcb6406bd431bc98fd8cbb15aa
+        with:
+          category: integration
+
+  hassfest:
+    name: Hassfest validation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: home-assistant/actions/hassfest@master
+
+  syntax:
+    name: Syntax & privacy checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Python syntax check
+        run: |
+          python3 -m compileall -q custom_components/kmd_easy_energy
+      - name: JS syntax & frontend sync check
+        run: |
+          node --check dist/kmd-easy-energy-card.js
+          cmp -s dist/kmd-easy-energy-card.js custom_components/kmd_easy_energy/frontend/kmd-easy-energy-card.js
+      - name: Validate hacs.json
+        run: |
+          node -e 'const h=JSON.parse(require("fs").readFileSync("hacs.json","utf8")); if(!/^\d{4}\.\d+\.\d+$/.test(h.homeassistant||"")) throw new Error("hacs.json needs homeassistant minimum version")'
+      - name: No private data
+        run: |
+          ! grep -rEn "192\.168\.|ntfy\.sh|ses-home|pixel_10|Hasselager" --include=*.py --include=*.js --include=*.json --include=*.yaml --include=*.md .

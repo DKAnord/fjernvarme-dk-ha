@@ -1,0 +1,110 @@
+update_token:
+  name: Update access token
+  description: Update the Bearer token (and optional Customer-Id) after a MitID refresh.
+  fields:
+    access_token:
+      name: Access token
+      description: Bearer token (with or without "Bearer " prefix)
+      required: true
+      selector:
+        text:
+    customer_id:
+      name: Customer ID
+      description: Optional Customer-Id header value
+      required: false
+      selector:
+        text:
+    customer_number:
+      name: Customer number
+      description: Optional Customer-Number header value
+      required: false
+      selector:
+        text:
+    entry_id:
+      name: Config entry ID
+      description: Optional – defaults to the first entry
+      required: false
+      selector:
+        text:
+
+refresh:
+  name: Refresh data
+  description: Manually trigger a coordinator refresh for KMD Easy Energy.
+  fields:
+    entry_id:
+      name: Config entry ID
+      description: Optional – refreshes all entries if omitted
+      required: false
+      selector:
+        text:
+
+configure_utility:
+  name: Configure utility & setup
+  description: Configure utility portal, location, thresholds, and optionally start MitID sync or complete initial setup.
+  fields:
+    utility_id:
+      name: Utility ID
+      required: true
+      selector:
+        text:
+    portal_url:
+      name: Portal URL
+      required: false
+      selector:
+        text:
+    location_name:
+      name: Location name
+      required: false
+      selector:
+        text:
+    bonus_temp:
+      name: Return temp bonus (°C)
+      required: false
+      selector:
+        number:
+          min: 15
+          max: 50
+          step: 0.5
+    penalty_temp:
+      name: Return temp penalty (°C)
+      required: false
+      selector:
+        number:
+          min: 20
+          max: 60
+          step: 0.5
+    mitid_username:
+      name: MitID User ID
+      required: false
+      selector:
+        text:
+    notify_service:
+      name: Mobile notify service
+      required: false
+      selector:
+        text:
+    start_sync:
+      name: Start MitID sync
+      required: false
+      selector:
+        boolean:
+    complete_setup:
+      name: Complete initial setup
+      required: false
+      selector:
+        boolean:
+    entry_id:
+      name: Config entry ID
+      required: false
+      selector:
+        text:
+
+reset_setup:
+  name: Reset initial setup
+  description: Switch the dashboard back into Initial Setup Mode.
+  fields:
+    entry_id:
+      name: Config entry ID
+      required: false
+      selector:
+        text:

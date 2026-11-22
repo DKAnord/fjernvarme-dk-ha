@@ -1,0 +1,59 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "KMD Easy Energy — Select Utility",
+        "description": "Choose your Danish district heating utility. Confirmed utilities are verified live; others are pending initial community testing.",
+        "data": {
+          "utility_id": "Utility"
+        }
+      },
+      "auth": {
+        "title": "Login & Token ({utility_name})",
+        "description": "Status: {status_badge}\nLogin portal: {portal_url}\n{notes}\n\nEnter your MitID User ID for native 1-click MitID sync inside Home Assistant, or paste a Bearer token manually.",
+        "data": {
+          "portal_url": "Portal URL",
+          "mitid_username": "MitID User ID (saved locally in HA)",
+          "notify_service": "Mobile notify service (optional, e.g. mobile_app_my_phone)",
+          "access_token": "Access token (optional — auto-fetched via MitID)",
+          "customer_id": "Customer ID (optional)",
+          "location_name": "City / Location label"
+        }
+      },
+      "reconfigure": {
+        "title": "Update Token / Portal ({utility_name})",
+        "description": "Login portal: {portal_url}\nUpdate your MitID User ID, notify service, portal URL, or paste a fresh Bearer token.",
+        "data": {
+          "portal_url": "Portal URL",
+          "mitid_username": "MitID User ID (saved locally in HA)",
+          "notify_service": "Mobile notify service (optional)",
+          "access_token": "New access token (optional)",
+          "customer_id": "Customer ID (optional)",
+          "location_name": "City / Location label"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "Invalid token or no profile returned"
+    },
+    "abort": {
+      "invalid_auth": "Invalid token or no profile returned",
+      "reconfigure_successful": "Updated KMD Easy Energy configuration"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "KMD Easy Energy Settings",
+        "data": {
+          "portal_url": "Portal URL",
+          "location_name": "City / Location label",
+          "bonus_temp": "Return temp bonus threshold (°C)",
+          "penalty_temp": "Return temp penalty threshold (°C)",
+          "latitude": "Latitude (Open-Meteo weather)",
+          "longitude": "Longitude (Open-Meteo weather)"
+        }
+      }
+    }
+  }
+}

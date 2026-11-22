@@ -1,0 +1,59 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Fjernvarme (KMD Easy Energy) — Vælg værk",
+        "description": "Vælg dit fjernvarmeværk. Bekræftede værker er testet live; øvrige afventer første test fra fællesskabet.",
+        "data": {
+          "utility_id": "Forsyningsselskab"
+        }
+      },
+      "auth": {
+        "title": "Login & Opsætning ({utility_name})",
+        "description": "Status: {status_badge}\nLogin-portal: {portal_url}\n{notes}\n\nIndtast dit MitID Bruger-ID til 100% lokal MitID-synkronisering i Home Assistant, eller indsæt et Bearer token manuelt.",
+        "data": {
+          "portal_url": "Portal-URL",
+          "mitid_username": "MitID Bruger-ID (gemmes kun lokalt i HA)",
+          "notify_service": "Mobil push-service (valgfri, f.eks. mobile_app_min_telefon)",
+          "access_token": "Access token (valgfri — hentes automatisk via MitID)",
+          "customer_id": "Kunde-ID (valgfrit)",
+          "location_name": "By / Lokationsnavn"
+        }
+      },
+      "reconfigure": {
+        "title": "Opdater MitID / Portal ({utility_name})",
+        "description": "Login-portal: {portal_url}\nOpdater MitID Bruger-ID, push-service, portal-URL eller indsæt et nyt Bearer token.",
+        "data": {
+          "portal_url": "Portal-URL",
+          "mitid_username": "MitID Bruger-ID (gemmes kun lokalt i HA)",
+          "notify_service": "Mobil push-service (valgfri)",
+          "access_token": "Nyt access token (valgfrit)",
+          "customer_id": "Kunde-ID (valgfrit)",
+          "location_name": "By / Lokationsnavn"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "Ugyldigt token eller ingen profil returneret"
+    },
+    "abort": {
+      "invalid_auth": "Ugyldigt token eller ingen profil returneret",
+      "reconfigure_successful": "Fjernvarme-konfiguration opdateret"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Fjernvarme (KMD) Indstillinger",
+        "data": {
+          "portal_url": "Portal-URL",
+          "location_name": "By / Lokationsnavn",
+          "bonus_temp": "Bonusgrænse returtemperatur (°C)",
+          "penalty_temp": "Gebyrgrænse returtemperatur (°C)",
+          "latitude": "Breddegrad (Open-Meteo vejr)",
+          "longitude": "Længdegrad (Open-Meteo vejr)"
+        }
+      }
+    }
+  }
+}

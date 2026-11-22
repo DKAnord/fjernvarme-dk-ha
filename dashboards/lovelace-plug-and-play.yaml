@@ -1,0 +1,39 @@
+# Plug-and-Play Lovelace Dashboard Layouts for KMD Easy Energy
+
+# Option A: 1-Card Plug-and-Play (includes smart utility login dropdown, sync bar,
+# 4 KPI cards, 5 interactive SVG charts, and 4 weather-correlated insights cards).
+# Replace `entity` with your `sensor.<utility>_overview` (or omit for auto-discovery).
+views:
+  - title: Fjernvarme
+    path: fjernvarme
+    icon: mdi:radiator
+    type: sections
+    max_columns: 3
+    sections:
+      - type: grid
+        column_span: 3
+        cards:
+          - type: custom:kmd-easy-energy-card
+            # entity: sensor.kredslob_overview
+            # utility_id: kredslob
+            language: da
+            bonus_temp: 30
+            penalty_temp: 40
+            show_sync_bar: true
+            grid_options:
+              columns: full
+              rows: auto
+
+# Option B: Full Sections View with Mushroom Sync Header (optional)
+# Requires custom:mushroom-template-card if you want a separate top status card
+# and set `show_sync_bar: false` on `kmd-easy-energy-card`.
+#
+# - type: custom:mushroom-template-card
+#   entity: sensor.kredslob_overview
+#   primary: "{{ state_attr('sensor.kredslob_overview', 'utility') }} · Fjernvarme"
+#   secondary: "Opdateret {{ state_attr('sensor.kredslob_overview', 'updated') }}"
+#   icon: mdi:radiator
+#   icon_color: deep-orange
+#   tap_action:
+#     action: call-service
+#     service: kmd_easy_energy.refresh

@@ -22,8 +22,8 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def test_integration_version_matches_manifest() -> None:
-    assert integration_version() == "0.3.1"
-    assert card_resource_url() == "/local/js/kmd-easy-energy-card.js?v=0.3.1"
+    assert integration_version() == "0.3.2"
+    assert card_resource_url() == "/local/js/kmd-easy-energy-card.js?v=0.3.2"
     assert card_resource_url("0.3.0") == "/local/js/kmd-easy-energy-card.js?v=0.3.0"
 
 
@@ -32,7 +32,7 @@ def test_integration_version_matches_manifest() -> None:
     [
         ("/local/js/kmd-easy-energy-card.js", True),
         ("/local/js/kmd-easy-energy-card.js?v=0.2.0", True),
-        ("/local/js/kmd-easy-energy-card.js?v=0.3.1", True),
+        ("/local/js/kmd-easy-energy-card.js?v=0.3.2", True),
         ("http://homeassistant.local:8123/local/js/kmd-easy-energy-card.js?v=1", True),
         ("/local/js/kmd-easy-energy-card.js#frag", True),
         ("/local/js/other-card.js", False),
@@ -94,8 +94,8 @@ class _FakeStorage:
 
 def test_ensure_resource_skips_when_lovelace_missing() -> None:
     hass = SimpleNamespace(data={})
-    url = asyncio.run(async_ensure_lovelace_card_resource(hass, "0.3.1"))
-    assert url == "/local/js/kmd-easy-energy-card.js?v=0.3.1"
+    url = asyncio.run(async_ensure_lovelace_card_resource(hass, "0.3.2"))
+    assert url == "/local/js/kmd-easy-energy-card.js?v=0.3.2"
 
 
 def test_ensure_resource_yaml_mode_warns(caplog: pytest.LogCaptureFixture) -> None:
@@ -106,8 +106,8 @@ def test_ensure_resource_yaml_mode_warns(caplog: pytest.LogCaptureFixture) -> No
     )
     hass = SimpleNamespace(data={LOVELACE_DATA: SimpleNamespace(resources=yaml_resources)})
     with caplog.at_level(logging.WARNING):
-        url = asyncio.run(async_ensure_lovelace_card_resource(hass, "0.3.1"))
-    assert url.endswith("?v=0.3.1")
+        url = asyncio.run(async_ensure_lovelace_card_resource(hass, "0.3.2"))
+    assert url.endswith("?v=0.3.2")
     assert any("YAML mode" in rec.message for rec in caplog.records)
 
 
@@ -116,13 +116,13 @@ def test_ensure_resource_yaml_mode_silent_when_current(
 ) -> None:
     from homeassistant.components.lovelace import LOVELACE_DATA
 
-    target = card_resource_url("0.3.1")
+    target = card_resource_url("0.3.2")
     yaml_resources = SimpleNamespace(
         async_items=lambda: [{"url": target, "type": "module"}]
     )
     hass = SimpleNamespace(data={LOVELACE_DATA: SimpleNamespace(resources=yaml_resources)})
     with caplog.at_level(logging.WARNING, logger="kmd_easy_energy.frontend_card"):
-        asyncio.run(async_ensure_lovelace_card_resource(hass, "0.3.1"))
+        asyncio.run(async_ensure_lovelace_card_resource(hass, "0.3.2"))
     assert not any("YAML mode" in rec.message for rec in caplog.records)
 
 
@@ -143,8 +143,8 @@ def test_ensure_resource_creates_when_missing(monkeypatch: pytest.MonkeyPatch) -
     _patch_storage_class(monkeypatch)
     store = _FakeStorage([])
     hass = SimpleNamespace(data={LOVELACE_DATA: SimpleNamespace(resources=store)})
-    url = asyncio.run(async_ensure_lovelace_card_resource(hass, "0.3.1"))
-    assert url == "/local/js/kmd-easy-energy-card.js?v=0.3.1"
+    url = asyncio.run(async_ensure_lovelace_card_resource(hass, "0.3.2"))
+    assert url == "/local/js/kmd-easy-energy-card.js?v=0.3.2"
     assert store.created == [{"res_type": "module", "url": url}]
     assert store.items[0]["url"] == url
     assert store.items[0]["type"] == "module"
@@ -158,7 +158,7 @@ def test_ensure_resource_updates_unversioned_url(monkeypatch: pytest.MonkeyPatch
         [{"id": "abc", "type": "module", "url": "/local/js/kmd-easy-energy-card.js"}]
     )
     hass = SimpleNamespace(data={LOVELACE_DATA: SimpleNamespace(resources=store)})
-    url = asyncio.run(async_ensure_lovelace_card_resource(hass, "0.3.1"))
+    url = asyncio.run(async_ensure_lovelace_card_resource(hass, "0.3.2"))
     assert store.updated == [("abc", {"url": url})]
     assert store.items[0]["url"] == url
     assert not store.created
@@ -175,7 +175,7 @@ def test_ensure_resource_updates_old_version_and_fixes_type(
         [{"id": "abc", "type": "js", "url": "/local/js/kmd-easy-energy-card.js?v=0.2.0"}]
     )
     hass = SimpleNamespace(data={LOVELACE_DATA: SimpleNamespace(resources=store)})
-    url = asyncio.run(async_ensure_lovelace_card_resource(hass, "0.3.1"))
+    url = asyncio.run(async_ensure_lovelace_card_resource(hass, "0.3.2"))
     assert store.updated == [("abc", {"url": url, "res_type": "module"})]
     assert store.items[0]["type"] == "module"
 
@@ -184,10 +184,10 @@ def test_ensure_resource_noop_when_current(monkeypatch: pytest.MonkeyPatch) -> N
     from homeassistant.components.lovelace import LOVELACE_DATA
 
     _patch_storage_class(monkeypatch)
-    target = card_resource_url("0.3.1")
+    target = card_resource_url("0.3.2")
     store = _FakeStorage([{"id": "abc", "type": "module", "url": target}])
     hass = SimpleNamespace(data={LOVELACE_DATA: SimpleNamespace(resources=store)})
-    asyncio.run(async_ensure_lovelace_card_resource(hass, "0.3.1"))
+    asyncio.run(async_ensure_lovelace_card_resource(hass, "0.3.2"))
     assert store.updated == []
     assert store.created == []
     assert store.deleted == []
@@ -204,7 +204,7 @@ def test_ensure_resource_removes_duplicates(monkeypatch: pytest.MonkeyPatch) -> 
         ]
     )
     hass = SimpleNamespace(data={LOVELACE_DATA: SimpleNamespace(resources=store)})
-    url = asyncio.run(async_ensure_lovelace_card_resource(hass, "0.3.1"))
+    url = asyncio.run(async_ensure_lovelace_card_resource(hass, "0.3.2"))
     assert store.updated == [("a", {"url": url})]
     assert store.deleted == ["b"]
     assert [item["id"] for item in store.items] == ["a"]
@@ -212,8 +212,8 @@ def test_ensure_resource_removes_duplicates(monkeypatch: pytest.MonkeyPatch) -> 
 
 def test_readme_documents_versioned_resource() -> None:
     readme = (ROOT / "README.md").read_text()
-    assert "/local/js/kmd-easy-energy-card.js?v=0.3.1" in readme
+    assert "/local/js/kmd-easy-energy-card.js?v=0.3.2" in readme
     assert "31 dage" in readme or "31 days" in readme
     changelog = (ROOT / "CHANGELOG.md").read_text()
-    assert "## [0.3.1]" in changelog
+    assert "## [0.3.2]" in changelog
     assert CARD_RESOURCE_PATH in changelog or "kmd-easy-energy-card.js?v=" in changelog

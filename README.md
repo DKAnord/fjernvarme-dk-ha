@@ -1,13 +1,13 @@
-# 🔥 Fjernvarme (KMD Easy Energy) — HA Connector & Dashboard
+# 🔥 Dansk Fjernvarme — Home Assistant Integration & Dashboard
 
-[![Åbn i HACS](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=DKAnord&repository=kmd-fjernvarme-ha&category=integration)
+[![Åbn i HACS](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=DKAnord&repository=fjernvarme-dk-ha&category=integration)
 
-Komplet, **100% lokal** Home Assistant-integration (`kmd_easy_energy`) og **Plug-and-Play Lovelace-dashboard** (`custom:kmd-easy-energy-card`) til danske fjernvarmeværker på **KMD Easy Energy** (`easy-energy-plugin-api.kmd.dk`).
+Komplet, **100% lokal** Home Assistant-integration (`kmd_easy_energy`) og **Plug-and-Play Lovelace-dashboard** (`custom:kmd-easy-energy-card`) til danske fjernvarmeværker på tværs af **KMD Easy Energy / Min Forsyning**, **Watts On** og **E|Forsyning**. *(Det tekniske domæne er fortsat `kmd_easy_energy`, så eksisterende opsætninger opgraderer problemfrit uden breaking changes.)*
 
 Log ind med **MitID direkte i Home Assistant** i ren Python (OIDC PKCE + NemLog-in + MitID SRP) — **ingen Chromium, ingen ekstern server eller add-on** påkrævet. Kører direkte på Raspberry Pi, Home Assistant OS og Docker.
 
 > [!NOTE]
-> **`v0.3.4` er stabil for KMD / Kredsløb og for Watts On hos Aalborg Forsyning.** Integrationen er testet live hos **Kredsløb** og **Aalborg Forsyning** (Watts On). De øvrige 15 KMD-værker og brugerdefineret portal-URL afventer stadig live-test. **E|Forsyning** (Hjørring Varmeforsyning) er eksperimentel og ikke afprøvet live. **Watts On** er eksperimentel og uofficiel: Aalborg er bekræftet live; Forsyning Helsingør, Fjernvarme Fyn og Hillerød Forsyning afventer første test — beta-testere søges. Alle tilbagemeldinger er guld værd — også *"det virker ikke hos mit værk"*. Brug feedback-knappen på kortet eller [opret et issue](https://github.com/DKAnord/kmd-fjernvarme-ha/issues) med navnet på dit værk.
+> **`v0.3.5` er stabil for KMD / Kredsløb og for Watts On hos Aalborg Forsyning.** Integrationen er testet live hos **Kredsløb** og **Aalborg Forsyning** (Watts On). De øvrige 15 KMD-værker og brugerdefineret portal-URL afventer stadig live-test. **E|Forsyning** (Hjørring Varmeforsyning) er eksperimentel og ikke afprøvet live. **Watts On** er eksperimentel og uofficiel: Aalborg er bekræftet live; Forsyning Helsingør, Fjernvarme Fyn og Hillerød Forsyning afventer første test — beta-testere søges. Alle tilbagemeldinger er guld værd — også *"det virker ikke hos mit værk"*. Brug feedback-knappen på kortet eller [opret et issue](https://github.com/DKAnord/fjernvarme-dk-ha/issues) med navnet på dit værk.
 
 ---
 
@@ -79,7 +79,7 @@ Se [Watts On-backend](#-watts-on-backend-eksperimentel) nedenfor. Beta-testere s
 
 **Hurtig 1-klik-tilføjelse i HACS:**
 
-[![Åbn i HACS](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=DKAnord&repository=kmd-fjernvarme-ha&category=integration)
+[![Åbn i HACS](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=DKAnord&repository=fjernvarme-dk-ha&category=integration)
 
 Klik på knappen for at tilføje arkivet i HACS → klik **Hent (Download)** (seneste version) → genstart Home Assistant.
 
@@ -88,26 +88,26 @@ Klik på knappen for at tilføje arkivet i HACS → klik **Hent (Download)** (se
 
 1. Åbn **HACS** i Home Assistant → **Integrationer** → menuen (`⋮` øverst til højre) → **Brugerdefinerede arkiver (Custom repositories)**.
 2. Tilføj:
-   - **Repository:** `https://github.com/DKAnord/kmd-fjernvarme-ha`
+   - **Repository:** `https://github.com/DKAnord/fjernvarme-dk-ha`
    - **Kategori:** `Integration`
-3. Søg efter **Fjernvarme (KMD)** i HACS, klik **Hent (Download)** (seneste version), og genstart Home Assistant.
+3. Søg efter **Dansk Fjernvarme** i HACS, klik **Hent (Download)** (seneste version), og genstart Home Assistant.
 
 </details>
 
 **Efter genstart:**
 
-1. Tilføj integrationen i Home Assistant (**Indstillinger → Enheder og tjenester → Tilføj integration → Fjernvarme (KMD Easy Energy)**) og vælg dit varmeværk:
+1. Tilføj integrationen i Home Assistant (**Indstillinger → Enheder og tjenester → Tilføj integration → Dansk Fjernvarme**) og vælg dit varmeværk:
 
    [![Tilføj integration](https://my.home-assistant.io/badges/config_flow_start.svg)](https://my.home-assistant.io/redirect/config_flow_start/?domain=kmd_easy_energy)
 
 2. Dashboard-kortet installeres automatisk. I **storage-tilstand** (standard) opretter eller opdaterer integrationen selv Lovelace-ressourcen ved opstart. Tjek under **Indstillinger → Dashboards → (`⋮`) Ressourcer**, at URL'en er:
-   - **URL:** `/local/js/kmd-easy-energy-card.js?v=0.3.4`
+   - **URL:** `/local/js/kmd-easy-energy-card.js?v=0.3.5`
    - **Ressourcetype:** `JavaScript-modul`
    *(Integrationen kopierer kortet til `/config/www/js/kmd-easy-energy-card.js` ved opstart. Home Assistant cacher filer under `/local/` i op til 31 dage, så `?v=…` er nødvendig efter en opdatering — ellers kan browseren eller Companion-appen blive ved med at køre et gammelt kort uden QR-kode. Kører du Lovelace i YAML-tilstand, skal du selv rette URL'en.)*
-3. Tilføj kortet **Fjernvarme (KMD Easy Energy): Dashboard** på et dashboard via den visuelle kortvælger (eller se [dashboards/lovelace-plug-and-play.yaml](dashboards/lovelace-plug-and-play.yaml)).
+3. Tilføj kortet **Dansk Fjernvarme: Dashboard** på et dashboard via den visuelle kortvælger (eller se [dashboards/lovelace-plug-and-play.yaml](dashboards/lovelace-plug-and-play.yaml)).
 
 > [!TIP]
-> **Mangler QR-koden efter en opdatering?** Så kører du sandsynligvis stadig det gamle kort i browserens cache. Ret ressource-URL'en til den ovenfor (med `?v=0.3.4`), og genindlæs hardt: **Ctrl+Shift+R** / **Cmd+Shift+R**. I Companion-appen: **Fejlfinding / Debugging → Nulstil frontend-cache**, og luk appen helt og åbn den igen. Du kan tjekke at det nye kort er indlæst ved i browserens udviklerværktøj at se, at elementet har `data-kmd-card-version="0.3.4"`.
+> **Mangler QR-koden efter en opdatering?** Så kører du sandsynligvis stadig det gamle kort i browserens cache. Ret ressource-URL'en til den ovenfor (med `?v=0.3.5`), og genindlæs hardt: **Ctrl+Shift+R** / **Cmd+Shift+R**. I Companion-appen: **Fejlfinding / Debugging → Nulstil frontend-cache**, og luk appen helt og åbn den igen. Du kan tjekke at det nye kort er indlæst ved i browserens udviklerværktøj at se, at elementet har `data-kmd-card-version="0.3.5"`.
 
 ---
 
@@ -176,8 +176,8 @@ Gælder KMD-værker med MitID (fx Kredsløb). E|Forsyning og Watts On har deres 
 
 ### Sådan gør du
 1. **Installér via HACS** (seneste version) og genstart Home Assistant — se [Installation via HACS](#-installation-via-hacs).
-2. Gå til **Indstillinger → Enheder og tjenester → Tilføj integration → Fjernvarme (KMD Easy Energy)**, vælg dit værk, udfyld **MitID Bruger-ID** *(gemmes kun lokalt i Home Assistant)*, og tryk **Submit**. *Det opretter kun integrationen — der sker endnu intet MitID-login i denne dialog.*
-3. Tilføj kort-ressourcen og kortet **Fjernvarme (KMD Easy Energy): Dashboard** på et dashboard — se trinene under [Installation via HACS](#-installation-via-hacs) (*Efter genstart*).
+2. Gå til **Indstillinger → Enheder og tjenester → Tilføj integration → Dansk Fjernvarme**, vælg dit værk, udfyld **MitID Bruger-ID** *(gemmes kun lokalt i Home Assistant)*, og tryk **Submit**. *Det opretter kun integrationen — der sker endnu intet MitID-login i denne dialog.*
+3. Tilføj kort-ressourcen og kortet **Dansk Fjernvarme: Dashboard** på et dashboard — se trinene under [Installation via HACS](#-installation-via-hacs) (*Efter genstart*).
 4. På kortet trykker du **🚀 Gem & Start MitID-synkronisering**. **Åbn straks MitID-appen på din telefon og lås den op** — MitID danner først QR-koden / engangskoden i det øjeblik, appen åbnes. *(Åbn ikke selv værkets hjemmeside i browseren samtidig — det giver MitID-fejl `CAP008`.)*
    - **Opsætter du på en tablet eller computer:** scan QR-koden på dashboard-kortet med MitID-appen på telefonen, og godkend.
    - **Opsætter du på samme telefon som MitID-appen:** indtast de **4 cifre** fra kortet (eller push-notifikationen) i MitID-appen, og godkend — det kræver, at engangskoder er slået til (se nedenfor).
@@ -265,9 +265,9 @@ Download diagnostics fra integrationen, hvis du skal have support: tokens, MitID
 
 ---
 
-## 🇬🇧 English notes (new in `v0.3.0`–`v0.3.4`)
+## 🇬🇧 English notes (new in `v0.3.0`–`v0.3.5`)
 
-This is a Denmark-only Home Assistant integration for district heating on the KMD Easy Energy platform. Version **`v0.3.4`** (first stable line: **`v0.3.0`**) moves the usage cache to private `.storage`, keeps MitID OTP/QR off sensor attributes and off the event bus (the bundled card gets them via the websocket subscription `kmd_easy_energy/mitid/subscribe`; event `kmd_easy_energy_mitid_challenge` carries status only), and uses **session-based sync**: KMD only issues a ~1 h access token (no refresh token), so each "Synkroniser" press is one MitID login that fetches everything since the last sync and then discards the token (never stored). There is no background polling, no reauth/repair for an expired token, and cached values are restored after an HA restart without contacting KMD. A soft, non-invasive weekend nudge (a calm info chip under the Synkroniser button; no notification, repair or push) (`binary_sensor.<entry>_sync_reminder`, Danish text on the card) is shown on Saturday/Sunday if there was no sync on Thursday, Friday or Saturday that week; it can be turned off in the options.
+This is a Denmark-only Home Assistant integration (**Dansk Fjernvarme**, technical domain `kmd_easy_energy`) for district heating across KMD Easy Energy / Min Forsyning, Watts On, and E|Forsyning. Version **`v0.3.5`** (first stable line: **`v0.3.0`**) moves the usage cache to private `.storage`, keeps MitID OTP/QR off sensor attributes and off the event bus (the bundled card gets them via the websocket subscription `kmd_easy_energy/mitid/subscribe`; event `kmd_easy_energy_mitid_challenge` carries status only), and uses **session-based sync**: KMD only issues a ~1 h access token (no refresh token), so each "Synkroniser" press is one MitID login that fetches everything since the last sync and then discards the token (never stored). There is no background polling, no reauth/repair for an expired token, and cached values are restored after an HA restart without contacting KMD. A soft, non-invasive weekend nudge (a calm info chip under the Synkroniser button; no notification, repair or push) (`binary_sensor.<entry>_sync_reminder`, Danish text on the card) is shown on Saturday/Sunday if there was no sync on Thursday, Friday or Saturday that week; it can be turned off in the options.
 
 For the Energy dashboard, add the imported hourly statistics `kmd_easy_energy:energy_<entry>` / `:volume_<entry>`, not the month-to-date entities. Heat price (DKK/kWh) is an option (and unlocks cross-provider variable cost estimate sensors + the card's `💰 Estimated variable cost` panel across KMD, Watts On, and E|Forsyning); Kredsløb defaults come from the [official price page](https://www.kredslob.dk/privat/fjernvarme/fjernvarmepriser) for the current year. Motivation tariff, degree-day forecast and an abnormal-consumption binary sensor are included; the integration never sends leak notifications on its own.
 
@@ -277,7 +277,7 @@ For the Energy dashboard, add the imported hourly statistics `kmd_easy_energy:en
 
 **Outdoor temperature:** degree days and temperature lines use, in this order, an optional HA outdoor temperature sensor (daily means from the recorder's long-term statistics, local-first, read-only), then Open-Meteo (external service) for any day the sensor doesn't cover. Open-Meteo uses the location override from the options if set, otherwise the HA home location, otherwise the utility's coordinates. Config entry 1.3 stops treating the utility's coordinates as your location; explicit overrides are kept. The source is exposed as `temp_source` / `outdoor_temp` (no coordinates) and shown on the card.
 
-**Breaking for custom dashboards:** attributes `mitid_otp_code` and `mitid_qr_svg` are removed. Use the bundled card or the websocket subscription above. After updating, the Lovelace resource must be `/local/js/kmd-easy-energy-card.js?v=0.3.4` (Home Assistant caches `/local/` for 31 days; a stale v0.2.x card shows no QR). Storage-mode Lovelace is updated automatically on startup; then hard-refresh the dashboard (Companion app: reset frontend cache). Setup from a tablet/PC works with MitID's default QR (both animated frames are shown on the card); only setup on the same phone as the MitID app needs one-time codes enabled in the MitID app. Phone OTP sync is verified live on Kredsløb; tablet QR and additional KMD Easy Energy utilities are open for beta testing.
+**Breaking for custom dashboards:** attributes `mitid_otp_code` and `mitid_qr_svg` are removed. Use the bundled card or the websocket subscription above. After updating, the Lovelace resource must be `/local/js/kmd-easy-energy-card.js?v=0.3.5` (Home Assistant caches `/local/` for 31 days; a stale v0.2.x card shows no QR). Storage-mode Lovelace is updated automatically on startup; then hard-refresh the dashboard (Companion app: reset frontend cache). Setup from a tablet/PC works with MitID's default QR (both animated frames are shown on the card); only setup on the same phone as the MitID app needs one-time codes enabled in the MitID app. Phone OTP sync is verified live on Kredsløb; tablet QR and additional KMD Easy Energy utilities are open for beta testing.
 
 ---
 
@@ -293,3 +293,16 @@ For the Energy dashboard, add the imported hourly statistics `kmd_easy_energy:en
 - Watts On: Kun et refresh token gemmes i `.storage/core.config_entries` (din Watts-adgangskode ses aldrig af Home Assistant). Det roteres ved hver synkronisering, logges aldrig og redigeres i diagnostics sammen med bruger- og måler-id. Adresser, navne og målernumre fra Watts gemmes ikke. Ellers står sensorerne på de senest hentede værdier fra den lokale cache.
 - Den valgfrie feedback-knap til GitHub åbner kun en forudfyldt kladde i din browser uden personoplysninger, tokens, kundenumre eller forbrugstal.
 - **Diagnostics** (Indstillinger → integrationen → Download diagnostics) redigerer access tokens, MitID-brugernavn, kunde- og måler-id'er, GPS-koordinater, push-service og adresser. Store forbrugsserier er kun talt, ikke inkluderet.
+
+---
+
+## 🙏 Tak & Credits
+
+En stor tak til de udviklere og brugere, der har gjort denne integration mulig på tværs af danske fjernvarmesystemer:
+
+- **[kpoppel/homeassistant-eforsyning](https://github.com/kpoppel/homeassistant-eforsyning)** *(Apache-2.0)* — Oprindelig Home Assistant-integration til **E|Forsyning**. Login- og dataprotokollen er studeret derfra og genimplementeret som asynkron klient i `api/eforsyning_client.py`.
+- **[TheRealBatBro/Home-Assistant-Novafos-V2](https://github.com/TheRealBatBro/Home-Assistant-Novafos-V2)** *(MIT)* — Oprindelig Home Assistant-integration til **Watts On** (Novafos vand). Azure AD B2C + PKCE-loginflowet og Watts On API-strukturen er lært derfra og genimplementeret i `api/wattson_client.py`.
+- **[Hundter/MitID-BrowserClient](https://github.com/Hundter/MitID-BrowserClient)** *(MIT)* — MitID SRP-klienten, der gør 100 % lokalt MitID-login muligt direkte i Home Assistant uden ekstern browser.
+- **[@dkvand](https://github.com/dkvand)** — Live-test, sparring, PR #9 (Aalborg Forsynings varme-endpoint og felter på Watts On) samt inspiration til kr.-estimatpanelet på dashboardet.
+
+Se [NOTICE](NOTICE) for fulde licens- og copyright-tekster.

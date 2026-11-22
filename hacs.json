@@ -1,5 +1,5 @@
 {
-  "name": "Fjernvarme (KMD) – HA Connector & Dashboard",
+  "name": "Dansk Fjernvarme",
   "country": "DK",
   "homeassistant": "2024.12.0",
   "render_readme": true

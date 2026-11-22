@@ -12,6 +12,15 @@ Alle væsentlige ændringer i **Fjernvarme (KMD Easy Energy) – HA Connector & 
 - Bredde-/længdegrad i indstillingerne er nu tomme som standard (= HA-hjemmelokation) og skal udfyldes parvis. Nye fejltekster på dansk og engelsk.
 - **Migrering (config entry 1.2 → 1.3, ikke brudende):** værkets koordinater flyttes til `utility_latitude`/`utility_longitude`. Koordinater i indstillingerne beholdes som eksplicit valg, medmindre de blot var den gamle formulars forudfyldte værdi (værkets placering, HA-hjemmelokationen eller 56.15/10.10). Så fjernes de, og installationen følger HA-hjemmelokationen. Ældre versioner kan stadig læse en 1.3-entry; de falder så tilbage til HA-hjemmelokationen.
 
+### Tilføjet: Watts On-backend for Aalborg Forsyning (eksperimentel, uofficiel, ikke testet live — beta-tester søges)
+- Ny backend `wattson` for fjernvarme vist i **Watts On**-appen. Første værk: **Aalborg Forsyning** (`utilities.json`). Forsyning Helsingør er uændret (KMD), selv om den også findes i Watts On.
+- Login i browseren uden MitID: config flowet viser et login-link (PKCE), og man indsætter den sidste `msauth://`-adresse. Home Assistant ser aldrig Watts-adgangskoden. Kun et refresh token gemmes; roterede tokens gemmes med det samme, logges aldrig og redigeres i diagnostics. Genkonfigurer = log ind igen (ingen reauth/repair).
+- Varmemåler findes automatisk (eller vælges), varme-endpoint findes ved at prøve få kandidater (resultatet huskes og vises i diagnostics). Defensiv parsing: energi (kWh/MWh/GJ), m³ og frem-/returtemperatur kun når felterne genkendes; ellers skjules de. Timedata → Energy-statistik pr. time, timeprofil, døgn/måned/år.
+- Automatisk daglig synkronisering (standard), weekend-påmindelse slået fra som standard. Avancerede indstillinger: energienhed og endpoint-skabelon.
+- Volumen-/returtemperatur-sensorer oprettes først, når data er fundet (én genindlæsning).
+- Bygget med [TheRealBatBro/Home-Assistant-Novafos-V2](https://github.com/TheRealBatBro/Home-Assistant-Novafos-V2) (MIT) som inspiration: afledt fil markeret, MIT-tekst i NOTICE og `api/LICENSE-novafos-v2-MIT.txt`, kreditering i README.
+- E|Forsyning og Watts On deler nu den daglige mapping (`apply_daily_readings`) og synkroniseringslogik; KMD er uændret.
+
 ## [0.3.0-beta.3] (efter 0.3.0-beta.2)
 
 ### Tilføjet: E|Forsyning-backend (eksperimentel, ikke testet live — beta-testere søges)

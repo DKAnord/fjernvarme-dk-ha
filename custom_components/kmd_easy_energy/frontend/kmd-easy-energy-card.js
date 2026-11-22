@@ -94,6 +94,7 @@
     { id: "samn", name: "SAMN Forsyning", city: "Horsens / Odder", url: "https://www.samn.dk/", status: "pending_test" },
     { id: "go-energi", name: "go'energi", city: "Thy-Mors", url: "https://www.goenergi.dk/", status: "pending_test" },
     { id: "hjorring-varmeforsyning", name: "Hjørring Varmeforsyning", city: "Hjørring", url: "https://eforsyning.dk/hjvarme/", status: "pending_test", backend: "eforsyning" },
+    { id: "aalborg-forsyning", name: "Aalborg Forsyning", city: "Aalborg", url: "https://aalborgforsyning.dk/services/forbrug/watts-on/", status: "pending_test", backend: "wattson" },
   ];
 
   const I18N = {
@@ -596,8 +597,11 @@
       const capList = Array.isArray(a.capabilities) ? a.capabilities : null;
       const has = (c) => (capList ? capList.includes(c) : true);
       const backend = a.backend || "kmd";
-      const hasMitid = capList ? capList.includes("mitid") : backend !== "eforsyning";
-      const dataSource = a.data_source || (backend === "eforsyning" ? "E|Forsyning" : "KMD Easy Energy");
+      const hasMitid = capList ? capList.includes("mitid") : backend === "kmd";
+      const dataSource = a.data_source || ({ eforsyning: "E|Forsyning", wattson: "Watts On" }[backend] || "KMD Easy Energy");
+      const loginHow = backend === "wattson"
+        ? "Login med din Watts On-konto (browser-login, din adgangskode gemmes ikke)"
+        : "Login med forbrugernummer og webpinkode";
       const yCur = Number(ann[String(curYr)] ?? st?.state ?? 0);
       const yPrev = Number(ann[String(prevYr)] ?? 0);
       const rtCur = Number(rtA[String(curYr)] ?? rtA["2026"] ?? 0);
@@ -655,7 +659,7 @@
       const utilStatus = a.utility_status || activeUtil.status;
       const statusBadge = utilStatus === "confirmed" ? t.confirmed : t.pending;
 
-      // The MitID wizard only lists KMD utilities (E|Forsyning is set up in HA's config flow).
+      // The MitID wizard only lists KMD utilities (E|Forsyning / Watts On are set up in HA's config flow).
       const kmdUtils = UTILITIES.filter((u) => (u.backend || "kmd") === "kmd");
       const confirmedOpts = kmdUtils.filter((u) => u.status === "confirmed")
         .map((u) => `<option value="${u.id}" ${u.id === activeUtilId ? "selected" : ""}>✅ ${esc(u.name)} (${esc(u.city)})</option>`).join("");
@@ -752,7 +756,7 @@
                 ${!isInitialSetup ? `<button class="btn" id="closeSetupBtn">✕ Luk</button>` : ""}
               </div>
             </div>
-            <div class="ob-note">Data fra ${esc(dataSource)}. Login med forbrugernummer og webpinkode er sat op i Home Assistant (Indstillinger → Enheder &amp; tjenester) — der bruges ikke MitID. Tryk <b>🔄 Hent data nu</b> for første hentning${autoHour ? "; derefter hentes data automatisk hver dag" : ""}.</div>
+            <div class="ob-note">Data fra ${esc(dataSource)}. ${esc(loginHow)} er sat op i Home Assistant (Indstillinger → Enheder &amp; tjenester) — der bruges ikke MitID. Tryk <b>🔄 Hent data nu</b> for første hentning${autoHour ? "; derefter hentes data automatisk hver dag" : ""}.</div>
             ${(hasSyncMsg || this._startingSync) ? `<div class="ob-live ${hasSyncMsg && syncMsg.startsWith("Fejl") ? "red" : ""}">📡 ${esc(hasSyncMsg ? syncMsg : "Henter data…")}</div>` : ""}
             <div class="tb-actions">
               <button class="btn primary" id="efSyncBtn">🔄 Hent data nu</button>
@@ -1308,7 +1312,7 @@
         // Prefer the domain service (looks up the entry by id / utility_id) so
         // entity_id slugs like "envafors_sk_forsyning" cannot miss the button.
         // KMD: every "Synkroniser" is one MitID login + fetch since last sync.
-        // Backends without MitID (E|Forsyning) use the generic "sync" service.
+        // Backends without MitID (E|Forsyning, Watts On) use the generic "sync" service.
         if (!hasMitid) {
           this._hass.callService("kmd_easy_energy", "sync", a.entry_id ? { entry_id: a.entry_id } : {});
           return;

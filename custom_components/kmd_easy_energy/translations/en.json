@@ -60,6 +60,33 @@
           "eforsyning_password": "Web PIN (empty = keep)",
           "eforsyning_supplier_id": "Supplier id"
         }
+      },
+      "wattson": {
+        "title": "Watts On login ({utility_name})",
+        "description": "⚠️ Experimental: Watts On support (Aalborg Forsyning) has not been tested live yet — beta testers wanted. Unofficial: it uses the same API as the Watts On app and may break if Watts changes it.\n\nYour heat meter must already be added in the Watts On app. Do this on a **computer** (not the phone with the Watts app):\n\n1. **[Open the Watts On login]({auth_url})** and sign in with your Watts On account (same e-mail and password as in the app). Home Assistant never sees your password.\n2. At the end the browser tries to open an address starting with `msauth://com.seasnve.watts/…`. It cannot — the page stalls or shows an error. That is expected.\n3. Copy that address: **Chrome/Edge:** press F12 → *Console* tab → the line *Failed to launch 'msauth://…'* → copy the whole line (or F12 → *Network* → last request → *Location*). **Firefox:** the address is shown in the address bar/error page.\n4. Paste it here within about 10 minutes (the code works only once). After an error a new login link is created automatically.\n\nHome Assistant only stores a *refresh token* (like other integrations store passwords). It is renewed on every sync, never logged and redacted in diagnostics.",
+        "data": {
+          "wattson_redirect_url": "Address starting with msauth://",
+          "wattson_refresh_token": "Advanced: refresh token (instead of the address)"
+        },
+        "data_description": {
+          "wattson_redirect_url": "The whole address (or the whole console line) — it contains code=…",
+          "wattson_refresh_token": "Only if you already have a token, e.g. from tools/login.py in Novafos-V2. Leave empty otherwise."
+        }
+      },
+      "wattson_device": {
+        "title": "Choose heat meter",
+        "description": "The Watts On account has several meters, or the heat meter could not be recognised with certainty. Pick the meter for your district heating.",
+        "data": {
+          "wattson_device_id": "Meter"
+        }
+      },
+      "reconfigure_wattson": {
+        "title": "Sign in to Watts On again ({utility_name})",
+        "description": "⚠️ Experimental: Watts On support (Aalborg Forsyning) has not been tested live yet — beta testers wanted. Unofficial: it uses the same API as the Watts On app and may break if Watts changes it.\n\nYour heat meter must already be added in the Watts On app. Do this on a **computer** (not the phone with the Watts app):\n\n1. **[Open the Watts On login]({auth_url})** and sign in with your Watts On account (same e-mail and password as in the app). Home Assistant never sees your password.\n2. At the end the browser tries to open an address starting with `msauth://com.seasnve.watts/…`. It cannot — the page stalls or shows an error. That is expected.\n3. Copy that address: **Chrome/Edge:** press F12 → *Console* tab → the line *Failed to launch 'msauth://…'* → copy the whole line (or F12 → *Network* → last request → *Location*). **Firefox:** the address is shown in the address bar/error page.\n4. Paste it here within about 10 minutes (the code works only once). After an error a new login link is created automatically.\n\nHome Assistant only stores a *refresh token* (like other integrations store passwords). It is renewed on every sync, never logged and redacted in diagnostics.",
+        "data": {
+          "wattson_redirect_url": "Address starting with msauth://",
+          "wattson_refresh_token": "Advanced: refresh token (instead of the address)"
+        }
       }
     },
     "abort": {
@@ -71,7 +98,16 @@
       "cannot_connect": "Could not connect to E|Forsyning (check the supplier id and network).",
       "unknown": "Unexpected error — see the log.",
       "eforsyning_missing": "Enter both consumer number and web PIN.",
-      "eforsyning_supplier_required": "The supplier id is required for this utility."
+      "eforsyning_supplier_required": "The supplier id is required for this utility.",
+      "wattson_missing": "Paste the address starting with msauth:// (or a refresh token).",
+      "wattson_no_code": "No code= found in what you pasted. Copy the whole msauth:// address and retry with the new login link.",
+      "wattson_state_mismatch": "That address belongs to an older login link. Use the new link above and retry.",
+      "wattson_login_cancelled": "The login was cancelled or refused by Watts On. Retry with the new link.",
+      "wattson_code_rejected": "Watts On rejected the code (expired or already used). Use the new link and paste the address right away.",
+      "wattson_token_rejected": "Watts On rejected this refresh token.",
+      "wattson_cannot_connect": "Could not connect to Watts On. Try again later.",
+      "wattson_no_heat_meter": "The Watts On account has no heat meter (only water/electricity). Add your Aalborg Forsyning heat meter in the Watts On app first.",
+      "wattson_wrong_account": "This is a different Watts On account than the one this entry was set up with."
     }
   },
   "options": {
@@ -92,8 +128,10 @@
           "motivation_dkk_per_kwh_per_k": "Motivation tariff (DKK/kWh/°C, 0 = published default)",
           "normal_hdd_year": "Normal-year HDD17 (0 = 3100 estimate)",
           "sync_reminder": "Soft weekend reminder (shown Sat/Sun if not synced Thu–Sat)",
-          "auto_sync": "Automatic daily sync (E|Forsyning only)",
-          "auto_sync_hour": "Automatic sync time (hour 0–23)"
+          "auto_sync": "Automatic daily sync (E|Forsyning / Watts On)",
+          "auto_sync_hour": "Automatic sync time (hour 0–23)",
+          "wattson_energy_unit": "Watts On: energy unit (auto = meter metadata/heuristic)",
+          "wattson_endpoint": "Watts On: advanced endpoint template (empty = automatic, e.g. heating/api/consumptions/<device_id>)"
         },
         "description": "Outdoor temperature (graddage/HDD17, kWh per degree day, temperature lines): an optional Home Assistant outdoor sensor is used first (local, from the recorder's long-term statistics). Days without sensor statistics use Open-Meteo (external weather service) at your Home Assistant home location, or at the coordinates below if you fill them in.",
         "data_description": {

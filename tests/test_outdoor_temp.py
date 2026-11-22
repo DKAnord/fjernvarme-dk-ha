@@ -173,6 +173,7 @@ def test_new_entries_store_utility_coords_as_metadata_only() -> None:
     src = (CC / "config_flow.py").read_text()
     assert "entry_data[CONF_LATITUDE]" not in src
     assert "_ef_pending[CONF_LATITUDE]" not in src
+    assert "_watts_pending[CONF_LATITUDE]" not in src
     assert "entry_data[CONF_UTILITY_LATITUDE]" in src
     init = (CC / "__init__.py").read_text()
     assert "updates[CONF_UTILITY_LATITUDE]" in init and "updates[CONF_LATITUDE]" not in init

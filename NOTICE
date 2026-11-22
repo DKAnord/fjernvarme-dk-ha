@@ -41,6 +41,57 @@ Thank you to kpoppel and the contributors of homeassistant-eforsyning.
 
 ------------------------------------------------------------------------
 
+The Watts On backend is derived from TheRealBatBro/Home-Assistant-Novafos-V2
+(Novafos water via Watts On):
+
+  https://github.com/TheRealBatBro/Home-Assistant-Novafos-V2
+
+Derived files (each carries a header saying it is derived and that changes
+were made):
+  custom_components/kmd_easy_energy/api/wattson_client.py
+
+The Watts On login flow (Azure AD B2C app registration, PKCE + msauth://
+redirect, rotating refresh token), the API base URL and the endpoint and
+field names for water were learned from that project (upstream commit
+920e41f) and reimplemented for district heating; no code was copied
+verbatim. Heat endpoints and heat field names are not from the upstream
+project (it only covers water) and are unverified guesses.
+
+The upstream copyright and permission notice (MIT License), reproduced as
+required:
+
+  MIT License
+
+  Copyright (c) 2026 TheRealBatBro
+
+  Permission is hereby granted, free of charge, to any person obtaining a copy
+  of this software and associated documentation files (the "Software"), to deal
+  in the Software without restriction, including without limitation the rights
+  to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+  copies of the Software, and to permit persons to whom the Software is
+  furnished to do so, subject to the following conditions:
+
+  The above copyright notice and this permission notice shall be included in all
+  copies or substantial portions of the Software.
+
+  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+  IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+  FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+  AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+  LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+  SOFTWARE.
+
+The same text is also at:
+  custom_components/kmd_easy_energy/api/LICENSE-novafos-v2-MIT.txt
+
+Test fixtures in tests/fixtures_wattson.py use invented values (no real
+tokens, ids or consumption) in the response shapes handled upstream.
+
+Thank you to TheRealBatBro for Home-Assistant-Novafos-V2.
+
+------------------------------------------------------------------------
+
 This project is not affiliated with or endorsed by MitID, NemLog-in,
-Digitaliseringsstyrelsen, KMD, E|Forsyning / DFF-EDB, or any district-heating
-utility.
+Digitaliseringsstyrelsen, KMD, E|Forsyning / DFF-EDB, Watts A/S (Watts On),
+or any district-heating utility.

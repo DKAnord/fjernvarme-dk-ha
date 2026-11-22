@@ -67,6 +67,14 @@ TO_REDACT = {
     "MålerNr",
     "Adresse",
     "EjendomNr",
+    # Watts On credentials / identifiers
+    "wattson_refresh_token",
+    "wattson_redirect_url",
+    "wattson_user_id",
+    "wattson_device_id",
+    "id_token",
+    "code",
+    "code_verifier",
 }
 
 
@@ -114,6 +122,27 @@ def _summarize_coordinator(data: dict[str, Any] | None) -> dict[str, Any]:
             "readings_last_fetch": (data.get("eforsyning") or {}).get("readings_last_fetch"),
         }
         if data.get("eforsyning")
+        else None,
+        # Watts On: only shapes and outcomes (endpoint templates, HTTP results,
+        # JSON key names, unit, assumptions) — never values, ids or tokens.
+        "wattson": {
+            k: (data.get("wattson") or {}).get(k)
+            for k in (
+                "endpoint",
+                "probe",
+                "device",
+                "keys_seen",
+                "energy_unit",
+                "interval_hours",
+                "skipped",
+                "assumptions",
+                "detected",
+                "intervals_last_fetch",
+                "stored_intervals",
+                "requests_last_sync",
+            )
+        }
+        if data.get("wattson")
         else None,
         "location": data.get("location"),
         "last_sync": data.get("last_sync"),

@@ -33,13 +33,16 @@ class KMDSyncButton(CoordinatorEntity[KMDEasyEnergyCoordinator], ButtonEntity):
         super().__init__(coordinator)
         self._entry = entry
         self._attr_unique_id = f"{entry.entry_id}_sync"
-        # E|Forsyning needs no MitID: "Synkroniser nu" instead of "Synkroniser (MitID)".
-        if getattr(coordinator, "is_eforsyning", False) is True:
+        # E|Forsyning / Watts On need no MitID: "Synkroniser nu" instead of
+        # "Synkroniser (MitID)".
+        no_mitid = getattr(coordinator, "uses_mitid", True) is False
+        if no_mitid:
             self._attr_translation_key = "sync_now"
+        source = getattr(coordinator, "data_source", None)
         self._attr_device_info = {
             "identifiers": {(DOMAIN, entry.entry_id)},
             "name": entry.title or "KMD Easy Energy",
-            "manufacturer": "E|Forsyning" if getattr(coordinator, "is_eforsyning", False) is True else "KMD",
+            "manufacturer": source if no_mitid and isinstance(source, str) else "KMD",
         }
 
     async def async_press(self) -> None:

@@ -75,11 +75,16 @@ WS_TYPE_MITID_SUBSCRIBE = "kmd_easy_energy/mitid/subscribe"
 # ---------------------------------------------------------------------------
 # Backends. "kmd" = KMD Easy Energy (MitID, session-based). "eforsyning" =
 # E|Forsyning (eforsyning.dk / dff-edb.dk; forbrugernummer + webpinkode).
+# "wattson" = Watts On (Watts A/S app backend; Azure AD B2C refresh token),
+# used by Aalborg Forsyning for district heating.
 # ---------------------------------------------------------------------------
 CONF_BACKEND = "backend"
 BACKEND_KMD = "kmd"
 BACKEND_EFORSYNING = "eforsyning"
-BACKENDS = (BACKEND_KMD, BACKEND_EFORSYNING)
+BACKEND_WATTSON = "wattson"
+BACKENDS = (BACKEND_KMD, BACKEND_EFORSYNING, BACKEND_WATTSON)
+# Backends that log in without MitID and may sync automatically every day.
+AUTO_SYNC_BACKENDS = (BACKEND_EFORSYNING, BACKEND_WATTSON)
 
 # E|Forsyning credentials (stored in the config entry like other HA
 # integrations store passwords; never logged, redacted in diagnostics).
@@ -89,10 +94,25 @@ CONF_EF_SUPPLIER_ID = "eforsyning_supplier_id"  # GetVaerkSettings forsyningid
 CONF_EF_INSTALLATION_ID = "eforsyning_installation_id"
 EFORSYNING_BASE_URL = "https://eforsyning.dk/"
 
-# Automatic sync (only for backends that need no MitID, i.e. E|Forsyning).
+# Watts On. The refresh token is a credential: stored in the config entry
+# (rotated tokens are persisted), never logged, redacted in diagnostics.
+# The Watts password is never asked for or stored.
+CONF_WATTS_REFRESH_TOKEN = "wattson_refresh_token"
+CONF_WATTS_REFRESH_EXPIRES_AT = "wattson_refresh_expires_at"
+CONF_WATTS_USER_ID = "wattson_user_id"
+CONF_WATTS_DEVICE_ID = "wattson_device_id"
+CONF_WATTS_ENDPOINT = "wattson_endpoint"  # advanced override (path template)
+CONF_WATTS_ENERGY_UNIT = "wattson_energy_unit"  # auto | kWh | MWh | GJ
+WATTS_ENERGY_UNITS = ("auto", "kWh", "MWh", "GJ")
+
+# Automatic sync (only for backends that need no MitID: E|Forsyning, Watts On).
 CONF_AUTO_SYNC = "auto_sync"
 CONF_AUTO_SYNC_HOUR = "auto_sync_hour"
 DEFAULT_AUTO_SYNC = True
 DEFAULT_AUTO_SYNC_HOUR = 6
 # Weekend reminder default per backend (E|Forsyning syncs itself daily).
-DEFAULT_SYNC_REMINDER_BY_BACKEND = {BACKEND_KMD: True, BACKEND_EFORSYNING: False}
+DEFAULT_SYNC_REMINDER_BY_BACKEND = {
+    BACKEND_KMD: True,
+    BACKEND_EFORSYNING: False,
+    BACKEND_WATTSON: False,
+}

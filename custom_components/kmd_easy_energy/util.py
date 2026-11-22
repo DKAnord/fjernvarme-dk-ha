@@ -24,6 +24,8 @@ SENSITIVE_CACHE_KEYS = (
     "qr_svg",
     "Authorization",
     "authorization",
+    "refresh_token",
+    "wattson_refresh_token",
 )
 
 _REDACT_QS = re.compile(

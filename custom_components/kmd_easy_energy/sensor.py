@@ -109,6 +109,8 @@ class KMDBaseSensor(CoordinatorEntity[KMDEasyEnergyCoordinator], SensorEntity):
             "eforsyning",
             "outdoor_temp",
             "temp_source",
+            "wattson",
+            "wattson_hours",
         }
     )
 
@@ -200,6 +202,7 @@ class KMDOverviewSensor(KMDBaseSensor):
             "data_source": data.get("data_source", "KMD Easy Energy"),
             "data_granularity": data.get("data_granularity", "hourly"),
             "auto_sync": bool(data.get("auto_sync", False)),
+            "login_expires_at": data.get("login_expires_at"),
             "capabilities": data.get("capabilities")
             or sorted(self.coordinator.capabilities(data)),
             "backend_capabilities": data.get("backend_capabilities")

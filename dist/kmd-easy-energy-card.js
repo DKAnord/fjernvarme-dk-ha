@@ -135,6 +135,41 @@
     },
   };
 
+  // Outdoor temperature source line (integration attribute temp_source /
+  // outdoor_temp; location kind only, never coordinates). "" = nothing to show.
+  const fmtIsoDay = (iso) => {
+    const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso || ""));
+    return m ? `${Number(m[3])}. ${(MONTHS[Number(m[2]) - 1] || "").toLowerCase()} ${m[1]}` : "";
+  };
+  const outdoorTempText = (a, lang) => {
+    const ot = (a && typeof a.outdoor_temp === "object" && a.outdoor_temp) || {};
+    const src = (a && a.temp_source) || ot.source || "";
+    if (!src) return "";
+    const en = lang === "en";
+    const sensor = ot.sensor_name || ot.entity_id || (en ? "HA sensor" : "HA-sensor");
+    const loc = ot.open_meteo_location || ot.configured_location || "";
+    const meteo = {
+      home: en ? "Open-Meteo (HA home location)" : "Open-Meteo (HA-hjemmelokation)",
+      utility: en ? "Open-Meteo (utility location)" : "Open-Meteo (værkets placering)",
+      custom: en ? "Open-Meteo (custom location)" : "Open-Meteo (egen placering)",
+    };
+    const meteoBySrc = { open_meteo_home: meteo.home, open_meteo_utility: meteo.utility, open_meteo_custom: meteo.custom, open_meteo: "Open-Meteo" };
+    const lbl = en ? "Outdoor temp" : "Udetemp";
+    let txt;
+    if (src === "ha_sensor") txt = `${lbl}: ${sensor}`;
+    else if (src === "mixed") {
+      const since = fmtIsoDay(ot.sensor_since);
+      const before = meteo[loc] || "Open-Meteo";
+      txt = en
+        ? `${lbl}: ${sensor}${since ? ` from ${since}` : ""}; days without sensor statistics: ${before}`
+        : `${lbl}: ${sensor}${since ? ` fra ${since}` : ""}; dage uden sensorstatistik: ${before}`;
+    } else txt = `${lbl}: ${meteoBySrc[src] || "Open-Meteo"}`;
+    if (src !== "ha_sensor" && src !== "mixed" && ot.entity_id && ot.sensor_status && ot.sensor_status !== "ok") {
+      txt += en ? ` · ${sensor} has no long-term statistics yet` : ` · ${sensor} har endnu ingen langtidsstatistik`;
+    }
+    if (ot.pending) txt += en ? " · updates at next sync" : " · opdateres ved næste synkronisering";
+    return txt;
+  };
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const fmtInt = (n) => Number.isFinite(n) ? Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".") : "–";
   const fmtDec = (n, d = 1) => Number.isFinite(n) ? n.toFixed(d).replace(".", ",") : "–";
@@ -702,6 +737,10 @@
       const sourceNote = backend !== "kmd"
         ? `<div class="src-note">ℹ️ Data fra ${esc(dataSource)}${has("hourly") ? "" : " · daglige aflæsninger"}${esc(autoHour)} · eksperimentel</div>`
         : "";
+      // Subtle source line; only where outdoor temperatures are actually used.
+      const wxHasTemps = Object.keys(wx.monthly_temp || {}).length > 0 || Object.keys(wx.daily_temp || {}).length > 0;
+      const tempTxt = (has("monthly") || has("daily")) && wxHasTemps ? outdoorTempText(a, lang) : "";
+      const tempSourceNote = tempTxt ? `<div class="src-note temp-src" data-section="temp-source">🌡️ ${esc(tempTxt)}</div>` : "";
       const efOnboard = `
           <div class="onboard">
             <div class="ob-head">
@@ -1008,6 +1047,7 @@
           </div>
           ${syncNudge}
           ${sourceNote}
+          ${tempSourceNote}
           ${mitidLiveBox}
           ${(utilStatus !== "confirmed" && hasData) ? `
           <div class="fb-bar">

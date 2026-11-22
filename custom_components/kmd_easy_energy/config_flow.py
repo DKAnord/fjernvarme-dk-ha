@@ -15,6 +15,11 @@ from homeassistant.core import callback
 from homeassistant.data_entry_flow import FlowResult
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.selector import (
+    EntitySelector,
+    EntitySelectorConfig,
+    NumberSelector,
+    NumberSelectorConfig,
+    NumberSelectorMode,
     SelectOptionDict,
     SelectSelector,
     SelectSelectorConfig,
@@ -40,6 +45,9 @@ from .const import (
     CONF_CUSTOMER_ID,
     CONF_LATITUDE,
     CONF_LONGITUDE,
+    CONF_OUTDOOR_TEMP_ENTITY,
+    CONF_UTILITY_LATITUDE,
+    CONF_UTILITY_LONGITUDE,
     CONF_LOCATION_NAME,
     CONF_MITID_USERNAME,
     CONF_MOTIVATION_DKK_PER_KWH_PER_K,
@@ -151,6 +159,51 @@ def _format_utility_label(u: dict[str, Any]) -> str:
     return f"🧪 {u['name']}{city} — Afventer 1. test / Pending test"
 
 
+_LAT_SELECTOR = NumberSelector(
+    NumberSelectorConfig(min=-90, max=90, step="any", mode=NumberSelectorMode.BOX)
+)
+_LON_SELECTOR = NumberSelector(
+    NumberSelectorConfig(min=-180, max=180, step="any", mode=NumberSelectorMode.BOX)
+)
+
+
+def _clean_outdoor_options(user_input: dict[str, Any]) -> tuple[dict[str, Any], str | None]:
+    """Validate the outdoor temperature options.
+
+    Latitude/longitude are an explicit override: both or neither. Empty
+    fields (or 0/0) mean "use the HA home location". An empty sensor means
+    "Open-Meteo only".
+    """
+    data = dict(user_input)
+    entity = str(data.get(CONF_OUTDOOR_TEMP_ENTITY) or "").strip()
+    if entity:
+        if not entity.startswith("sensor."):
+            return data, "outdoor_temp_entity_invalid"
+        data[CONF_OUTDOOR_TEMP_ENTITY] = entity
+    else:
+        data.pop(CONF_OUTDOOR_TEMP_ENTITY, None)
+    lat = data.get(CONF_LATITUDE)
+    lon = data.get(CONF_LONGITUDE)
+    if lat in (None, "") and lon in (None, ""):
+        data.pop(CONF_LATITUDE, None)
+        data.pop(CONF_LONGITUDE, None)
+        return data, None
+    if lat in (None, "") or lon in (None, ""):
+        return data, "location_incomplete"
+    try:
+        la, lo = float(lat), float(lon)
+    except (TypeError, ValueError):
+        return data, "location_invalid"
+    if la == 0 and lo == 0:
+        data.pop(CONF_LATITUDE, None)
+        data.pop(CONF_LONGITUDE, None)
+        return data, None
+    if not (-90 <= la <= 90 and -180 <= lo <= 180):
+        return data, "location_invalid"
+    data[CONF_LATITUDE], data[CONF_LONGITUDE] = la, lo
+    return data, None
+
+
 def _notify_service_selector(hass: Any, current: str = "") -> SelectSelector:
     """Build a dropdown selector of available Home Assistant notify services."""
     services_map: dict[str, Any] = {}
@@ -195,7 +248,7 @@ class KMDEasyEnergyConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     VERSION = 1
     # 1.2: KMD access tokens are no longer stored (session-based sync).
-    MINOR_VERSION = 2
+    MINOR_VERSION = 3
 
     def __init__(self) -> None:
         self._selected_utility: dict[str, Any] = dict(CUSTOM_UTILITY)
@@ -291,8 +344,10 @@ class KMDEasyEnergyConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             if notify_service:
                 entry_data[CONF_NOTIFY_SERVICE] = notify_service
             if u.get("latitude") is not None:
-                entry_data[CONF_LATITUDE] = u["latitude"]
-                entry_data[CONF_LONGITUDE] = u["longitude"]
+                # Utility metadata / last-resort Open-Meteo location (the HA
+                # home location wins; only options can override it).
+                entry_data[CONF_UTILITY_LATITUDE] = u["latitude"]
+                entry_data[CONF_UTILITY_LONGITUDE] = u["longitude"]
 
             if customer_id:
                 entry_data[CONF_CUSTOMER_ID] = customer_id
@@ -376,8 +431,8 @@ class KMDEasyEnergyConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         CONF_EF_SUPPLIER_ID: supplier_id,
                     }
                     if u.get("latitude") is not None:
-                        self._ef_pending[CONF_LATITUDE] = u["latitude"]
-                        self._ef_pending[CONF_LONGITUDE] = u["longitude"]
+                        self._ef_pending[CONF_UTILITY_LATITUDE] = u["latitude"]
+                        self._ef_pending[CONF_UTILITY_LONGITUDE] = u["longitude"]
                     self._ef_installations = installs
                     if len(installs) > 1:
                         return await self.async_step_eforsyning_installation()
@@ -567,10 +622,19 @@ class KMDEasyEnergyOptionsFlow(config_entries.OptionsFlow):
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
+        errors: dict[str, str] = {}
         if user_input is not None:
-            return self.async_create_entry(title="", data=user_input)
+            cleaned, error = _clean_outdoor_options(user_input)
+            if error is None:
+                return self.async_create_entry(title="", data=cleaned)
+            errors["base"] = error
 
         opts = {**self.config_entry.data, **self.config_entry.options}
+        # Only an explicit options override is a user location; utility
+        # coordinates in entry.data are metadata and never pre-filled.
+        explicit = self.config_entry.options
+        if user_input is not None:
+            explicit = {**explicit, **user_input}
         backend = str(self.config_entry.data.get(CONF_BACKEND) or BACKEND_KMD)
         reminder_default = DEFAULT_SYNC_REMINDER_BY_BACKEND.get(backend, DEFAULT_SYNC_REMINDER)
         schema = vol.Schema(
@@ -598,13 +662,19 @@ class KMDEasyEnergyOptionsFlow(config_entries.OptionsFlow):
                     default=float(opts.get(CONF_PENALTY_TEMP, 40.0)),
                 ): vol.Coerce(float),
                 vol.Optional(
+                    CONF_OUTDOOR_TEMP_ENTITY,
+                    description={"suggested_value": explicit.get(CONF_OUTDOOR_TEMP_ENTITY)},
+                ): EntitySelector(
+                    EntitySelectorConfig(domain="sensor", device_class="temperature")
+                ),
+                vol.Optional(
                     CONF_LATITUDE,
-                    default=float(opts.get(CONF_LATITUDE) or self.hass.config.latitude or 56.15),
-                ): vol.Coerce(float),
+                    description={"suggested_value": explicit.get(CONF_LATITUDE)},
+                ): _LAT_SELECTOR,
                 vol.Optional(
                     CONF_LONGITUDE,
-                    default=float(opts.get(CONF_LONGITUDE) or self.hass.config.longitude or 10.10),
-                ): vol.Coerce(float),
+                    description={"suggested_value": explicit.get(CONF_LONGITUDE)},
+                ): _LON_SELECTOR,
                 vol.Optional(
                     CONF_PRICE_DKK_PER_KWH,
                     default=float(opts.get(CONF_PRICE_DKK_PER_KWH) or 0.0),
@@ -640,4 +710,4 @@ class KMDEasyEnergyOptionsFlow(config_entries.OptionsFlow):
                     ): vol.All(vol.Coerce(int), vol.Range(min=0, max=23)),
                 }
             )
-        return self.async_show_form(step_id="init", data_schema=schema)
+        return self.async_show_form(step_id="init", data_schema=schema, errors=errors)

@@ -40,8 +40,7 @@ from .const import (
     CONF_EF_USERNAME,
     CONF_CUSTOMER_ID,
     CONF_CUSTOMER_NUMBER,
-    CONF_LATITUDE,
-    CONF_LONGITUDE,
+    CONF_OUTDOOR_TEMP_ENTITY,
     CONF_LOCATION_NAME,
     CONF_MITID_USERNAME,
     CONF_NOTIFY_SERVICE,
@@ -64,6 +63,18 @@ from .const import (
 )
 from .capabilities import backend_capabilities, effective_capabilities
 from .eforsyning_mapping import apply_eforsyning_data
+from .outdoor_temp import (
+    SENSOR_ERROR,
+    Location,
+    async_sensor_daily_means,
+    combine_parts,
+    merge_daily,
+    part_summary,
+    resolve_location,
+    source_by_month,
+    source_signature,
+    usable_sensor_days,
+)
 from .insights import (
     compact_hourly_point,
     copenhagen_today,
@@ -93,6 +104,16 @@ from .util import (
 _LOGGER = logging.getLogger(__name__)
 
 HDD_BASE = 17.0  # °C – common Danish district heating base
+WEATHER_ARCHIVE_START = dt_mod.date(2022, 1, 1)
+
+
+def _open_meteo_daily(payload: dict[str, Any]) -> dict[str, float]:
+    daily = (payload or {}).get("daily") or {}
+    out: dict[str, float] = {}
+    for d, t in zip(daily.get("time") or [], daily.get("temperature_2m_mean") or []):
+        if t is not None:
+            out[str(d)] = round(float(t), 1)
+    return out
 
 M_KEYS = ["Jan", "Feb", "Mar", "Apr", "Maj", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Dec"]
 M_FULL = [
@@ -447,7 +468,8 @@ class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             self.hass, SIGNAL_MITID_CHALLENGE, self.mitid_challenge_payload()
         )
 
-    async def _fetch_open_meteo_7d(self, lat: float, lon: float) -> float | None:
+    async def _fetch_open_meteo_recent(self, lat: float, lon: float) -> dict[str, float]:
+        """Open-Meteo daily means for the last 7 days + today (forecast API)."""
         session = async_get_clientsession(self.hass)
         url = (
             "https://api.open-meteo.com/v1/forecast"
@@ -458,28 +480,28 @@ class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         async with session.get(url) as resp:
             resp.raise_for_status()
             data = await resp.json()
-        means = (data.get("daily") or {}).get("temperature_2m_mean") or []
-        hdd = [max(0.0, HDD_BASE - t) for t in means if t is not None]
-        return round(sum(hdd), 1) if hdd else None
+        return _open_meteo_daily(data)
 
-    async def _fetch_open_meteo_archive(self, lat: float, lon: float) -> dict[str, float]:
+    async def _fetch_open_meteo_archive(
+        self,
+        lat: float,
+        lon: float,
+        start: dt_mod.date | None = None,
+        end: dt_mod.date | None = None,
+    ) -> dict[str, float]:
         session = async_get_clientsession(self.hass)
-        end_dt = (copenhagen_today() - dt_mod.timedelta(days=1)).isoformat()
+        start_d = (start or WEATHER_ARCHIVE_START).isoformat()
+        end_d = (end or (copenhagen_today() - dt_mod.timedelta(days=1))).isoformat()
         url = (
             "https://archive-api.open-meteo.com/v1/archive"
             f"?latitude={lat}&longitude={lon}"
-            f"&start_date=2022-01-01&end_date={end_dt}"
+            f"&start_date={start_d}&end_date={end_d}"
             "&daily=temperature_2m_mean&timezone=Europe%2FCopenhagen"
         )
         async with session.get(url) as resp:
             resp.raise_for_status()
             meteo = await resp.json()
-        daily = meteo.get("daily") or {}
-        out: dict[str, float] = {}
-        for d, t in zip(daily.get("time") or [], daily.get("temperature_2m_mean") or []):
-            if t is not None:
-                out[str(d)] = round(float(t), 1)
-        return out
+        return _open_meteo_daily(meteo)
 
     def _base_meta(self) -> dict[str, Any]:
         location = (
@@ -703,6 +725,9 @@ class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         state["abnormal_consumption"] = detect_abnormal_consumption(
             daily_kwh, daily_hdd, target
         )
+        outdoor = self._outdoor_temp_summary(state)
+        state["outdoor_temp"] = outdoor
+        state["temp_source"] = outdoor.get("source")
         state["backend_capabilities"] = sorted(self.backend_capabilities)
         state["capabilities"] = self.capabilities(state)
 
@@ -725,39 +750,148 @@ class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._enrich_derived(state)
         return state
 
+    @property
+    def outdoor_temp_entity(self) -> str | None:
+        value = str(self.entry.options.get(CONF_OUTDOOR_TEMP_ENTITY) or "").strip()
+        return value or None
+
+    @property
+    def weather_location(self) -> Location | None:
+        """Open-Meteo location: options override -> HA home -> utility coordinates."""
+        return resolve_location(self.entry.options, self.entry.data, self.hass.config)
+
+    @property
+    def weather_signature(self) -> str:
+        return source_signature(self.weather_location, self.outdoor_temp_entity)
+
+    async def _async_sensor_days(
+        self, start: dt_mod.date, end: dt_mod.date, today: dt_mod.date | None = None
+    ) -> tuple[dict[str, float], str | None]:
+        """Usable daily means from the optional HA sensor's long-term statistics."""
+        entity_id = self.outdoor_temp_entity
+        if not entity_id:
+            return {}, None
+        try:
+            means, status = await async_sensor_daily_means(self.hass, entity_id, start, end)
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.warning("Reading outdoor temperature statistics failed: %s", err)
+            return {}, SENSOR_ERROR
+        return usable_sensor_days(means, today), status
+
     async def _async_update_weather(self, state: dict[str, Any]) -> None:
-        """Optional Open-Meteo 7-day HDD + archive insights (backend-independent)."""
-        lat = (
-            self.entry.options.get(CONF_LATITUDE)
-            or self.entry.data.get(CONF_LATITUDE)
-            or self.hass.config.latitude
-        )
-        lon = (
-            self.entry.options.get(CONF_LONGITUDE)
-            or self.entry.data.get(CONF_LONGITUDE)
-            or self.hass.config.longitude
-        )
-        if lat is not None and lon is not None:
-            today = copenhagen_today().isoformat()
-            if state.get("weather_7d_fetched_on") == today and state.get("hdd_7d") is not None:
-                _LOGGER.debug("Skipping Open-Meteo 7d (already fetched %s)", today)
-            else:
+        """Daily outdoor temperatures: HA sensor statistics first, Open-Meteo per missing day.
+
+        HDD 7 d and the archive (monthly/daily temps, R², kWh/HDD) are each
+        refreshed at most once a day, or when the configured source changes.
+        """
+        location = self.weather_location
+        entity_id = self.outdoor_temp_entity
+        signature = source_signature(location, entity_id)
+        same_source = state.get("weather_source_sig") == signature
+        today = copenhagen_today()
+        today_s = today.isoformat()
+        info = dict(state.get("outdoor_temp_parts") or {}) if same_source else {}
+        sensor_status: str | None = state.get("outdoor_temp_sensor_status") if same_source else None
+
+        if same_source and state.get("weather_7d_fetched_on") == today_s and state.get("hdd_7d") is not None:
+            _LOGGER.debug("Skipping 7 d outdoor temperatures (already fetched %s)", today_s)
+        else:
+            window = [(today - dt_mod.timedelta(days=n)).isoformat() for n in range(7, -1, -1)]
+            sensor, status = await self._async_sensor_days(
+                today - dt_mod.timedelta(days=7), today, today
+            )
+            sensor_status = status or sensor_status
+            meteo: dict[str, float] = {}
+            if location and any(d not in sensor for d in window):
                 try:
-                    state["hdd_7d"] = await self._fetch_open_meteo_7d(float(lat), float(lon))
-                    state["weather_7d_fetched_on"] = today
+                    meteo = await self._fetch_open_meteo_recent(location.latitude, location.longitude)
                 except Exception as err:  # noqa: BLE001
                     _LOGGER.warning("Optional Open-Meteo 7d failed: %s", err)
-            if state.get("weather_archive_fetched_on") == today and state.get("weather"):
-                _LOGGER.debug("Skipping Open-Meteo archive (already fetched %s)", today)
-            else:
+            temps, by_day = merge_daily(window, sensor, meteo)
+            if temps:
+                state["hdd_7d"] = round(sum(max(0.0, HDD_BASE - t) for t in temps.values()), 1)
+                state["weather_7d_fetched_on"] = today_s
+                info["recent"] = part_summary(by_day, location)
+
+        if same_source and state.get("weather_archive_fetched_on") == today_s and state.get("weather"):
+            _LOGGER.debug("Skipping outdoor temperature archive (already fetched %s)", today_s)
+        else:
+            end = today - dt_mod.timedelta(days=1)
+            days: list[str] = []
+            cur = WEATHER_ARCHIVE_START
+            while cur <= end:
+                days.append(cur.isoformat())
+                cur += dt_mod.timedelta(days=1)
+            sensor, status = await self._async_sensor_days(WEATHER_ARCHIVE_START, end)
+            sensor_status = status or sensor_status
+            missing = [d for d in days if d not in sensor]
+            meteo = {}
+            meteo_failed = False
+            if location and missing:
                 try:
-                    daily_temp = await self._fetch_open_meteo_archive(float(lat), float(lon))
-                    computed = _compute_weather_and_insights(state, daily_temp)
-                    state["weather"] = computed["weather"]
-                    state["insights"] = computed["insights"]
-                    state["weather_archive_fetched_on"] = today
+                    meteo = await self._fetch_open_meteo_archive(
+                        location.latitude,
+                        location.longitude,
+                        dt_mod.date.fromisoformat(missing[0]),
+                        dt_mod.date.fromisoformat(missing[-1]),
+                    )
                 except Exception as err:  # noqa: BLE001
                     _LOGGER.warning("Optional Open-Meteo archive failed: %s", err)
+                    meteo_failed = True
+            if meteo_failed and same_source and state.get("weather"):
+                pass  # keep yesterday's complete history rather than a partial one
+            else:
+                daily_temp, by_day = merge_daily(days, sensor, meteo)
+                if daily_temp:
+                    computed = _compute_weather_and_insights(state, daily_temp)
+                    weather = dict(computed["weather"])
+                    months = source_by_month(by_day)
+                    weather["temp_source_by_month"] = {
+                        ym: src for ym, src in months.items() if ym in (weather.get("monthly_temp") or {})
+                    }
+                    state["weather"] = weather
+                    state["insights"] = computed["insights"]
+                    state["weather_archive_fetched_on"] = today_s
+                    info["archive"] = part_summary(by_day, location)
+
+        state["weather_source_sig"] = signature
+        state["outdoor_temp_parts"] = info
+        state["outdoor_temp_sensor_status"] = sensor_status if entity_id else None
+
+    def _outdoor_temp_summary(self, state: dict[str, Any]) -> dict[str, Any]:
+        """Non-recorded attribute: which source the temperatures come from (no coordinates)."""
+        entity_id = self.outdoor_temp_entity
+        location = self.weather_location
+        parts = state.get("outdoor_temp_parts") or {}
+        summary = combine_parts(parts)
+        label = None
+        if entity_id:
+            st = self.hass.states.get(entity_id) if getattr(self.hass, "states", None) else None
+            name = getattr(st, "name", None) if st is not None else None
+            label = name if isinstance(name, str) and name else entity_id
+        summary.update(
+            {
+                "entity_id": entity_id,
+                "sensor_name": label,
+                "sensor_status": state.get("outdoor_temp_sensor_status") if entity_id else None,
+                "configured_location": location.kind if location else None,
+                "pending": bool(state.get("weather_source_sig"))
+                and state.get("weather_source_sig") != source_signature(location, entity_id),
+            }
+        )
+        return summary
+
+    async def async_refresh_weather(self) -> None:
+        """Re-read outdoor temperatures after an options change (no utility call)."""
+        if self._sync_task and not self._sync_task.done():
+            return
+        state = await self._async_load_cache()
+        if not cache_has_sensor_data(state):
+            return
+        await self._async_update_weather(state)
+        self._enrich_derived(state)
+        await self._async_save_cache(state)
+        self.async_set_updated_data(state)
 
     async def _async_fill_gap_since_last_sync(
         self,

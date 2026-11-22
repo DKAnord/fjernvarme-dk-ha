@@ -2,6 +2,16 @@
 
 Alle væsentlige ændringer i **Fjernvarme (KMD Easy Energy) – HA Connector & Dashboard** dokumenteres her.
 
+## [Unreleased]
+
+### Ændret: Udetemperaturens kilde (HA-sensor, HA-hjemmelokation, værkets placering)
+- **Rettet:** Open-Meteo brugte reelt altid værkets koordinater, fordi de blev kopieret ind i config entry ved opsætningen. Home Assistants hjemmelokation blev derfor aldrig brugt. Nu gælder: **egen placering i indstillingerne → HA-hjemmelokation → værkets placering** (sidstnævnte kun, hvis HA ikke har en hjemmelokation, dvs. 0/0).
+- **Ny valgfri udetemperatursensor** (indstillinger; `sensor` med `device_class: temperature`). Døgnmiddel og graddage (HDD17) beregnes lokalt ud fra recorderens langtidsstatistik (timemiddel, °C) i stedet for Open-Meteo. Der skrives intet til databasen. Dage uden sensorstatistik, fx før sensoren fandtes, hentes fra Open-Meteo pr. dag. Dækker sensoren alt, kaldes Open-Meteo ikke.
+- Kilden vises diskret på kortet (*Udetemp: …*) og i de ikke-optagede attributter `temp_source` (`ha_sensor` / `open_meteo_home` / `open_meteo_utility` / `open_meteo_custom` / `mixed`) og `outdoor_temp` (sensor, dage pr. kilde, slags placering, `sensor_since`). Kilden gemmes også pr. måned i `weather.temp_source_by_month`. Koordinater vises aldrig. Diagnostics redigerer også `utility_latitude`/`utility_longitude`.
+- Ændrer man kilden i indstillingerne, genberegnes temperaturerne med det samme (ingen kontakt til værket). Ellers sker det højst én gang i døgnet ved synkronisering.
+- Bredde-/længdegrad i indstillingerne er nu tomme som standard (= HA-hjemmelokation) og skal udfyldes parvis. Nye fejltekster på dansk og engelsk.
+- **Migrering (config entry 1.2 → 1.3, ikke brudende):** værkets koordinater flyttes til `utility_latitude`/`utility_longitude`. Koordinater i indstillingerne beholdes som eksplicit valg, medmindre de blot var den gamle formulars forudfyldte værdi (værkets placering, HA-hjemmelokationen eller 56.15/10.10). Så fjernes de, og installationen følger HA-hjemmelokationen. Ældre versioner kan stadig læse en 1.3-entry; de falder så tilbage til HA-hjemmelokationen.
+
 ## [0.3.0-beta.3] (efter 0.3.0-beta.2)
 
 ### Tilføjet: E|Forsyning-backend (eksperimentel, ikke testet live — beta-testere søges)

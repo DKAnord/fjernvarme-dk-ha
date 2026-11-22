@@ -84,8 +84,9 @@
           "notify_service": "Mobil push-service (valgfri, til MitID-kode)",
           "bonus_temp": "Bonusgrænse returtemperatur (°C)",
           "penalty_temp": "Gebyrgrænse returtemperatur (°C)",
-          "latitude": "Breddegrad (Open-Meteo vejr)",
-          "longitude": "Længdegrad (Open-Meteo vejr)",
+          "outdoor_temp_entity": "Udetemperatursensor (valgfri)",
+          "latitude": "Breddegrad – egen placering (valgfri, Open-Meteo)",
+          "longitude": "Længdegrad – egen placering (valgfri, Open-Meteo)",
           "price_dkk_per_kwh": "Varmepris (kr./kWh, 0 = brug offentliggjort standard)",
           "price_dkk_per_m3": "Volumenpris (kr./m³, valgfri, 0 = ikke sat)",
           "motivation_dkk_per_kwh_per_k": "Motivationstarif (kr./kWh/°C, 0 = offentliggjort standard)",
@@ -93,8 +94,19 @@
           "sync_reminder": "Blød påmindelse i weekenden (vises lør/søn, hvis der ikke er synkroniseret tors–lør)",
           "auto_sync": "Automatisk daglig synkronisering (kun E|Forsyning)",
           "auto_sync_hour": "Tidspunkt for automatisk synkronisering (time 0–23)"
+        },
+        "description": "Udetemperatur (graddage/HDD17, kWh pr. graddag og temperaturkurver): En valgfri udetemperatursensor i Home Assistant bruges først (lokalt, fra recorderens langtidsstatistik). Dage uden statistik fra sensoren hentes fra Open-Meteo (ekstern vejrtjeneste) for din Home Assistant-hjemmelokation — eller for koordinaterne herunder, hvis du udfylder dem.",
+        "data_description": {
+          "outdoor_temp_entity": "Dit eget udetermometer (temperatursensor med langtidsstatistik, state_class measurement). Døgnmiddel læses lokalt fra recorderen. Dage fra før sensoren fandtes, hentes fra Open-Meteo. Lad feltet stå tomt for kun at bruge Open-Meteo.",
+          "latitude": "Lad feltet stå tomt for at bruge Home Assistants hjemmelokation (Indstillinger → System → Generelt). Udfyld kun, hvis Open-Meteo skal bruge et andet sted. Værkets placering bruges kun, hvis Home Assistant ikke har en hjemmelokation.",
+          "longitude": "Udfyldes sammen med breddegrad – eller lad begge stå tomme."
         }
       }
+    },
+    "error": {
+      "location_incomplete": "Udfyld både bredde- og længdegrad – eller lad begge stå tomme for at bruge Home Assistants hjemmelokation.",
+      "location_invalid": "Ugyldige koordinater (breddegrad −90…90, længdegrad −180…180).",
+      "outdoor_temp_entity_invalid": "Vælg en temperatursensor (sensor.…)."
     }
   },
   "entity": {

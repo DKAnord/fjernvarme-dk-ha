@@ -84,8 +84,9 @@
           "notify_service": "Mobile push notify service (optional)",
           "bonus_temp": "Return temp bonus threshold (°C)",
           "penalty_temp": "Return temp penalty threshold (°C)",
-          "latitude": "Latitude (Open-Meteo weather)",
-          "longitude": "Longitude (Open-Meteo weather)",
+          "outdoor_temp_entity": "Outdoor temperature sensor (optional)",
+          "latitude": "Latitude override (optional, Open-Meteo)",
+          "longitude": "Longitude override (optional, Open-Meteo)",
           "price_dkk_per_kwh": "Heat price (DKK/kWh, 0 = use published default)",
           "price_dkk_per_m3": "Volume price (DKK/m³, optional, 0 = unset)",
           "motivation_dkk_per_kwh_per_k": "Motivation tariff (DKK/kWh/°C, 0 = published default)",
@@ -93,8 +94,19 @@
           "sync_reminder": "Soft weekend reminder (shown Sat/Sun if not synced Thu–Sat)",
           "auto_sync": "Automatic daily sync (E|Forsyning only)",
           "auto_sync_hour": "Automatic sync time (hour 0–23)"
+        },
+        "description": "Outdoor temperature (graddage/HDD17, kWh per degree day, temperature lines): an optional Home Assistant outdoor sensor is used first (local, from the recorder's long-term statistics). Days without sensor statistics use Open-Meteo (external weather service) at your Home Assistant home location, or at the coordinates below if you fill them in.",
+        "data_description": {
+          "outdoor_temp_entity": "Your own outdoor thermometer (temperature sensor with long-term statistics, state_class measurement). Daily means are read locally from the recorder. Days from before the sensor existed fall back to Open-Meteo. Leave empty to use Open-Meteo only.",
+          "latitude": "Leave empty to use the Home Assistant home location (Settings → System → General). Only fill in to use another place for Open-Meteo. The utility's location is only used if Home Assistant has no home location.",
+          "longitude": "Fill in together with latitude, or leave both empty."
         }
       }
+    },
+    "error": {
+      "location_incomplete": "Fill in both latitude and longitude, or leave both empty to use the Home Assistant home location.",
+      "location_invalid": "Invalid coordinates (latitude −90…90, longitude −180…180).",
+      "outdoor_temp_entity_invalid": "Choose a temperature sensor (sensor.…)."
     }
   },
   "entity": {

@@ -71,6 +71,7 @@ from .const import (
     CONF_LOCATION_NAME,
     CONF_MITID_USERNAME,
     CONF_MOTIVATION_DKK_PER_KWH_PER_K,
+    CONF_MOTIVATION_PCT_PER_K,
     CONF_NORMAL_HDD_YEAR,
     CONF_NOTIFY_SERVICE,
     CONF_PENALTY_TEMP,
@@ -1107,6 +1108,10 @@ class KMDEasyEnergyOptionsFlow(config_entries.OptionsFlow):
         if user_input is not None:
             cleaned, error = _clean_outdoor_options(user_input)
             if error is None:
+                bonus_val = float(cleaned.get(CONF_BONUS_TEMP) or 0.0)
+                penalty_val = float(cleaned.get(CONF_PENALTY_TEMP) or 0.0)
+                if bonus_val > 0 and penalty_val <= 0:
+                    cleaned[CONF_PENALTY_TEMP] = bonus_val
                 supply = str(cleaned.get(CONF_KMD_SUPPLY) or "").strip()
                 if supply:
                     from .kmd_supply import parse_supply_key
@@ -1148,11 +1153,11 @@ class KMDEasyEnergyOptionsFlow(config_entries.OptionsFlow):
                 ),
                 vol.Optional(
                     CONF_BONUS_TEMP,
-                    default=float(opts.get(CONF_BONUS_TEMP, 30.0)),
+                    default=float(opts.get(CONF_BONUS_TEMP) or 0.0),
                 ): vol.Coerce(float),
                 vol.Optional(
                     CONF_PENALTY_TEMP,
-                    default=float(opts.get(CONF_PENALTY_TEMP, 40.0)),
+                    default=float(opts.get(CONF_PENALTY_TEMP) or 0.0),
                 ): vol.Coerce(float),
                 vol.Optional(
                     CONF_OUTDOOR_TEMP_ENTITY,
@@ -1175,6 +1180,10 @@ class KMDEasyEnergyOptionsFlow(config_entries.OptionsFlow):
                 vol.Optional(
                     CONF_PRICE_DKK_PER_M3,
                     default=float(opts.get(CONF_PRICE_DKK_PER_M3) or 0.0),
+                ): vol.Coerce(float),
+                vol.Optional(
+                    CONF_MOTIVATION_PCT_PER_K,
+                    default=float(opts.get(CONF_MOTIVATION_PCT_PER_K) or 0.0),
                 ): vol.Coerce(float),
                 vol.Optional(
                     CONF_MOTIVATION_DKK_PER_KWH_PER_K,

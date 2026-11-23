@@ -506,3 +506,13 @@ def test_mitid_flow_kmd_login_error_shows_on_card_without_reauth(tmp_path: Path)
     assert pushed[-1]["sync_state"] == "error"
     assert "HTTP 401" in pushed[-1]["sync_message"]
     coord.entry.async_start_reauth.assert_not_called()
+
+
+def test_coordinator_base_meta_exposes_integration_version(tmp_path: Path) -> None:
+    entry = _entry(tmp_path)
+    hass = _hass(tmp_path)
+    with patch.object(DataUpdateCoordinator, "__init__", lambda *a, **k: None):
+        coord = KMDEasyEnergyCoordinator(hass, entry, integration_version="1.2.0")
+        default_coord = KMDEasyEnergyCoordinator(hass, entry)
+    assert coord._base_meta()["integration_version"] == "1.2.0"
+    assert default_coord._base_meta()["integration_version"] is None

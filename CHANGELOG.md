@@ -2,6 +2,16 @@
 
 Alle væsentlige ændringer i **Dansk Fjernvarme** (tidligere *Fjernvarme (KMD Easy Energy)*) dokumenteres her.
 
+## [1.2.0] - 2026-11-23
+
+### Tilføjet & Bekræftet
+- **Middelfart Fjernvarme bekræftet live (E|Forsyning):** Markeret som ✅ **Bekræftet** efter live-verifikation fra **Jesper Madsen**, inkl. officiel takst pr. 1. juli 2026 (`0,705 kr./kWh` inkl. moms, `±1 %/°C` motivationstarif med maks. `±20 %` regulering samt `37 °C` standard forventet returtemperatur).
+- **Automatisk forventet returtemperatur (`Forv_Retur`) fra E|Forsyning:** Når et E|Forsyning-værk leverer feltet `Forv_Retur` i dagsdataene, gemmes det m³-vægtet og bruges automatisk som forventet returtemperatur i bonus-/gebyrberegning og grafer, medmindre du selv har indtastet andre grænser.
+- **Hurtig indtastning af varmepris (`kr./kWh`), forventet returtemperatur (`°C`) & motivation (`%/°C`) direkte på kortet:** Tryk på **⚙️** på dashboard-kortet (virker nu for både KMD, E|Forsyning og Watts On) eller følg det diskrete hint, når kWh-pris ikke er sat endnu. Integrationens indstillingsdialog hedder nu også *Dansk Fjernvarme — Indstillinger* og har fået et dedikeret `% pr. °C`-felt samt `0 = automatisk` for returtemperaturgrænser.
+
+### Forbedret
+- **Skarpere fejlrapporter & danske MitID-fejltekster:** GitHub-fejlrapporter skelner nu mellem `Card Version` og backendens `Integration Version`, vedlægger sanitiseret `Sync State` / `Last Sync Message` uden persondata, og oversætter ukendt MitID Bruger-ID samt parallelle MitID-sessioner til tydelige danske fejlbeskeder.
+
 ## [1.1.0] - 2026-11-23
 
 ### Tilføjet & Bekræftet

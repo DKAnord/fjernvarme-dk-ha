@@ -215,7 +215,11 @@ def test_mapping_fills_daily_monthly_temps_and_daily_statistics() -> None:
     assert state["daily_m3"]["total"] == 1.8
     # m³-weighted return temperature: (31.2*0.6 + 30*0.8 + 33*0.4) / 1.8
     assert state["return_temp"]["monthly_2026"]["Nov"] == round((31.2 * 0.6 + 30 * 0.8 + 33 * 0.4) / 1.8, 1)
+    assert state["return_temp"]["expected_annual"]["2026"] == 37.0
+    assert state["return_temp"]["expected_monthly_2026"]["Nov"] == 37.0
+    assert state["daily_expected_return_temp"]["2026-11-01"] == 37.0
     assert state["latest_reading"]["temp_return"] == 33.0
+    assert state["latest_reading"]["temp_expected_return"] == 37.0
     assert [p["DateFrom"] for p in state["daily_stat_kwh"]][0] == "2026-11-01T00:00:00+01:00"
     assert all(p["IsComplete"] for p in state["daily_stat_kwh"])
     assert state["hourly"] == {} and "hourly_kwh" not in state

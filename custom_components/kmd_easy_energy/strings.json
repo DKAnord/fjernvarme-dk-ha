@@ -129,18 +129,19 @@
   "options": {
     "step": {
       "init": {
-        "title": "KMD Easy Energy Settings",
+        "title": "Dansk Fjernvarme — Settings",
         "data": {
           "portal_url": "Portal URL",
           "location_name": "City / Location label",
           "notify_service": "Mobile push notify service (optional)",
-          "bonus_temp": "Return temp bonus threshold (°C)",
-          "penalty_temp": "Return temp penalty threshold (°C)",
+          "bonus_temp": "Expected return / bonus threshold (°C, 0 = from E|Forsyning / default)",
+          "penalty_temp": "Return temp penalty threshold (°C, 0 = same as expected / default)",
           "outdoor_temp_entity": "Outdoor temperature sensor (optional)",
           "latitude": "Latitude override (optional, Open-Meteo)",
           "longitude": "Longitude override (optional, Open-Meteo)",
-          "price_dkk_per_kwh": "Heat price (DKK/kWh, 0 = use published default)",
+          "price_dkk_per_kwh": "Heat price incl. VAT (DKK/kWh, 0 = published default)",
           "price_dkk_per_m3": "Volume price (DKK/m³, optional, 0 = unset)",
+          "motivation_pct_per_k": "Motivation tariff in percent (% per °C, e.g. 1, 0 = default)",
           "motivation_dkk_per_kwh_per_k": "Motivation tariff (DKK/kWh/°C, 0 = published default)",
           "normal_hdd_year": "Normal-year HDD17 (0 = 3100 estimate)",
           "sync_reminder": "Soft weekend reminder (shown Sat/Sun if not synced Thu–Sat)",

@@ -31,6 +31,7 @@ CONF_NOTIFY_SERVICE = "notify_service"
 CONF_PRICE_DKK_PER_KWH = "price_dkk_per_kwh"
 CONF_PRICE_DKK_PER_M3 = "price_dkk_per_m3"
 CONF_MOTIVATION_DKK_PER_KWH_PER_K = "motivation_dkk_per_kwh_per_k"
+CONF_MOTIVATION_PCT_PER_K = "motivation_pct_per_k"
 CONF_NORMAL_HDD_YEAR = "normal_hdd_year"
 CONF_SYNC_REMINDER = "sync_reminder"
 DEFAULT_SYNC_REMINDER = True

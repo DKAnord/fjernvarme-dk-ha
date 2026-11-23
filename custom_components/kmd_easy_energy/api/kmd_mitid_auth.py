@@ -89,6 +89,14 @@ MSG_DISCOVERY_FAILED = (
     "Kunne ikke finde login-oplysningerne for denne portal. "
     "Tjek at du har valgt det rigtige værk, og send gerne en fejlrapport (uden MitID-id)."
 )
+MSG_MITID_USER_NOT_FOUND = (
+    "MitID Bruger-ID blev ikke fundet — tjek at du har indtastet dit MitID bruger-ID "
+    "(ikke e-mail eller CPR)."
+)
+MSG_MITID_PARALLEL_SESSION = (
+    "Der kører allerede et andet MitID-login — luk evt. værkets selvbetjening i "
+    "browseren og prøv igen."
+)
 
 
 def _decode_href(url: str) -> str:
@@ -707,12 +715,20 @@ class KMDMitIDAuthenticator:
         auth_session_id = aux["parameters"]["authenticationSessionId"]
 
         self.mitid_client = BrowserClient(client_hash, auth_session_id, self.session)
-        authenticators = self.mitid_client.identify_as_user_and_get_available_authenticators(
-            mitid_username.strip()
-        )
-        if "APP" not in authenticators:
-            raise RuntimeError(f"MitID APP authenticator not available for user ({authenticators})")
-        self.mitid_client.start_app_authentication()
+        try:
+            authenticators = self.mitid_client.identify_as_user_and_get_available_authenticators(
+                mitid_username.strip()
+            )
+            if "APP" not in authenticators:
+                raise RuntimeError(f"MitID APP authenticator not available for user ({authenticators})")
+            self.mitid_client.start_app_authentication()
+        except Exception as err:
+            err_text = str(err)
+            if "control.identity_not_found" in err_text:
+                raise RuntimeError(MSG_MITID_USER_NOT_FOUND) from err
+            if "parallel_sessions_detected" in err_text or "Parallel app sessions detected" in err_text:
+                raise RuntimeError(MSG_MITID_PARALLEL_SESSION) from err
+            raise
 
     def poll_once(self) -> dict[str, Any]:
         """Poll MitID APP status once (blocking, run in executor)."""

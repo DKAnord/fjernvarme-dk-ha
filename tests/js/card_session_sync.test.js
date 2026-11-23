@@ -83,4 +83,37 @@ html = card.shadowRoot.innerHTML;
 assert.ok(html.includes("Hver synkronisering er ét MitID-login"), "session explanation");
 assert.ok(html.includes("gemmes ikke"), "token not stored");
 assert.ok(html.includes("Synkroniser én gang med token"));
+
+// 5) Feedback report splits Card Version vs Integration Version and sanitizes sync diagnostics on Issue.
+const opened = [];
+global.window.open = (url) => { opened.push(url); };
+card = new Card();
+card.setConfig({});
+card.hass = mkHass({
+  utility_id: "struer-energi",
+  utility_status: "pending_test",
+  integration_version: "1.1.0",
+  sync_state: "error",
+  sync_message: "Fejl for anna@example.com med token abcdefghijklmnopqrstuvwxyz123456",
+}, calls);
+card.shadowRoot.getElementById("fbIssueBtn").listeners.click();
+assert.strictEqual(opened.length, 1);
+const issueUrl = new URL(opened[0]);
+const issueBody = issueUrl.searchParams.get("body");
+assert.ok(issueBody.includes("- **Card Version:** 1.1.0"), "issue includes Card Version");
+assert.ok(issueBody.includes("- **Integration Version:** 1.1.0"), "issue includes Integration Version");
+assert.ok(issueBody.includes("- **Sync State:** `error`"), "issue includes Sync State");
+assert.ok(issueBody.includes("- **Last Sync Message:** Fejl for [email] med token [redacted]"), "issue sanitizes sync message");
+assert.ok(!issueBody.includes("anna@example.com"), "issue does not leak email");
+assert.ok(!issueBody.includes("abcdefghijklmnopqrstuvwxyz123456"), "issue does not leak raw token");
+
+card.shadowRoot.getElementById("fbGithubBtn").listeners.click();
+assert.strictEqual(opened.length, 2);
+const confirmedUrl = new URL(opened[1]);
+const confirmedBody = confirmedUrl.searchParams.get("body");
+assert.ok(confirmedBody.includes("- **Card Version:** 1.1.0"), "confirmed includes Card Version");
+assert.ok(confirmedBody.includes("- **Integration Version:** 1.1.0"), "confirmed includes Integration Version");
+assert.ok(!confirmedBody.includes("Sync State:"), "confirmed omits Sync State");
+assert.ok(!confirmedBody.includes("Last Sync Message:"), "confirmed omits Last Sync Message");
+
 console.log("card_session_sync.test.js: OK");

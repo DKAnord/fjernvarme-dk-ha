@@ -1419,6 +1419,14 @@
       if (closeSetupBtn) {
         closeSetupBtn.addEventListener("click", () => { this._setupOpen = false; this._render(); });
       }
+      const sanitizeIssueNote = (raw) => String(raw || "")
+        .replace(/[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}/g, "[email]")
+        .replace(/\b\d{6}-?\d{4}\b/g, "[id]")
+        .replace(/\?[^\s)]+/g, "")
+        .replace(/\b[A-Za-z0-9_-]{24,}\b/g, "[redacted]")
+        .replace(/\s+/g, " ")
+        .trim()
+        .slice(0, 140);
       const buildFeedbackBody = (kind) => {
         const units = Array.isArray(a.available_units) ? a.available_units.map((u) => u.Name).filter(Boolean).join(", ") : "ukendt";
         const authMethodLabel = backend === "wattson"
@@ -1426,7 +1434,8 @@
           : backend === "eforsyning"
             ? "E|Forsyning (Forbrugernummer + webpinkode)"
             : "Pure-HA MitID (SRP + OIDC PKCE)";
-        return [
+        const integrationVer = a.integration_version ? String(a.integration_version) : "ukendt";
+        const lines = [
           `### Utility Verification Report (${kind})`,
           `- **Utility ID:** \`${activeUtilId}\``,
           `- **Utility Name:** ${activeUtil.name}`,
@@ -1435,10 +1444,20 @@
           `- **Discovered Units:** ${units || "none"}`,
           `- **Direct Temp Unit:** ${Boolean(a.has_direct_temp)}`,
           `- **Auth Method:** ${authMethodLabel}`,
-          `- **Card/Integration Version:** ${VER}`,
+          `- **Card Version:** ${VER}`,
+          `- **Integration Version:** ${integrationVer}`,
+        ];
+        if (kind === "Issue") {
+          lines.push(`- **Sync State:** \`${a.sync_state || "idle"}\``);
+          if (a.sync_message) {
+            lines.push(`- **Last Sync Message:** ${sanitizeIssueNote(a.sync_message)}`);
+          }
+        }
+        lines.push(
           ``,
           `_Sanitized report: contains no MitID ID, tokens, customer numbers, or consumption values._`,
-        ].join("\n");
+        );
+        return lines.join("\n");
       };
       const openGhFeedback = (kind) => {
         const title = encodeURIComponent(`[Utility ${kind}] ${activeUtil.name} (${activeUtilId})`);

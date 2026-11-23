@@ -398,12 +398,15 @@ class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     # Class-level defaults (also used by tests that bypass __init__).
     backend: str = BACKEND_KMD
     started_auto_sync_signature: tuple[bool, int] | None = None
+    _integration_version: str | None = None
 
     def __init__(
         self,
         hass: HomeAssistant,
         entry: ConfigEntry,
         portal_url: str = "https://minvarme.kredslob.dk/",
+        *,
+        integration_version: str | None = None,
     ) -> None:
         super().__init__(
             hass,
@@ -414,6 +417,7 @@ class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         )
         self.entry = entry
         self._portal_url = portal_url
+        self._integration_version = integration_version
         # Only set for the duration of one sync; never persisted.
         self.client: KMDClient | None = None
         self.last_sync: datetime | None = None
@@ -741,6 +745,7 @@ class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "mitid_username_masked": masked_user,
             "notify_service": notify_svc,
             "entry_id": self.entry.entry_id,
+            "integration_version": self._integration_version,
             "sync_state": self.sync_state,
             "sync_message": self.sync_message,
             **self.sync_reminder(),

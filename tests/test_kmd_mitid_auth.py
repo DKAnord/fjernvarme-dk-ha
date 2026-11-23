@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from types import SimpleNamespace
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 from bs4 import BeautifulSoup
@@ -13,6 +13,8 @@ from kmd_easy_energy.api.kmd_mitid_auth import (
     DEFAULT_MINFORSYNING2,
     KMDMitIDAuthenticator,
     MSG_DISCOVERY_FAILED,
+    MSG_MITID_PARALLEL_SESSION,
+    MSG_MITID_USER_NOT_FOUND,
     MSG_OIDC_GENERIC,
     MSG_PORTAL_FIRST,
     _extract_page_feedback,
@@ -380,3 +382,58 @@ def test_finalize_stops_on_external_login_register_page() -> None:
     assert str(exc.value) == MSG_PORTAL_FIRST
     # Must not POST the register form (that would try to create an account).
     assert session.posts == [] or all("Input.Email" not in str(data) for _, data in session.posts)
+
+
+def _start_session_with_browser_client(err: Exception) -> None:
+    import base64
+    import json
+
+    aux = base64.b64encode(
+        json.dumps(
+            {
+                "coreClient": {"checksum": base64.b64encode(b"\x01\x02").decode()},
+                "parameters": {"authenticationSessionId": "sid-1"},
+            }
+        ).encode()
+    ).decode()
+    session = FakeSession(
+        {
+            "https://easy-energy-identity.kmd.dk/oidc/authorize": FakeResp(
+                status_code=200,
+                text='<input name="__RequestVerificationToken" value="rvt2" />',
+                url="https://nemlog-in.mitid.dk/login/mitid",
+            ),
+            "https://nemlog-in.mitid.dk/login/mitid/initialize": FakeResp(
+                status_code=200,
+                text="{}",
+                url="https://nemlog-in.mitid.dk/login/mitid/initialize",
+                _json={"Aux": aux},
+            ),
+        }
+    )
+    auth = _auth_with(session)
+    auth._client_id = KREDSLOB_CLIENT
+    auth._redirect_uri = DEFAULT_KREDSLOB["redirect_uri"]
+    client = MagicMock()
+    if "parallel" in str(err).lower():
+        client.identify_as_user_and_get_available_authenticators.return_value = {"APP": "MitID"}
+        client.start_app_authentication.side_effect = err
+    else:
+        client.identify_as_user_and_get_available_authenticators.side_effect = err
+    with patch("kmd_easy_energy.api.kmd_mitid_auth.BrowserClient", return_value=client):
+        auth.start_session("https://minvarme.kredslob.dk/", "secret-mitid-user-42")
+
+
+def test_start_session_translates_identity_not_found_without_leaking_username() -> None:
+    err = Exception(b'{"errorCode":"control.identity_not_found"}')
+    with pytest.raises(RuntimeError) as exc:
+        _start_session_with_browser_client(err)
+    assert str(exc.value) == MSG_MITID_USER_NOT_FOUND
+    assert "secret-mitid-user-42" not in str(exc.value)
+
+
+def test_start_session_translates_parallel_app_sessions() -> None:
+    err = Exception("Parallel app sessions detected")
+    with pytest.raises(RuntimeError) as exc:
+        _start_session_with_browser_client(err)
+    assert str(exc.value) == MSG_MITID_PARALLEL_SESSION

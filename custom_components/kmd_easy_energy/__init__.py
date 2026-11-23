@@ -33,7 +33,11 @@ from .const import (
     WS_TYPE_MITID_SUBSCRIBE,
 )
 from .coordinator import KMDEasyEnergyCoordinator
-from .frontend_card import async_ensure_lovelace_card_resource, install_frontend_card
+from .frontend_card import (
+    async_ensure_lovelace_card_resource,
+    install_frontend_card,
+    integration_version,
+)
 from .outdoor_temp import migrate_location
 from .util import store_for, unique_id_for, delete_legacy_www_cache, legacy_www_cache_paths
 
@@ -327,7 +331,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     await hass.async_add_executor_job(
         install_frontend_card, Path(hass.config.path("www/js"))
     )
-    await async_ensure_lovelace_card_resource(hass)
+    ver = await hass.async_add_executor_job(integration_version)
+    await async_ensure_lovelace_card_resource(hass, version=ver)
     portal_url = (
         entry.options.get(CONF_PORTAL_URL)
         or entry.data.get(CONF_PORTAL_URL)
@@ -346,7 +351,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             ),
         )
 
-    coordinator = KMDEasyEnergyCoordinator(hass, entry, portal_url=portal_url)
+    coordinator = KMDEasyEnergyCoordinator(
+        hass, entry, portal_url=portal_url, integration_version=ver
+    )
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = coordinator
 
     await coordinator.async_initialize_cache()

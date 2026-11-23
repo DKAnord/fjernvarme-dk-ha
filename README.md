@@ -7,7 +7,7 @@ Komplet, **100% lokal** Home Assistant-integration (`kmd_easy_energy`) og **Plug
 Log ind med **MitID direkte i Home Assistant** i ren Python (OIDC PKCE + NemLog-in + MitID SRP) — **ingen Chromium, ingen ekstern server eller add-on** påkrævet. Kører direkte på Raspberry Pi, Home Assistant OS og Docker.
 
 > [!NOTE]
-> **`v1.0.1` er en rettelse oven på den første stabile hovedudgivelse (`v1.0.0`, ude af beta) — bekræftet live for KMD (Kredsløb og Energi Ikast / Min Forsyning 2) og Watts On (Aalborg Forsyning).** Integrationen er testet live hos **Kredsløb**, **Energi Ikast** og **Aalborg Forsyning** (Watts On). De øvrige 14 KMD-værker og brugerdefineret portal-URL afventer stadig live-test. **E|Forsyning** (Hjørring Varmeforsyning) er eksperimentel og ikke afprøvet live. **Watts On** er eksperimentel og uofficiel: Aalborg er bekræftet live; Forsyning Helsingør, Fjernvarme Fyn og Hillerød Forsyning afventer første test — beta-testere søges. Alle tilbagemeldinger er guld værd — også *"det virker ikke hos mit værk"*. Brug feedback-knappen på kortet eller [opret et issue](https://github.com/DKAnord/fjernvarme-dk-ha/issues) med navnet på dit værk.
+> **`v1.1.0` bygger oven på den stabile `v1.0.0`-udgivelse — bekræftet live for KMD (Kredsløb, Energi Ikast / Min Forsyning 2 og Frederikshavn Forsyning), Watts On (Aalborg Forsyning) og E|Forsyning (Sorø Fjernvarme).** Derudover er **E|Forsyning** nu udvidet med 20 ekstra forudfyldte værker, en **live søgbar værksliste (300+ fjernvarmeværker fra eforsyning.dk)** og **automatisk opslag fra portal-URL eller slug** (intet F12 påkrævet). De øvrige 13 KMD-værker, 21 E|Forsyning-værker og 3 Watts On-værker afventer første live-test — beta-testere søges. Alle tilbagemeldinger er guld værd — også *"det virker ikke hos mit værk"*. Brug feedback-knappen på kortet eller [opret et issue](https://github.com/DKAnord/fjernvarme-dk-ha/issues) med navnet på dit værk.
 
 ---
 
@@ -41,7 +41,9 @@ Log ind med **MitID direkte i Home Assistant** i ren Python (OIDC PKCE + NemLog-
 |---|---|---|---|
 | **Kredsløb** | Aarhus / Brabrand | https://minvarme.kredslob.dk/ | ✅ Bekræftet (KMD) |
 | **Energi Ikast** | Ikast | https://energi-ikast.dk/ | ✅ Bekræftet (KMD / Min Forsyning 2) |
+| **Frederikshavn Forsyning** | Frederikshavn | https://www.forsyningen.dk/selvbetjening | ✅ Bekræftet (KMD) |
 | **Aalborg Forsyning** | Aalborg | https://aalborgforsyning.dk/services/forbrug/watts-on/ | ✅ Bekræftet (Watts On) |
+| **Sorø Fjernvarme** | Sorø | https://eforsyning.dk/soroe/ | ✅ Bekræftet (E\|Forsyning) |
 
 ### 🧪 Afventer første test (Verificerede KMD / Min Forsyning-portaler)
 | Værk | By | Login-portal | Status |
@@ -49,7 +51,6 @@ Log ind med **MitID direkte i Home Assistant** i ren Python (OIDC PKCE + NemLog-
 | **Galten Varmeværk** | Galten | https://minvarme.kredslob.dk/ | 🧪 Afventer 1. test |
 | **Struer Energi** | Struer | https://struerenergi.dk/selvbetjening/ | 🧪 Afventer 1. test |
 | **Envafors / SK Forsyning** | Slagelse / Næstved / Sorø | https://skenergi.dk/minforsyning/ | 🧪 Afventer 1. test |
-| **Frederikshavn Forsyning** | Frederikshavn | https://www.forsyningen.dk/selvbetjening | 🧪 Afventer 1. test |
 | **Vestforsyning** | Holstebro | https://www.vestforsyning.dk/selvbetjening/ | 🧪 Afventer 1. test |
 | **Bornholms Energi & Forsyning (BEOF)** | Bornholm | https://minforsyning.beof.dk/ | 🧪 Afventer 1. test |
 | **Kalundborg Forsyning** | Kalundborg | https://kalfor.dk/selvbetjening/min-forsyning | 🧪 Afventer 1. test |
@@ -58,8 +59,10 @@ Log ind med **MitID direkte i Home Assistant** i ren Python (OIDC PKCE + NemLog-
 ### 🔎 Kandidater (KMD Easy Energy-kunder — afventer test)
 - **Nykøbing Sjælland Varmeværk** · **Langeland Energi & Forsyning (LEF)** · **Provas (Haderslev)** · **Skanderborg Forsyning** · **SAMN Forsyning** · **go'energi** · samt *Brugerdefineret URL*
 
-### 🧪 E|Forsyning (eksperimentel — beta-testere søges)
-- **Hjørring Varmeforsyning** ([eforsyning.dk/hjvarme](https://eforsyning.dk/hjvarme)) · samt *Andet E|Forsyning-værk* (kræver værkets forsyningid)
+### 🧪 E|Forsyning (Sorø bekræftet live, 21 forudfyldte + søgning blandt 300+ værker)
+- **Sorø Fjernvarme** ([eforsyning.dk/soroe](https://eforsyning.dk/soroe/)) — ✅ Bekræftet live (inkl. 2026-takst)
+- **21 forudfyldte værker (🧪 afventer 1. test):** Hjørring Varmeforsyning, Fjernvarme Horsens, Vestforbrænding, Egedal Fjernvarme A/S, Fredericia Fjernvarme, Vejle Fjernvarme, Sønderborg Varme, SONFOR Varme, Køge Fjernvarme, Høje Taastrup Fjernvarme, Avedøre Fjernvarme, Middelfart Fjernvarme, Solrød Fjernvarme, Thisted Varmeforsyning, Assens Fjernvarme, Ringkøbing Fjernvarme, Hvide Sande Fjernvarme, Kibæk Varmeværk, Kjellerup Fjernvarme, Ansager Varmeværk og Dianalund Fjernvarme
+- **Alle øvrige E|Forsyning-værker:** Vælg **🔎 Søg blandt alle E|Forsyning-værker (300+ på eforsyning.dk)** i opsætningsguiden eller indsæt værkets portal-URL / slug (f.eks. `horsens` eller `https://eforsyning.dk/horsens/`) — `forsyningid` slås op automatisk uden F12.
 
 Se [E|Forsyning-backend](#-eforsyning-backend-eksperimentel) nedenfor.
 
@@ -101,13 +104,13 @@ Klik på knappen for at tilføje arkivet i HACS → klik **Hent (Download)** (se
    [![Tilføj integration](https://my.home-assistant.io/badges/config_flow_start.svg)](https://my.home-assistant.io/redirect/config_flow_start/?domain=kmd_easy_energy)
 
 2. Dashboard-kortet installeres automatisk. I **storage-tilstand** (standard) opretter eller opdaterer integrationen selv Lovelace-ressourcen ved opstart. Tjek under **Indstillinger → Dashboards → (`⋮`) Ressourcer**, at URL'en er:
-   - **URL:** `/local/js/kmd-easy-energy-card.js?v=1.0.1`
+   - **URL:** `/local/js/kmd-easy-energy-card.js?v=1.1.0`
    - **Ressourcetype:** `JavaScript-modul`
    *(Integrationen kopierer kortet til `/config/www/js/kmd-easy-energy-card.js` ved opstart. Home Assistant cacher filer under `/local/` i op til 31 dage, så `?v=…` er nødvendig efter en opdatering — ellers kan browseren eller Companion-appen blive ved med at køre et gammelt kort uden QR-kode. Kører du Lovelace i YAML-tilstand, skal du selv rette URL'en.)*
 3. Tilføj kortet **Dansk Fjernvarme: Dashboard** på et dashboard via den visuelle kortvælger (eller se [dashboards/lovelace-plug-and-play.yaml](dashboards/lovelace-plug-and-play.yaml)).
 
 > [!TIP]
-> **Mangler QR-koden efter en opdatering?** Så kører du sandsynligvis stadig det gamle kort i browserens cache. Ret ressource-URL'en til den ovenfor (med `?v=1.0.1`), og genindlæs hardt: **Ctrl+Shift+R** / **Cmd+Shift+R**. I Companion-appen: **Fejlfinding / Debugging → Nulstil frontend-cache**, og luk appen helt og åbn den igen. Du kan tjekke at det nye kort er indlæst ved i browserens udviklerværktøj at se, at elementet har `data-kmd-card-version="1.0.1"`.
+> **Mangler QR-koden efter en opdatering?** Så kører du sandsynligvis stadig det gamle kort i browserens cache. Ret ressource-URL'en til den ovenfor (med `?v=1.1.0`), og genindlæs hardt: **Ctrl+Shift+R** / **Cmd+Shift+R**. I Companion-appen: **Fejlfinding / Debugging → Nulstil frontend-cache**, og luk appen helt og åbn den igen. Du kan tjekke at det nye kort er indlæst ved i browserens udviklerværktøj at se, at elementet har `data-kmd-card-version="1.1.0"`.
 
 ---
 
@@ -126,7 +129,7 @@ KMD udsteder kun en adgang (access token), der gælder ca. 1 time, og ingen refr
 ## 🧪 E|Forsyning-backend (eksperimentel)
 
 > [!WARNING]
-> E|Forsyning-understøttelsen er **ikke testet live** endnu. Har du fjernvarme fra et E|Forsyning-værk (fx Hjørring Varmeforsyning), så hjælp gerne som beta-tester og meld tilbage i et GitHub-issue — uden persondata.
+> **Sorø Fjernvarme** er nu verificeret live på E|Forsyning (tak til [@Crallebab](https://github.com/Crallebab) i [issue #25](https://github.com/DKAnord/fjernvarme-dk-ha/issues/25)). **Hjørring Varmeforsyning** og øvrige E|Forsyning-værker søger fortsat beta-testere — meld meget gerne tilbage i et GitHub-issue (uden persondata).
 
 Nogle værker bruger ikke KMD Easy Energy men **E|Forsyning** (eforsyning.dk / DFF-EDB). For dem bruger integrationen en anden backend, men **samme kort, sensorer, Energy-statistik og påmindelse**:
 
@@ -135,7 +138,7 @@ Nogle værker bruger ikke KMD Easy Energy men **E|Forsyning** (eforsyning.dk / D
 - **Data er daglige aflæsninger** (kWh, m³, frem- og returtemperatur) — ikke timedata. Energy-statistikken (`kmd_easy_energy:energy_<entry_id>` / `:volume_<entry_id>`) får én række pr. døgn (ved midnat), så døgntallene er rigtige, men der er ingen timeprofil.
 - **Kortet viser kun det, der er data til:** ingen timeprofil, ingen saldo/regning og ingen budgetprognose for E|Forsyning, og ingen MitID-felter. Der står *Data fra E|Forsyning* under banneret.
 - **Årstal** vises kun, når historikken dækker hele året (første synkronisering henter indeværende og forrige afregningsår), så du ser hellere "intet tal" end et forkert tal.
-- **Andet E|Forsyning-værk:** Vælg *Andet E|Forsyning-værk* og indtast værkets **forsyningid**: åbn værkets side på eforsyning.dk, tryk F12 → *Netværk*, søg efter `GetVaerkSettings`, og kopiér værdien efter `forsyningid=`. Hjørring Varmeforsyning er forudfyldt (`B30A6948-2461-4827-B8EB-5D93169CCB8B`, fundet på den offentlige side).
+- **Andet E|Forsyning-værk (300+ værker uden F12):** Vælg **🔎 Søg blandt alle E|Forsyning-værker** i integrationens opsætning (henter og filtrerer varmeværker direkte fra `eforsyning.dk`), eller vælg *Andet E|Forsyning-værk* og indsæt værkets portal-URL (f.eks. `https://eforsyning.dk/horsens/`), blot slug (`horsens`), eller værkets `forsyningid` (UUID). Integrationen slår automatisk `forsyningid` og værkets navn op — **ingen F12 påkrævet**. **Sorø Fjernvarme** samt 21 andre store E|Forsyning-værker er allerede forudfyldt.
 
 **Tak til [kpoppel/homeassistant-eforsyning](https://github.com/kpoppel/homeassistant-eforsyning)** (Apache-2.0): Login- og dataprotokollen er studeret fra det projekt og genimplementeret som en asynkron klient (`api/eforsyning_client.py`, markeret som afledt værk med ændringer). Se [NOTICE](NOTICE) og licensteksten i `custom_components/kmd_easy_energy/api/LICENSE-eforsyning-Apache-2.0.txt`. Bruger du kun E|Forsyning og vil have flere detaljer (fx regningslinjer), så kig også på kpoppels integration.
 
@@ -242,7 +245,7 @@ Gælder KMD-værker med MitID (fx Kredsløb). E|Forsyning og Watts On har deres 
 
 - **Timehistorik til Energy-dashboardet:** Integrationen importerer eksterne statistikker `kmd_easy_energy:energy_<entry_id>` (kWh) og `kmd_easy_energy:volume_<entry_id>` (m³). Tilføj **disse** under Indstillinger → Dashboards → Energi — ikke måned-til-dato-sensorerne `sensor.*_energy` / `sensor.*_overview`, som nulstilles hver måned.
 - Første synkronisering henter op til 12 måneders timehistorik; senere synkroniseringer udfylder data siden sidste synkronisering og op til tre manglende måneder ad gangen.
-- **Varmepris:** Indstillinger → integrationen → Valgfrit: kr./kWh, ev. kr./m³, motivationstarif (kr./kWh/°C) og normalår-graddage. For **Kredsløb** udfyldes kWh-pris og motivation automatisk fra den offentliggjorte takst for kalenderåret ([prisside](https://www.kredslob.dk/privat/fjernvarme/fjernvarmepriser)). Sæt 0 for at bruge standarden. Andre værker har ingen indbygget pris — den skal tastes. Kredsløb afregner varme i kWh, så m³-pris er ikke udfyldt på forhånd.
+- **Varmepris:** Indstillinger → integrationen → Valgfrit: kr./kWh, ev. kr./m³, motivationstarif (kr./kWh/°C) og normalår-graddage. For **Kredsløb** ([prisside](https://www.kredslob.dk/privat/fjernvarme/fjernvarmepriser)) og **Sorø Fjernvarme** ([prisside](https://www.affaldplus.dk/soroe-fjernvarme/fjernvarmepriser)) udfyldes kWh-pris og motivation automatisk fra de offentliggjorte takster for kalenderåret. Sæt 0 for at bruge standarden. Andre værker har ingen indbygget pris — den skal tastes. Kredsløb og Sorø Fjernvarme afregner varme i kWh, så m³-pris er ikke udfyldt på forhånd.
 - **Motivationstarif / afkøling:** Bonus under 30 °C, gebyr over 40 °C (kan ændres). Sensorerne viser status og kr./kWh-regulering.
 - **Graddage og prognose:** kWh/HDD og et skønnet normalår (standard 3100 HDD17, kan ændres — det er *ikke* et officielt DMI 1991–2020-tal). Årsprognosen er ÅTD plus resterende skønnede graddage.
 - **Unormalt forbrug:** `binary_sensor` slår til, hvis sidste komplette døgn ligger væsentligt over samme ugedag de foregående uger, også efter HDD-justering. Du bestemmer selv, om den skal styre en notifikation.
@@ -265,19 +268,19 @@ Download diagnostics fra integrationen, hvis du skal have support: tokens, MitID
 
 ---
 
-## 🇬🇧 English notes (new in `v1.0.0`–`v1.0.1`)
+## 🇬🇧 English notes (new in `v1.0.0`–`v1.1.0`)
 
-This is a Denmark-only Home Assistant integration (**Dansk Fjernvarme**, technical domain `kmd_easy_energy`) for district heating across KMD Easy Energy / Min Forsyning, Watts On, and E|Forsyning. Version **`v1.0.1`** (first stable 1.0 release out of beta; building on the `v0.3.x` series) moves the usage cache to private `.storage`, keeps MitID OTP/QR off sensor attributes and off the event bus (the bundled card gets them via the websocket subscription `kmd_easy_energy/mitid/subscribe`; event `kmd_easy_energy_mitid_challenge` carries status only), and uses **session-based sync**: KMD only issues a ~1 h access token (no refresh token), so each "Synkroniser" press is one MitID login that fetches everything since the last sync and then discards the token (never stored). There is no background polling, no reauth/repair for an expired token, and cached values are restored after an HA restart without contacting KMD. A soft, non-invasive weekend nudge (a calm info chip under the Synkroniser button; no notification, repair or push) (`binary_sensor.<entry>_sync_reminder`, Danish text on the card) is shown on Saturday/Sunday if there was no sync on Thursday, Friday or Saturday that week; it can be turned off in the options.
+This is a Denmark-only Home Assistant integration (**Dansk Fjernvarme**, technical domain `kmd_easy_energy`) for district heating across KMD Easy Energy / Min Forsyning, Watts On, and E|Forsyning. Version **`v1.1.0`** (building on the stable `v1.0.0` release; confirmed live at **Kredsløb**, **Energi Ikast**, and **Frederikshavn Forsyning** on KMD, **Aalborg Forsyning** on Watts On, and **Sorø Fjernvarme** on E|Forsyning) moves the usage cache to private `.storage`, keeps MitID OTP/QR off sensor attributes and off the event bus (the bundled card gets them via the websocket subscription `kmd_easy_energy/mitid/subscribe`; event `kmd_easy_energy_mitid_challenge` carries status only), and uses **session-based sync**: KMD only issues a ~1 h access token (no refresh token), so each "Synkroniser" press is one MitID login that fetches everything since the last sync and then discards the token (never stored). There is no background polling, no reauth/repair for an expired token, and cached values are restored after an HA restart without contacting KMD. A soft, non-invasive weekend nudge (a calm info chip under the Synkroniser button; no notification, repair or push) (`binary_sensor.<entry>_sync_reminder`, Danish text on the card) is shown on Saturday/Sunday if there was no sync on Thursday, Friday or Saturday that week; it can be turned off in the options.
 
-For the Energy dashboard, add the imported hourly statistics `kmd_easy_energy:energy_<entry>` / `:volume_<entry>`, not the month-to-date entities. Heat price (DKK/kWh) is an option (and unlocks cross-provider variable cost estimate sensors + the card's `💰 Estimated variable cost` panel across KMD, Watts On, and E|Forsyning); Kredsløb defaults come from the [official price page](https://www.kredslob.dk/privat/fjernvarme/fjernvarmepriser) for the current year. Motivation tariff, degree-day forecast and an abnormal-consumption binary sensor are included; the integration never sends leak notifications on its own.
+For the Energy dashboard, add the imported hourly statistics `kmd_easy_energy:energy_<entry>` / `:volume_<entry>`, not the month-to-date entities. Heat price (DKK/kWh) is an option (and unlocks cross-provider variable cost estimate sensors + the card's `💰 Estimated variable cost` panel across KMD, Watts On, and E|Forsyning); Kredsløb ([price page](https://www.kredslob.dk/privat/fjernvarme/fjernvarmepriser)) and Sorø Fjernvarme ([price page](https://www.affaldplus.dk/soroe-fjernvarme/fjernvarmepriser)) defaults come from their official price pages for the current year. Motivation tariff, degree-day forecast and an abnormal-consumption binary sensor are included; the integration never sends leak notifications on its own.
 
-**E|Forsyning (experimental, untested, beta testers wanted):** utilities on eforsyning.dk (e.g. Hjørring Varmeforsyning) use a second backend with consumer number + web PIN (no MitID), automatic daily sync, daily readings (no hourly data) and the same card/sensors/statistics. The card and the entities are capability-driven, so sections without data are hidden. The protocol was studied from and reimplemented after [kpoppel/homeassistant-eforsyning](https://github.com/kpoppel/homeassistant-eforsyning) (Apache-2.0) — thank you! See NOTICE.
+**E|Forsyning (Sorø Fjernvarme confirmed live; 22 curated utilities + live directory of 300+ utilities):** utilities on eforsyning.dk (e.g. Sorø Fjernvarme with bundled 2026 tariff, plus 21 curated utilities and any other E|Forsyning utility via the live searchable directory or automatic URL/slug `forsyningid` lookup — no DevTools/F12 needed) use a second backend with consumer number + web PIN (no MitID), automatic daily sync, daily readings (no hourly data) and the same card/sensors/statistics. The card and the entities are capability-driven, so sections without data are hidden. The protocol was studied from and reimplemented after [kpoppel/homeassistant-eforsyning](https://github.com/kpoppel/homeassistant-eforsyning) (Apache-2.0) — thank you! See NOTICE.
 
 **Watts On (experimental, unofficial):** a third backend reads district heating from the Watts On app backend, inspired by [TheRealBatBro/Home-Assistant-Novafos-V2](https://github.com/TheRealBatBro/Home-Assistant-Novafos-V2) (Novafos water via Watts On, MIT) — thank you! Login happens in your browser (paste the final `msauth://` redirect into the config flow); only a rotating refresh token is stored (redacted in diagnostics, never logged). The heat endpoint and field names (`En`, `Vol`, `TI`/`TO`) have been verified live at **Aalborg Forsyning**. **Forsyning Helsingør**, **Fjernvarme Fyn** and **Hillerød Forsyning** are listed and awaiting a first live test (beta testers wanted). Helsingør was previously a KMD candidate and is now a Watts On utility (official Watts On heat page; Hornbæk Fjernvarme customers are excluded). Novafos is not included (water only). Whatever is not recognised is hidden rather than guessed. Watts On has no public API terms; use at your own risk.
 
 **Outdoor temperature:** degree days and temperature lines use, in this order, an optional HA outdoor temperature sensor (daily means from the recorder's long-term statistics, local-first, read-only), then Open-Meteo (external service) for any day the sensor doesn't cover. Open-Meteo uses the location override from the options if set, otherwise the HA home location, otherwise the utility's coordinates. Config entry 1.3 stops treating the utility's coordinates as your location; explicit overrides are kept. The source is exposed as `temp_source` / `outdoor_temp` (no coordinates) and shown on the card.
 
-**Breaking for custom dashboards:** attributes `mitid_otp_code` and `mitid_qr_svg` are removed. Use the bundled card or the websocket subscription above. After updating, the Lovelace resource must be `/local/js/kmd-easy-energy-card.js?v=1.0.1` (Home Assistant caches `/local/` for 31 days; a stale v0.2.x card shows no QR). Storage-mode Lovelace is updated automatically on startup; then hard-refresh the dashboard (Companion app: reset frontend cache). Setup from a tablet/PC works with MitID's default QR (both animated frames are shown on the card); only setup on the same phone as the MitID app needs one-time codes enabled in the MitID app. Phone OTP sync is verified live on Kredsløb; tablet QR and additional KMD Easy Energy utilities are open for beta testing.
+**Breaking for custom dashboards:** attributes `mitid_otp_code` and `mitid_qr_svg` are removed. Use the bundled card or the websocket subscription above. After updating, the Lovelace resource must be `/local/js/kmd-easy-energy-card.js?v=1.1.0` (Home Assistant caches `/local/` for 31 days; a stale v0.2.x card shows no QR). Storage-mode Lovelace is updated automatically on startup; then hard-refresh the dashboard (Companion app: reset frontend cache). Setup from a tablet/PC works with MitID's default QR (both animated frames are shown on the card); only setup on the same phone as the MitID app needs one-time codes enabled in the MitID app. Phone OTP sync is verified live on Kredsløb; tablet QR and additional KMD Easy Energy utilities are open for beta testing.
 
 ---
 
@@ -305,5 +308,7 @@ En stor tak til de udviklere og brugere, der har gjort denne integration mulig p
 - **[Hundter/MitID-BrowserClient](https://github.com/Hundter/MitID-BrowserClient)** *(MIT)* — MitID SRP-klienten, der gør 100 % lokalt MitID-login muligt direkte i Home Assistant uden ekstern browser.
 - **[@dkvand](https://github.com/dkvand)** — Live-test, sparring, PR #9 (Aalborg Forsynings varme-endpoint og felter på Watts On) samt inspiration til kr.-estimatpanelet på dashboardet.
 - **[@BenzDK](https://github.com/BenzDK)** — Live-test og bekræftelse af **Energi Ikast** / Min Forsyning 2 ([issue #19](https://github.com/DKAnord/fjernvarme-dk-ha/issues/19)).
+- **[@tirolel](https://github.com/tirolel)** — Live-test og bekræftelse af **Frederikshavn Forsyning** ([issue #24](https://github.com/DKAnord/fjernvarme-dk-ha/issues/24)).
+- **[@Crallebab](https://github.com/Crallebab)** — Første fulde live-verificering af **E|Forsyning**-backenden hos **Sorø Fjernvarme** inkl. `forsyningid` og 2026-takst ([issue #25](https://github.com/DKAnord/fjernvarme-dk-ha/issues/25)).
 
 Se [NOTICE](NOTICE) for fulde licens- og copyright-tekster.

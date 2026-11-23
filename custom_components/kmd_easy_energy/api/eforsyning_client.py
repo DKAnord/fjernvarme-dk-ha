@@ -35,12 +35,16 @@ Protocol (as handled by kpoppel's client):
 from __future__ import annotations
 
 import hashlib
+import html
+import ipaddress
 import json
 import logging
+import re
 import secrets
 import string
 from datetime import date, datetime, timedelta
 from typing import Any
+from urllib.parse import urlparse, urlunparse
 
 import aiohttp
 
@@ -52,6 +56,263 @@ _TIMEOUT = aiohttp.ClientTimeout(total=20)
 _ID_CHARS = string.digits + string.ascii_uppercase
 # Values above this are treated as a missing decimal comma (seen in the wild).
 _TEMP_SANITY_MAX = 150.0
+
+
+_UUID_RE = re.compile(
+    r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+)
+_SLUG_RE = re.compile(r"^[A-Za-z0-9_-]{1,80}$")
+_UMBRACO_PREFIX_RE = re.compile(r"indstillinger\.umbraco\s*=\s*")
+_FORSYNING_ID_RE = re.compile(
+    r"forsyning[Ii]d[\"':=\s]+([0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12})"
+)
+_SELECT_PLANT_RE = re.compile(
+    r"selectPlant\(\s*['\"]([^'\"]+)['\"]\s*\)[^>]*>\s*<h5>(.*?)</h5>",
+    re.IGNORECASE | re.DOTALL,
+)
+_EXCLUDED_DIRECTORY_SLUGS = {"albertslund"}
+_NON_FILE_EXT_RE = re.compile(r"\.(?:php|html?|aspx)$", re.IGNORECASE)
+
+
+def is_uuid(value: str) -> bool:
+    """Return True if value is a standard UUID string."""
+    return bool(_UUID_RE.match(str(value or "").strip()))
+
+
+def _canonical_url_key(url: str) -> str:
+    parsed = urlparse(url.strip())
+    host = (parsed.hostname or "").lower()
+    if host.startswith("www."):
+        host = host[4:]
+    path = parsed.path.rstrip("/").lower()
+    return f"{host}{path}"
+
+
+def normalize_eforsyning_url(value: str) -> str | None:
+    """Normalize a slug or HTTPS portal URL; reject localhost, IPs, and non-HTTPS."""
+    raw = str(value or "").strip()
+    if not raw:
+        return None
+    slug_candidate = raw.strip("/")
+    if "/" not in slug_candidate and "." not in slug_candidate and ":" not in slug_candidate:
+        if _SLUG_RE.match(slug_candidate):
+            return f"https://eforsyning.dk/{slug_candidate}/"
+        return None
+    lower = raw.lower()
+    if lower.startswith(("eforsyning.dk/", "www.eforsyning.dk/")):
+        raw = f"https://{raw}"
+    parsed = urlparse(raw)
+    if parsed.scheme.lower() != "https":
+        return None
+    if parsed.username or parsed.password:
+        return None
+    try:
+        port = parsed.port
+    except ValueError:
+        return None
+    if port not in (None, 443):
+        return None
+    host = (parsed.hostname or "").strip().lower()
+    if not host or "." not in host:
+        return None
+    if host == "localhost" or host.endswith((".local", ".internal", ".localhost")):
+        return None
+    try:
+        ipaddress.ip_address(host)
+        return None
+    except ValueError:
+        pass
+    path = parsed.path or "/"
+    if not path.endswith("/") and not _NON_FILE_EXT_RE.search(path):
+        path = f"{path}/"
+    netloc = host if port is None else f"{host}:{port}"
+    return urlunparse(("https", netloc, path, "", "", ""))
+
+
+def parse_umbraco_suppliers(html_text: str, page_url: str = "") -> list[dict[str, str]]:
+    """Extract E|Forsyning supplier entries from a portal page's HTML."""
+    text = str(html_text or "")
+    suppliers: list[dict[str, str]] = []
+    seen: set[str] = set()
+
+    match = _UMBRACO_PREFIX_RE.search(text)
+    if match:
+        try:
+            obj, _ = json.JSONDecoder().raw_decode(text, match.end())
+        except json.JSONDecodeError:
+            obj = None
+        if isinstance(obj, dict):
+            default_name = str(obj.get("firmaNavn") or "").strip()
+            for entry in obj.get("eforsyninger") or []:
+                if not isinstance(entry, dict):
+                    continue
+                fid = str(entry.get("forsyningId") or "").strip()
+                if not is_uuid(fid):
+                    continue
+                fid_up = fid.upper()
+                if fid_up in seen:
+                    continue
+                seen.add(fid_up)
+                firma = entry.get("firmaInfo") if isinstance(entry.get("firmaInfo"), dict) else {}
+                suppliers.append(
+                    {
+                        "supplier_id": fid_up,
+                        "name": str(firma.get("firmaNavn") or default_name).strip(),
+                        "portal_url": str(entry.get("siteUrl") or page_url or "").strip(),
+                        "app_server_url": str(entry.get("appServerUrl") or "").strip(),
+                    }
+                )
+
+    if len(suppliers) > 1 and page_url:
+        target_key = _canonical_url_key(page_url)
+        matched = [
+            s for s in suppliers if s.get("portal_url") and _canonical_url_key(s["portal_url"]) == target_key
+        ]
+        if len(matched) == 1:
+            return matched
+
+    if not suppliers:
+        for fid in _FORSYNING_ID_RE.findall(text):
+            fid_up = fid.upper()
+            if fid_up in seen:
+                continue
+            seen.add(fid_up)
+            suppliers.append(
+                {
+                    "supplier_id": fid_up,
+                    "name": "",
+                    "portal_url": str(page_url or "").strip(),
+                    "app_server_url": "",
+                }
+            )
+    return suppliers
+
+
+def parse_eforsyning_directory(html_text: str) -> list[dict[str, str]]:
+    """Parse district-heating utilities from the eforsyning.dk directory page."""
+    entries: list[dict[str, str]] = []
+    seen_urls: set[str] = set()
+    for raw_url, raw_name in _SELECT_PLANT_RE.findall(str(html_text or "")):
+        norm_url = normalize_eforsyning_url(raw_url)
+        if not norm_url or norm_url in seen_urls:
+            continue
+        parsed = urlparse(norm_url)
+        slug = parsed.path.strip("/").lower()
+        if (parsed.hostname or "").lower() in ("eforsyning.dk", "www.eforsyning.dk") and slug in _EXCLUDED_DIRECTORY_SLUGS:
+            continue
+        name = " ".join(html.unescape(raw_name).split()).strip()
+        if not name:
+            continue
+        low = name.lower()
+        if "vand" in low and not any(kw in low for kw in ("varme", "fjernvarme", "kraftvarme")):
+            continue
+        seen_urls.add(norm_url)
+        entries.append({"name": name, "portal_url": norm_url})
+    entries.sort(key=lambda item: item["name"].casefold())
+    return entries
+
+
+async def async_lookup_vaerk_settings(
+    session: aiohttp.ClientSession,
+    supplier_id: str,
+    base_url: str = EFORSYNING_BASE_URL,
+) -> dict[str, str]:
+    """Fetch public GetVaerkSettings metadata for a supplier UUID."""
+    fid = str(supplier_id or "").strip()
+    if not is_uuid(fid):
+        raise EforsyningError("Ugyldigt forsyningid")
+    headers = {
+        "Accept": "application/json",
+        "User-Agent": "HomeAssistant kmd_easy_energy (E|Forsyning backend)",
+    }
+    try:
+        async with session.get(
+            f"{base_url}{_SETTINGS_PATH}{fid}", headers=headers, timeout=_TIMEOUT
+        ) as resp:
+            if resp.status >= 400:
+                raise EforsyningError(f"E|Forsyning GetVaerkSettings: HTTP {resp.status}")
+            try:
+                data = await resp.json(content_type=None)
+            except (ValueError, aiohttp.ContentTypeError) as err:
+                raise EforsyningError("E|Forsyning GetVaerkSettings: ugyldigt svar") from err
+    except aiohttp.ClientError as err:
+        raise EforsyningError(f"E|Forsyning GetVaerkSettings: {type(err).__name__}") from err
+
+    app_uri = str((data or {}).get("AppServerUri") or "").strip()
+    if not app_uri.startswith("https://"):
+        raise EforsyningError("E|Forsyning: ukendt forsyningid (ingen AppServerUri)")
+    firma = (data or {}).get("FirmaInfo")
+    fi = firma if isinstance(firma, dict) else {}
+    return {
+        "supplier_id": fid.upper(),
+        "app_server_url": app_uri if app_uri.endswith("/") else f"{app_uri}/",
+        "portal_url": str((data or {}).get("EforsyningUri") or "").strip(),
+        "name": str(fi.get("firmaNavn") or "").strip(),
+        "city": str(fi.get("by") or "").strip(),
+    }
+
+
+async def async_resolve_supplier_input(
+    session: aiohttp.ClientSession,
+    raw_input: str,
+    base_url: str = EFORSYNING_BASE_URL,
+) -> list[dict[str, str]]:
+    """Resolve a UUID, slug, or portal URL into validated E|Forsyning supplier dicts."""
+    text = str(raw_input or "").strip()
+    if not text:
+        raise EforsyningError("Tomt forsyningid/URL")
+    if is_uuid(text):
+        return [await async_lookup_vaerk_settings(session, text, base_url=base_url)]
+    url = normalize_eforsyning_url(text)
+    if not url:
+        raise EforsyningError("Ugyldig E|Forsyning-URL eller forsyningid")
+    headers = {"User-Agent": "HomeAssistant kmd_easy_energy (E|Forsyning backend)"}
+    try:
+        async with session.get(url, headers=headers, timeout=_TIMEOUT) as resp:
+            if resp.status >= 400:
+                raise EforsyningError(f"E|Forsyning portalopslag: HTTP {resp.status}")
+            page_html = await resp.text()
+            final_url = str(getattr(resp, "url", "") or url)
+    except aiohttp.ClientError as err:
+        raise EforsyningError(f"E|Forsyning portalopslag: {type(err).__name__}") from err
+
+    candidates = parse_umbraco_suppliers(page_html, page_url=final_url)
+    if not candidates:
+        raise EforsyningError("Fandt intet forsyningid på siden")
+    if len(candidates) == 1:
+        cand = candidates[0]
+        settings = await async_lookup_vaerk_settings(
+            session, cand["supplier_id"], base_url=base_url
+        )
+        return [
+            {
+                "supplier_id": settings["supplier_id"],
+                "app_server_url": settings["app_server_url"],
+                "portal_url": settings["portal_url"] or cand.get("portal_url") or url,
+                "name": settings["name"] or cand.get("name") or "",
+                "city": settings["city"],
+            }
+        ]
+    return candidates
+
+
+async def async_fetch_eforsyning_directory(
+    session: aiohttp.ClientSession, base_url: str = EFORSYNING_BASE_URL
+) -> list[dict[str, str]]:
+    """Fetch and parse the public E|Forsyning utility directory."""
+    headers = {"User-Agent": "HomeAssistant kmd_easy_energy (E|Forsyning backend)"}
+    try:
+        async with session.get(base_url, headers=headers, timeout=_TIMEOUT) as resp:
+            if resp.status >= 400:
+                raise EforsyningError(f"E|Forsyning værksliste: HTTP {resp.status}")
+            page_html = await resp.text()
+    except aiohttp.ClientError as err:
+        raise EforsyningError(f"E|Forsyning værksliste: {type(err).__name__}") from err
+
+    directory = parse_eforsyning_directory(page_html)
+    if not directory:
+        raise EforsyningError("E|Forsyning værksliste var tom")
+    return directory
 
 
 class EforsyningError(RuntimeError):
@@ -202,6 +463,7 @@ class EforsyningClient:
         self.installations: list[dict[str, Any]] = []
         self.moved_in: date | None = None
         self.year_marker: dict[str, Any] = {}
+        self.vaerk_settings: dict[str, Any] = {}
 
     # -- helpers ---------------------------------------------------------
     @staticmethod
@@ -254,6 +516,7 @@ class EforsyningClient:
         data = await self._request(
             "GET", f"{self._base_url}{_SETTINGS_PATH}{self._supplier_id}", what="GetVaerkSettings"
         )
+        self.vaerk_settings = dict(data or {})
         uri = str((data or {}).get("AppServerUri") or "").strip()
         if not uri.startswith("https://"):
             raise EforsyningError("E|Forsyning: ukendt forsyningid (ingen AppServerUri)")

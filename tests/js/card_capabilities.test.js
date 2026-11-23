@@ -111,6 +111,7 @@ card = render({ capabilities: ALL_KMD, initial_setup_complete: false, annual: {}
 html = card.shadowRoot.innerHTML;
 assert.ok(html.includes('id="mitidUserInput"'), "KMD wizard");
 assert.ok(!html.includes('value="hjorring-varmeforsyning"'), "E|Forsyning utility not in MitID wizard");
+assert.ok(!html.includes('value="soroe-fjernvarme"'), "Sorø E|Forsyning utility not in MitID wizard");
 
 // 7) Watts On (Aalborg): hourly data detected -> hourly sections shown, no MitID,
 //    no "daglige aflæsninger", data-source note, sync service.

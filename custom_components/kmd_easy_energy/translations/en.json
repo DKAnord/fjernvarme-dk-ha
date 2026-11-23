@@ -30,19 +30,33 @@
           "location_name": "City / Location label"
         }
       },
+      "eforsyning_directory": {
+        "title": "Select E|Forsyning utility",
+        "description": "Search among {count} district heating utilities loaded directly from eforsyning.dk (water-only utilities are filtered out). The supplier id is resolved automatically — no F12 required.",
+        "data": {
+          "eforsyning_directory_url": "District heating utility"
+        }
+      },
+      "eforsyning_supplier": {
+        "title": "Select E|Forsyning supplier",
+        "description": "This portal page lists multiple E|Forsyning entries. Choose the one for your district heating.",
+        "data": {
+          "eforsyning_supplier_id": "Supplier"
+        }
+      },
       "eforsyning": {
         "title": "E|Forsyning login ({utility_name})",
-        "description": "⚠️ Experimental: E|Forsyning support has not been tested live yet — beta testers wanted.\n\nLog in with the **forbrugernummer** (consumer number) and **webpinkode** (web PIN) from your heating bill (same as on {portal_url}). No MitID is used. The credentials are stored in Home Assistant like other integrations' passwords, never logged and redacted in diagnostics.\n\n**Supplier id** (only for 'Other E|Forsyning utility'): open your utility's page on eforsyning.dk (e.g. {example_url}), press F12 → Network, search for 'GetVaerkSettings' and copy the value after `forsyningid=`.",
+        "description": "Status: {status_badge}\n\n⚠️ Experimental: E|Forsyning support has been verified live at Sorø Fjernvarme; other E|Forsyning utilities await a first test — beta testers wanted.\n\nLog in with the **forbrugernummer** (consumer number) and **webpinkode** (web PIN) from your heating bill (same as on {portal_url}). No MitID is used. The credentials are stored in Home Assistant like other integrations' passwords, never logged and redacted in diagnostics.\n\n**Portal URL, slug, or supplier id** (only for 'Other E|Forsyning utility'): paste your utility's portal URL (e.g. {example_url}), just the slug (`horsens`), or the supplier UUID — the rest is resolved automatically without F12.",
         "data": {
           "eforsyning_username": "Consumer number (forbrugernummer)",
           "eforsyning_password": "Web PIN (webpinkode)",
-          "eforsyning_supplier_id": "Supplier id (GetVaerkSettings forsyningid)",
+          "eforsyning_supplier_id": "Portal URL, slug, or supplier id",
           "location_name": "City / location name"
         },
         "data_description": {
           "eforsyning_username": "Printed on your heating bill.",
           "eforsyning_password": "The web PIN from your bill (stored only in Home Assistant).",
-          "eforsyning_supplier_id": "Long id from eforsyning.dk, e.g. B30A6948-2461-4827-B8EB-5D93169CCB8B for Hjørring Varmeforsyning."
+          "eforsyning_supplier_id": "Utility portal address (e.g. eforsyning.dk/horsens), slug (horsens), or UUID like B30A6948-2461-4827-B8EB-5D93169CCB8B."
         }
       },
       "eforsyning_installation": {
@@ -98,7 +112,9 @@
       "cannot_connect": "Could not connect to E|Forsyning (check the supplier id and network).",
       "unknown": "Unexpected error — see the log.",
       "eforsyning_missing": "Enter both consumer number and web PIN.",
-      "eforsyning_supplier_required": "The supplier id is required for this utility.",
+      "eforsyning_supplier_required": "The supplier id or portal URL is required for this utility.",
+      "eforsyning_supplier_lookup_failed": "Could not resolve a valid supplier id from that URL/slug. Check the portal address (e.g. eforsyning.dk/horsens) or paste the supplier UUID directly.",
+      "eforsyning_directory_failed": "Could not fetch the utility list from eforsyning.dk — enter the utility URL, slug, or supplier id instead.",
       "wattson_missing": "Paste the address starting with msauth:// (or a refresh token).",
       "wattson_no_code": "No code= found in what you pasted. Copy the whole msauth:// address and retry with the new login link.",
       "wattson_state_mismatch": "That address belongs to an older login link. Use the new link above and retry.",

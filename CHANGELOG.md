@@ -2,11 +2,14 @@
 
 Alle væsentlige ændringer i **Dansk Fjernvarme** (tidligere *Fjernvarme (KMD Easy Energy)*) dokumenteres her.
 
-## [1.0.2] - 2026-11-23
+## [1.1.0] - 2026-11-23
 
 ### Tilføjet & Bekræftet
 - **Frederikshavn Forsyning bekræftet live (KMD / MitID):** Markeret som ✅ **Bekræftet** efter live-verifikation fra `@tirolel` ([issue #24](https://github.com/DKAnord/fjernvarme-dk-ha/issues/24), `MWh` & `M3`).
 - **Sorø Fjernvarme tilføjet og bekræftet live (E|Forsyning):** Første fuldt bekræftede E|Forsyning-værk takket være `@Crallebab` ([issue #25](https://github.com/DKAnord/fjernvarme-dk-ha/issues/25)), inkl. forudfyldt `forsyningid` (`CE44A147-CE18-483B-81AF-29A188E33067`) og officiel 2026-takst (`0,981 kr./kWh` inkl. moms samt `±1 %/°C` under 35 °C / over 45 °C).
+- **20 nye forudfyldte E|Forsyning-fjernvarmeværker (22 i alt):** Horsens, Vestforbrænding, Egedal, Fredericia, Vejle, Sønderborg Varme, SONFOR Varme, Køge, Høje Taastrup, Avedøre, Middelfart, Solrød, Thisted, Assens, Ringkøbing, Hvide Sande, Kibæk, Kjellerup, Ansager og Dianalund — alle verificeret offentligt mod `GetVaerkSettings`.
+- **Live søgbar E|Forsyning-værksliste (300+ værker):** Ny mulighed i opsætningen (*🔎 Søg blandt alle E|Forsyning-værker*) henter alle varmeværker direkte fra `eforsyning.dk` (vandværker filtreres fra), slår `forsyningid` op automatisk og falder pænt tilbage til manuel indtastning ved netværksfejl.
+- **Automatisk opslag fra portal-URL eller slug (intet F12 påkrævet):** Under *Andet E|Forsyning-værk* (og genkonfigurering) kan du nu indsætte en portal-URL (f.eks. `https://eforsyning.dk/horsens/`), et slug (`horsens`) eller en `forsyningid`-UUID. Integrationen henter automatisk `forsyningid`, værknavn og portal-URL — og vælger automatisk rigtig enhed ved multi-værkssider eller viser en vælger.
 - **E|Forsyning-vælger & statusbadge:** Værk-vælgeren og opsætningsguiden for E|Forsyning skelner nu mellem ✅ **Bekræftet live** (Sorø Fjernvarme) og 🧪 **Afventer 1. test** (øvrige værker).
 
 ## [1.0.1] - 2026-11-22

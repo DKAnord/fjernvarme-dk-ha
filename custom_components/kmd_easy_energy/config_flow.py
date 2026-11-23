@@ -29,7 +29,14 @@ from homeassistant.helpers.selector import (
     TextSelectorType,
 )
 
-from .api.eforsyning_client import EforsyningClient, EforsyningError, EforsyningLoginError
+from .api.eforsyning_client import (
+    EforsyningClient,
+    EforsyningError,
+    EforsyningLoginError,
+    async_fetch_eforsyning_directory,
+    async_resolve_supplier_input,
+    is_uuid,
+)
 from .api.wattson_client import (
     PkceLogin,
     WattsOnAuthError,
@@ -110,8 +117,47 @@ CUSTOM_EFORSYNING: dict[str, Any] = {
     "status": "pending_test",
     "tier": "custom",
     "backend": BACKEND_EFORSYNING,
-    "notes": "Angiv værkets forsyningid (se hjælpeteksten).",
+    "notes": "Indsæt portal-URL, slug eller forsyningid.",
 }
+
+DIRECTORY_EFORSYNING_ID = "eforsyning-directory"
+_EF_MANUAL_CHOICE = "__manual__"
+
+
+def _match_curated_eforsyning(
+    utilities: list[dict[str, Any]], supplier_id: str
+) -> dict[str, Any] | None:
+    target = str(supplier_id or "").strip().lower()
+    if not target:
+        return None
+    return next(
+        (
+            u
+            for u in utilities
+            if str(u.get("eforsyning_supplier_id") or "").strip().lower() == target
+        ),
+        None,
+    )
+
+
+def _utility_from_resolved(
+    resolved: dict[str, str],
+    utilities: list[dict[str, Any]],
+    fallback_name: str = "",
+) -> dict[str, Any]:
+    matched = _match_curated_eforsyning(utilities, resolved.get("supplier_id", ""))
+    if matched:
+        return dict(matched)
+    return {
+        "id": CUSTOM_EFORSYNING["id"],
+        "name": resolved.get("name") or fallback_name or CUSTOM_EFORSYNING["name"],
+        "city": resolved.get("city") or "",
+        "portal_url": resolved.get("portal_url") or "https://eforsyning.dk/",
+        "status": "pending_test",
+        "tier": "custom",
+        "backend": BACKEND_EFORSYNING,
+        "eforsyning_supplier_id": resolved["supplier_id"],
+    }
 
 _PASSWORD_SELECTOR = TextSelector(TextSelectorConfig(type=TextSelectorType.PASSWORD))
 
@@ -327,8 +373,12 @@ class KMDEasyEnergyConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     def __init__(self) -> None:
         self._selected_utility: dict[str, Any] = dict(CUSTOM_UTILITY)
+        self._utilities_cache: list[dict[str, Any]] = []
         self._ef_pending: dict[str, Any] = {}
         self._ef_installations: list[dict[str, Any]] = []
+        self._ef_directory: list[dict[str, str]] = []
+        self._ef_candidates: list[dict[str, str]] = []
+        self._ef_manual_creds: dict[str, Any] | None = None
         self._watts_login: PkceLogin | None = None
         self._watts_pending: dict[str, Any] = {}
         self._watts_devices: list[dict[str, Any]] = []
@@ -351,9 +401,12 @@ class KMDEasyEnergyConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     ) -> FlowResult:
         """Step 1: smart utility dropdown (or direct 1-step API submission)."""
         utilities = await self.hass.async_add_executor_job(_load_utilities)
+        self._utilities_cache = utilities
 
         if user_input is not None:
             selected_id = user_input[CONF_UTILITY_ID]
+            if selected_id == DIRECTORY_EFORSYNING_ID:
+                return await self.async_step_eforsyning_directory()
             if selected_id == "custom":
                 self._selected_utility = dict(CUSTOM_UTILITY)
             elif selected_id == CUSTOM_EFORSYNING["id"]:
@@ -381,8 +434,14 @@ class KMDEasyEnergyConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         )
         options.append(
             SelectOptionDict(
+                value=DIRECTORY_EFORSYNING_ID,
+                label="🔎 Søg blandt alle E|Forsyning-værker (300+ på eforsyning.dk)",
+            )
+        )
+        options.append(
+            SelectOptionDict(
                 value=CUSTOM_EFORSYNING["id"],
-                label="⚙️ Andet E|Forsyning-værk (eksperimentel, kræver forsyningid)",
+                label="⚙️ Andet E|Forsyning-værk (indsæt portal-URL, slug eller forsyningid)",
             )
         )
         default_id = utilities[0]["id"] if utilities else "kredslob"
@@ -461,6 +520,117 @@ class KMDEasyEnergyConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             },
         )
 
+    async def async_step_eforsyning_directory(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Searchable live directory of E|Forsyning district-heating utilities."""
+        errors: dict[str, str] = {}
+        if not self._ef_directory:
+            try:
+                self._ef_directory = await async_fetch_eforsyning_directory(
+                    async_get_clientsession(self.hass)
+                )
+            except Exception as err:  # noqa: BLE001
+                _LOGGER.debug("E|Forsyning directory lookup failed, falling back to manual: %s", err)
+                self._selected_utility = dict(CUSTOM_EFORSYNING)
+                return await self.async_step_eforsyning()
+
+        if user_input is not None:
+            chosen_url = str(user_input.get("eforsyning_directory_url") or "").strip()
+            if not chosen_url or chosen_url == _EF_MANUAL_CHOICE:
+                self._selected_utility = dict(CUSTOM_EFORSYNING)
+                return await self.async_step_eforsyning()
+            chosen_entry = next(
+                (d for d in self._ef_directory if d["portal_url"] == chosen_url),
+                {"name": "", "portal_url": chosen_url},
+            )
+            try:
+                candidates = await async_resolve_supplier_input(
+                    async_get_clientsession(self.hass), chosen_url
+                )
+            except EforsyningError:
+                errors["base"] = "eforsyning_supplier_lookup_failed"
+            else:
+                if len(candidates) == 1:
+                    self._selected_utility = _utility_from_resolved(
+                        candidates[0],
+                        self._utilities_cache,
+                        fallback_name=chosen_entry.get("name", ""),
+                    )
+                    return await self.async_step_eforsyning()
+                self._ef_candidates = candidates
+                self._ef_manual_creds = None
+                return await self.async_step_eforsyning_supplier()
+
+        options = [
+            SelectOptionDict(value=d["portal_url"], label=d["name"])
+            for d in self._ef_directory
+        ]
+        options.append(
+            SelectOptionDict(
+                value=_EF_MANUAL_CHOICE,
+                label="⚙️ Indtast URL, slug eller forsyningid manuelt",
+            )
+        )
+        return self.async_show_form(
+            step_id="eforsyning_directory",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(
+                        "eforsyning_directory_url", default=options[0]["value"]
+                    ): SelectSelector(
+                        SelectSelectorConfig(
+                            options=options, mode=SelectSelectorMode.DROPDOWN
+                        )
+                    )
+                }
+            ),
+            errors=errors,
+            description_placeholders={"count": str(len(self._ef_directory))},
+        )
+
+    async def async_step_eforsyning_supplier(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Disambiguate when an E|Forsyning portal page embeds multiple suppliers."""
+        if user_input is not None:
+            chosen_id = str(user_input.get(CONF_EF_SUPPLIER_ID) or "").strip()
+            picked = next(
+                (c for c in self._ef_candidates if c.get("supplier_id") == chosen_id),
+                self._ef_candidates[0] if self._ef_candidates else {"supplier_id": chosen_id},
+            )
+            self._selected_utility = _utility_from_resolved(picked, self._utilities_cache)
+            if self._ef_manual_creds is not None:
+                saved_creds = dict(self._ef_manual_creds)
+                self._ef_manual_creds = None
+                return await self.async_step_eforsyning(saved_creds)
+            return await self.async_step_eforsyning()
+
+        options = [
+            SelectOptionDict(
+                value=c["supplier_id"],
+                label=(
+                    f"{c.get('name') or 'E|Forsyning'} "
+                    f"({c.get('portal_url') or c.get('app_server_url') or c['supplier_id'][:8]})"
+                ),
+            )
+            for c in self._ef_candidates
+        ]
+        return self.async_show_form(
+            step_id="eforsyning_supplier",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(
+                        CONF_EF_SUPPLIER_ID, default=options[0]["value"]
+                    ): SelectSelector(
+                        SelectSelectorConfig(
+                            options=options, mode=SelectSelectorMode.DROPDOWN
+                        )
+                    )
+                }
+            ),
+        )
+
     async def async_step_eforsyning(
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
@@ -472,51 +642,77 @@ class KMDEasyEnergyConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         if user_input is not None:
             username = str(user_input.get(CONF_EF_USERNAME) or "").strip()
             password = str(user_input.get(CONF_EF_PASSWORD) or "")
-            supplier_id = (
+            raw_supplier = (
                 known_supplier or str(user_input.get(CONF_EF_SUPPLIER_ID) or "").strip()
             )
             location_name = (user_input.get(CONF_LOCATION_NAME) or u.get("city") or "").strip()
             if not username or not password:
                 errors["base"] = "eforsyning_missing"
-            elif not supplier_id:
+            elif not raw_supplier:
                 errors[CONF_EF_SUPPLIER_ID] = "eforsyning_supplier_required"
             else:
-                await self.async_set_unique_id(eforsyning_unique_id(supplier_id, username))
-                self._abort_if_unique_id_configured()
-                try:
-                    installs = await async_validate_eforsyning(
-                        self.hass, username, password, supplier_id
-                    )
-                except EforsyningLoginError:
-                    errors["base"] = "invalid_auth"
-                except EforsyningError:
-                    errors["base"] = "cannot_connect"
-                except Exception:  # noqa: BLE001
-                    _LOGGER.exception("Unexpected E|Forsyning error during setup")
-                    errors["base"] = "unknown"
-                else:
-                    self._ef_pending = {
-                        CONF_BACKEND: BACKEND_EFORSYNING,
-                        CONF_UTILITY: u.get("name") or "E|Forsyning",
-                        CONF_UTILITY_ID: u.get("id", CUSTOM_EFORSYNING["id"]),
-                        CONF_UTILITY_STATUS: u.get("status", "pending_test"),
-                        CONF_PORTAL_URL: u.get("portal_url") or "https://eforsyning.dk/",
-                        CONF_LOCATION_NAME: location_name,
-                        CONF_EF_USERNAME: username,
-                        CONF_EF_PASSWORD: password,
-                        CONF_EF_SUPPLIER_ID: supplier_id,
-                    }
-                    if u.get("latitude") is not None:
-                        self._ef_pending[CONF_UTILITY_LATITUDE] = u["latitude"]
-                        self._ef_pending[CONF_UTILITY_LONGITUDE] = u["longitude"]
-                    self._ef_installations = installs
-                    if len(installs) > 1:
-                        return await self.async_step_eforsyning_installation()
-                    if installs and installs[0].get("InstallationNr") is not None:
-                        self._ef_pending[CONF_EF_INSTALLATION_ID] = str(
-                            installs[0]["InstallationNr"]
+                supplier_id = raw_supplier
+                if not known_supplier and not is_uuid(raw_supplier):
+                    try:
+                        candidates = await async_resolve_supplier_input(
+                            async_get_clientsession(self.hass), raw_supplier
                         )
-                    return self._create_eforsyning_entry()
+                    except EforsyningError:
+                        errors[CONF_EF_SUPPLIER_ID] = "eforsyning_supplier_lookup_failed"
+                        candidates = []
+                    if not errors:
+                        if len(candidates) > 1:
+                            self._ef_candidates = candidates
+                            self._ef_manual_creds = {
+                                CONF_EF_USERNAME: username,
+                                CONF_EF_PASSWORD: password,
+                                CONF_LOCATION_NAME: location_name,
+                            }
+                            return await self.async_step_eforsyning_supplier()
+                        u = _utility_from_resolved(candidates[0], self._utilities_cache)
+                        self._selected_utility = u
+                        supplier_id = str(u.get("eforsyning_supplier_id") or "")
+                        location_name = (
+                            user_input.get(CONF_LOCATION_NAME) or u.get("city") or ""
+                        ).strip()
+
+                if not errors:
+                    await self.async_set_unique_id(eforsyning_unique_id(supplier_id, username))
+                    self._abort_if_unique_id_configured()
+                    try:
+                        installs = await async_validate_eforsyning(
+                            self.hass, username, password, supplier_id
+                        )
+                    except EforsyningLoginError:
+                        errors["base"] = "invalid_auth"
+                    except EforsyningError:
+                        errors["base"] = "cannot_connect"
+                    except Exception:  # noqa: BLE001
+                        _LOGGER.exception("Unexpected E|Forsyning error during setup")
+                        errors["base"] = "unknown"
+                    else:
+                        self._ef_pending = {
+                            CONF_BACKEND: BACKEND_EFORSYNING,
+                            CONF_UTILITY: u.get("name") or "E|Forsyning",
+                            CONF_UTILITY_ID: u.get("id", CUSTOM_EFORSYNING["id"]),
+                            CONF_UTILITY_STATUS: u.get("status", "pending_test"),
+                            CONF_PORTAL_URL: u.get("portal_url") or "https://eforsyning.dk/",
+                            CONF_LOCATION_NAME: location_name,
+                            CONF_EF_USERNAME: username,
+                            CONF_EF_PASSWORD: password,
+                            CONF_EF_SUPPLIER_ID: supplier_id,
+                        }
+                        if u.get("latitude") is not None:
+                            self._ef_pending[CONF_UTILITY_LATITUDE] = u["latitude"]
+                            self._ef_pending[CONF_UTILITY_LONGITUDE] = u["longitude"]
+                        self._ef_installations = installs
+                        if len(installs) > 1:
+                            return await self.async_step_eforsyning_installation()
+                        if installs and installs[0].get("InstallationNr") is not None:
+                            self._ef_pending[CONF_EF_INSTALLATION_ID] = str(
+                                installs[0]["InstallationNr"]
+                            )
+                        return self._create_eforsyning_entry()
 
         fields: dict[Any, Any] = {
             vol.Required(CONF_EF_USERNAME, default=""): str,
@@ -853,24 +1049,37 @@ class KMDEasyEnergyConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             supplier_id = str(
                 user_input.get(CONF_EF_SUPPLIER_ID) or data.get(CONF_EF_SUPPLIER_ID) or ""
             ).strip()
-            try:
-                await async_validate_eforsyning(self.hass, username, password, supplier_id)
-            except EforsyningLoginError:
-                errors["base"] = "invalid_auth"
-            except EforsyningError:
-                errors["base"] = "cannot_connect"
-            except Exception:  # noqa: BLE001
-                _LOGGER.exception("Unexpected E|Forsyning error during reconfigure")
-                errors["base"] = "unknown"
-            else:
-                return self.async_update_reload_and_abort(
-                    entry,
-                    data_updates={
-                        CONF_EF_USERNAME: username,
-                        CONF_EF_PASSWORD: password,
-                        CONF_EF_SUPPLIER_ID: supplier_id,
-                    },
-                )
+            if supplier_id and not is_uuid(supplier_id):
+                try:
+                    candidates = await async_resolve_supplier_input(
+                        async_get_clientsession(self.hass), supplier_id
+                    )
+                except EforsyningError:
+                    errors[CONF_EF_SUPPLIER_ID] = "eforsyning_supplier_lookup_failed"
+                else:
+                    if len(candidates) == 1:
+                        supplier_id = candidates[0]["supplier_id"]
+                    else:
+                        errors[CONF_EF_SUPPLIER_ID] = "eforsyning_supplier_lookup_failed"
+            if not errors:
+                try:
+                    await async_validate_eforsyning(self.hass, username, password, supplier_id)
+                except EforsyningLoginError:
+                    errors["base"] = "invalid_auth"
+                except EforsyningError:
+                    errors["base"] = "cannot_connect"
+                except Exception:  # noqa: BLE001
+                    _LOGGER.exception("Unexpected E|Forsyning error during reconfigure")
+                    errors["base"] = "unknown"
+                else:
+                    return self.async_update_reload_and_abort(
+                        entry,
+                        data_updates={
+                            CONF_EF_USERNAME: username,
+                            CONF_EF_PASSWORD: password,
+                            CONF_EF_SUPPLIER_ID: supplier_id,
+                        },
+                    )
         schema = vol.Schema(
             {
                 vol.Required(CONF_EF_USERNAME, default=str(data.get(CONF_EF_USERNAME) or "")): str,

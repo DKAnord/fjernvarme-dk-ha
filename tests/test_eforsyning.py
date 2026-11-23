@@ -20,8 +20,13 @@ from kmd_easy_energy.api.eforsyning_client import (
     EforsyningError,
     EforsyningLoginError,
     access_token_for,
+    async_resolve_supplier_input,
+    is_uuid,
+    normalize_eforsyning_url,
+    parse_eforsyning_directory,
     parse_number,
     parse_readings,
+    parse_umbraco_suppliers,
     response_has_lines,
 )
 from kmd_easy_energy.eforsyning_mapping import apply_eforsyning_data
@@ -390,7 +395,22 @@ def test_utilities_json_backend_field_and_hjorring() -> None:
     assert fh["tier"] == "confirmed"
 
     eforsyning = {u["id"] for u in data["utilities"] if u.get("backend") == "eforsyning"}
-    assert eforsyning >= {"soroe-fjernvarme", "hjorring-varmeforsyning"}
+    assert len(eforsyning) == 22
+    assert eforsyning >= {
+        "soroe-fjernvarme",
+        "hjorring-varmeforsyning",
+        "fjernvarme-horsens",
+        "vestforbraending",
+        "vejle-fjernvarme",
+        "sonderborg-varme",
+        "kjellerup-fjernvarme",
+    }
+    for uid in eforsyning:
+        u = by_id[uid]
+        assert is_uuid(u["eforsyning_supplier_id"]), uid
+        assert u["portal_url"].startswith("https://"), uid
+        assert isinstance(u["latitude"], (int, float)) and isinstance(u["longitude"], (int, float)), uid
+    assert by_id["albertslund-forsyning"]["backend"] == "kmd"
     wattson = {u["id"] for u in data["utilities"] if u.get("backend") == "wattson"}
     others = eforsyning | wattson
     assert wattson >= {"aalborg-forsyning", "forsyning-helsingor", "fjernvarme-fyn", "hillerod-forsyning"}
@@ -486,17 +506,266 @@ def test_translations_cover_eforsyning_steps() -> None:
     for rel in ("strings.json", "translations/en.json", "translations/da.json"):
         data = json.loads((ROOT / "custom_components/kmd_easy_energy" / rel).read_text())
         steps = data["config"]["step"]
-        for step in ("eforsyning", "eforsyning_installation", "reconfigure_eforsyning"):
+        for step in (
+            "eforsyning",
+            "eforsyning_directory",
+            "eforsyning_supplier",
+            "eforsyning_installation",
+            "reconfigure_eforsyning",
+        ):
             assert step in steps
+            desc = steps[step].get("description", "")
+            assert "<" not in desc and ">" not in desc
         assert {"eforsyning_username", "eforsyning_password", "eforsyning_supplier_id"} <= set(steps["eforsyning"]["data"])
         assert "{status_badge}" in steps["eforsyning"]["description"]
-        assert {"invalid_auth", "cannot_connect", "eforsyning_supplier_required"} <= set(data["config"]["error"])
+        assert "eforsyning_directory_url" in steps["eforsyning_directory"]["data"]
+        assert "eforsyning_supplier_id" in steps["eforsyning_supplier"]["data"]
+        assert {
+            "invalid_auth",
+            "cannot_connect",
+            "eforsyning_supplier_required",
+            "eforsyning_supplier_lookup_failed",
+            "eforsyning_directory_failed",
+        } <= set(data["config"]["error"])
         assert {"auto_sync", "auto_sync_hour"} <= set(data["options"]["step"]["init"]["data"])
     da_ef_desc = json.loads(
         (ROOT / "custom_components/kmd_easy_energy/translations/da.json").read_text()
     )["config"]["step"]["eforsyning"]["description"]
     assert "Eksperimentel" in da_ef_desc
     assert "Sorø Fjernvarme" in da_ef_desc
+
+
+# ---------------------------------------------- discovery & directory (B + C)
+def test_is_uuid_and_normalize_eforsyning_url() -> None:
+    assert is_uuid("8B563AC8-706E-45C6-A23C-A6CABCAE3E41")
+    assert not is_uuid("horsens")
+    assert normalize_eforsyning_url("horsens") == "https://eforsyning.dk/horsens/"
+    assert normalize_eforsyning_url("/horsens/") == "https://eforsyning.dk/horsens/"
+    assert normalize_eforsyning_url("eforsyning.dk/horsens") == "https://eforsyning.dk/horsens/"
+    assert normalize_eforsyning_url("https://www.vejlefjernvarme.dk/eforsyning") == "https://www.vejlefjernvarme.dk/eforsyning/"
+    for bad in (
+        "",
+        "http://eforsyning.dk/horsens/",
+        "https://localhost/eforsyning/",
+        "https://127.0.0.1/eforsyning/",
+        "https://ha.local/eforsyning/",
+        "https://eforsyning.dk:8443/horsens/",
+        "https://user:pass@eforsyning.dk/horsens/",
+    ):
+        assert normalize_eforsyning_url(bad) is None
+
+
+def test_parse_umbraco_suppliers_single_multi_and_fallback() -> None:
+    single = (
+        '<script>indstillinger.umbraco = {"firmaNavn":"Fjernvarme Horsens","eforsyninger":'
+        '[{"forsyningId":"8B563AC8-706E-45C6-A23C-A6CABCAE3E41","siteUrl":"https://eforsyning.dk/horsens/",'
+        '"appServerUrl":"https://apiapp.dff-edb.dk/horsens/"}]};</script>'
+    )
+    res = parse_umbraco_suppliers(single, "https://eforsyning.dk/horsens/")
+    assert res == [{
+        "supplier_id": "8B563AC8-706E-45C6-A23C-A6CABCAE3E41",
+        "name": "Fjernvarme Horsens",
+        "portal_url": "https://eforsyning.dk/horsens/",
+        "app_server_url": "https://apiapp.dff-edb.dk/horsens/",
+    }]
+
+    multi = (
+        '<script>indstillinger.umbraco = {"firmaNavn":"Kjellerup Fjernvarme Amba","eforsyninger":['
+        '{"forsyningId":"07026EBC-5635-4A70-B381-34BB896ACEDD","siteUrl":"https://eforsyning.dk/kjellerupfjernvarme-varme/","appServerUrl":"https://apiapp.dff-edb.dk/kjellerup/"},'
+        '{"forsyningId":"8CD51FA1-33B8-4982-8C39-A830E6AE1D79","siteUrl":"https://eforsyning.dk/kjellerupfjernvarme-vand/","appServerUrl":"https://apiapp.dff-edb.dk/kjellerupvand/"}'
+        ']};</script>'
+    )
+    matched = parse_umbraco_suppliers(multi, "https://eforsyning.dk/kjellerupfjernvarme-varme/")
+    assert len(matched) == 1 and matched[0]["supplier_id"] == "07026EBC-5635-4A70-B381-34BB896ACEDD"
+    all_choices = parse_umbraco_suppliers(multi, "https://eforsyning.dk/other/")
+    assert len(all_choices) == 2
+
+    fallback = '<script>var x = { forsyningId: "8B563AC8-706E-45C6-A23C-A6CABCAE3E41" };</script>'
+    fb = parse_umbraco_suppliers(fallback, "https://eforsyning.dk/horsens/")
+    assert len(fb) == 1 and fb[0]["supplier_id"] == "8B563AC8-706E-45C6-A23C-A6CABCAE3E41"
+
+
+def test_parse_eforsyning_directory_filters_water_and_albertslund() -> None:
+    sample_html = """
+    <a href="javascript:selectPlant('https://eforsyning.dk/addit/');"><h5>Addit Vandv&#xE6;rk</h5></a>
+    <a href="javascript:selectPlant('https://eforsyning.dk/albertslund/');"><h5>Albertslund Forsyning</h5></a>
+    <a href="javascript:selectPlant('https://eforsyning.dk/aulumfjernvarme/');"><h5>Aulum Fjernvarme a.m.b.a. og Aulum Vandv&#xE6;rk a.m.b.a.</h5></a>
+    <a href="javascript:selectPlant('https://eforsyning.dk/horsens/');"><h5>Fjernvarme Horsens</h5></a>
+    <a href="javascript:selectPlant('https://www.vejlefjernvarme.dk/eforsyning/');"><h5>Vejle Fjernvarme</h5></a>
+    """
+    parsed = parse_eforsyning_directory(sample_html)
+    names = [p["name"] for p in parsed]
+    assert "Addit Vandværk" not in names
+    assert "Albertslund Forsyning" not in names
+    assert names == [
+        "Aulum Fjernvarme a.m.b.a. og Aulum Vandværk a.m.b.a.",
+        "Fjernvarme Horsens",
+        "Vejle Fjernvarme",
+    ]
+
+
+class _LookupSession:
+    def __init__(self, responses: dict[str, tuple[int, str]]) -> None:
+        self._responses = responses
+        self.urls: list[str] = []
+
+    def get(self, url: str, **kwargs):
+        self.urls.append(url)
+        for key, val in self._responses.items():
+            if key in url:
+                status, text = val
+                return _FakeResp(status, text, url)
+        return _FakeResp(404, "", url)
+
+
+class _FakeResp:
+    def __init__(self, status: int, text: str, url: str) -> None:
+        self.status = status
+        self._text = text
+        self.url = url
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *args):
+        return False
+
+    async def text(self) -> str:
+        return self._text
+
+    async def json(self, content_type=None):
+        return json.loads(self._text)
+
+
+@pytest.mark.asyncio
+async def test_async_resolve_supplier_input_slug_and_errors() -> None:
+    horsens_html = (
+        '<script>indstillinger.umbraco = {"firmaNavn":"Fjernvarme Horsens","eforsyninger":'
+        '[{"forsyningId":"8B563AC8-706E-45C6-A23C-A6CABCAE3E41","siteUrl":"https://eforsyning.dk/horsens/"}]};</script>'
+    )
+    gvs_json = json.dumps({
+        "AppServerUri": "https://apiapp.dff-edb.dk/horsens/",
+        "EforsyningUri": "https://eforsyning.dk/horsens/",
+        "FirmaInfo": {"firmaNavn": "Fjernvarme Horsens", "by": "Horsens"},
+    })
+    sess = _LookupSession({
+        "GetVaerkSettings": (200, gvs_json),
+        "eforsyning.dk/horsens/": (200, horsens_html),
+    })
+    resolved = await async_resolve_supplier_input(sess, "horsens")
+    assert len(resolved) == 1
+    assert resolved[0]["supplier_id"] == "8B563AC8-706E-45C6-A23C-A6CABCAE3E41"
+    assert resolved[0]["name"] == "Fjernvarme Horsens"
+    assert resolved[0]["city"] == "Horsens"
+
+    with pytest.raises(EforsyningError):
+        await async_resolve_supplier_input(sess, "http://insecure.example/x")
+    with pytest.raises(EforsyningError):
+        await async_resolve_supplier_input(_LookupSession({"eforsyning.dk/empty/": (200, "<html></html>")}), "empty")
+
+
+@pytest.mark.asyncio
+async def test_flow_eforsyning_directory_and_url_lookup() -> None:
+    from kmd_easy_energy.config_flow import DIRECTORY_EFORSYNING_ID, KMDEasyEnergyConfigFlow
+
+    flow = _flow(dict(HJ))
+    flow._utilities_cache = [
+        {
+            "id": "soroe-fjernvarme",
+            "name": "Sorø Fjernvarme",
+            "city": "Sorø",
+            "portal_url": "https://eforsyning.dk/soroe/",
+            "status": "confirmed",
+            "backend": "eforsyning",
+            "eforsyning_supplier_id": "CE44A147-CE18-483B-81AF-29A188E33067",
+        }
+    ]
+    with patch(
+        "kmd_easy_energy.config_flow.async_fetch_eforsyning_directory",
+        AsyncMock(return_value=[
+            {"name": "Avedøre Fjernvarme", "portal_url": "https://eforsyning.dk/avedore/"},
+            {"name": "Sorø Fjernvarme", "portal_url": "https://eforsyning.dk/soroe/"},
+        ]),
+    ), patch("kmd_easy_energy.config_flow.async_get_clientsession"):
+        form = await flow.async_step_eforsyning_directory()
+    assert form["step_id"] == "eforsyning_directory"
+
+    with patch(
+        "kmd_easy_energy.config_flow.async_resolve_supplier_input",
+        AsyncMock(return_value=[{
+            "supplier_id": "CE44A147-CE18-483B-81AF-29A188E33067",
+            "name": "Sorø Fjernvarme",
+            "city": "Sorø",
+            "portal_url": "https://eforsyning.dk/soroe/",
+        }]),
+    ), patch("kmd_easy_energy.config_flow.async_get_clientsession"):
+        next_step = await flow.async_step_eforsyning_directory(
+            {"eforsyning_directory_url": "https://eforsyning.dk/soroe/"}
+        )
+    assert next_step["step_id"] == "eforsyning"
+    assert flow._selected_utility["id"] == "soroe-fjernvarme"
+    assert flow._selected_utility["status"] == "confirmed"
+
+    # Offline directory fallback goes straight to manual eforsyning step
+    offline_flow = _flow(dict(HJ))
+    with patch(
+        "kmd_easy_energy.config_flow.async_fetch_eforsyning_directory",
+        AsyncMock(side_effect=EforsyningError("offline")),
+    ), patch("kmd_easy_energy.config_flow.async_get_clientsession"):
+        fb = await offline_flow.async_step_eforsyning_directory()
+    assert fb["step_id"] == "eforsyning"
+    assert offline_flow._selected_utility["id"] == "eforsyning-custom"
+
+    # Manual slug lookup on eforsyning-custom sets real utility name & portal URL
+    from kmd_easy_energy.config_flow import CUSTOM_EFORSYNING
+
+    slug_flow = _flow(dict(CUSTOM_EFORSYNING))
+    with patch(
+        "kmd_easy_energy.config_flow.async_resolve_supplier_input",
+        AsyncMock(return_value=[{
+            "supplier_id": "A16B623F-9AE8-4152-949B-03B19A96F644",
+            "name": "Avedøre Fjernvarme amba",
+            "city": "Hvidovre",
+            "portal_url": "https://eforsyning.dk/avedore/",
+        }]),
+    ), patch(
+        "kmd_easy_energy.config_flow.async_validate_eforsyning",
+        AsyncMock(return_value=fx.INSTALLATIONS["Installationer"]),
+    ), patch("kmd_easy_energy.config_flow.async_get_clientsession"):
+        created = await slug_flow.async_step_eforsyning({
+            "eforsyning_username": fx.USERNAME,
+            "eforsyning_password": fx.PASSWORD,
+            "eforsyning_supplier_id": "avedore",
+        })
+    assert created["type"] == "create_entry"
+    assert created["title"] == "Avedøre Fjernvarme amba"
+    assert created["data"]["portal_url"] == "https://eforsyning.dk/avedore/"
+    assert created["data"]["eforsyning_supplier_id"] == "A16B623F-9AE8-4152-949B-03B19A96F644"
+
+    # Multi-candidate portal shows eforsyning_supplier step and finishes setup
+    multi_flow = _flow(dict(CUSTOM_EFORSYNING))
+    with patch(
+        "kmd_easy_energy.config_flow.async_resolve_supplier_input",
+        AsyncMock(return_value=[
+            {"supplier_id": "0EF3EA2A-DA10-416F-AF1C-B36FD44393C9", "name": "Ringkøbing", "portal_url": "https://eforsyning.dk/rfv/"},
+            {"supplier_id": "2B956C80-A167-43DC-A29A-10F87AE69CFD", "name": "Tim", "portal_url": "https://eforsyning.dk/rfv-tim-fjernvarme/"},
+        ]),
+    ), patch("kmd_easy_energy.config_flow.async_get_clientsession"):
+        pick = await multi_flow.async_step_eforsyning({
+            "eforsyning_username": fx.USERNAME,
+            "eforsyning_password": fx.PASSWORD,
+            "eforsyning_supplier_id": "rfv",
+        })
+    assert pick["step_id"] == "eforsyning_supplier"
+    with patch(
+        "kmd_easy_energy.config_flow.async_validate_eforsyning",
+        AsyncMock(return_value=fx.INSTALLATIONS["Installationer"]),
+    ):
+        done = await multi_flow.async_step_eforsyning_supplier({
+            "eforsyning_supplier_id": "2B956C80-A167-43DC-A29A-10F87AE69CFD"
+        })
+    assert done["type"] == "create_entry"
+    assert done["title"] == "Tim"
 
 
 @pytest.mark.asyncio

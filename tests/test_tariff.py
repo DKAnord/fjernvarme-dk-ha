@@ -87,3 +87,36 @@ def test_bundled_utilities_json_has_kredslob_tariffs() -> None:
     assert bundled["source"].startswith("https://www.kredslob.dk/")
     # No guessed volume price — Kredsløb bills heat in kWh, not m³.
     assert not bundled.get("price_dkk_per_m3")
+
+
+def test_bundled_utilities_json_has_soroe_2026_tariff() -> None:
+    from kmd_easy_energy.tariff import load_utilities
+
+    utilities = load_utilities()
+    bundled = published_tariff("soroe-fjernvarme", 2026, utilities)
+    assert bundled is not None
+    assert bundled["price_dkk_per_kwh"] == 0.981
+    assert bundled["motivation_pct_per_k"] == 1.0
+    assert bundled["bonus_temp"] == 35.0
+    assert bundled["penalty_temp"] == 45.0
+    assert bundled["source"].startswith("https://www.affaldplus.dk/")
+    assert not bundled.get("price_dkk_per_m3")
+
+    resolved = resolve_tariff(
+        _entry(data={"utility_id": "soroe-fjernvarme"}),
+        today=date(2026, 11, 23),
+        utilities=utilities,
+    )
+    assert resolved.price_dkk_per_kwh == 0.981
+    assert resolved.motivation_pct_per_k == 1.0
+    assert resolved.motivation_dkk_per_kwh_per_k == 0.00981
+    assert resolved.bonus_temp == 35.0
+    assert resolved.penalty_temp == 45.0
+
+    overridden = resolve_tariff(
+        _entry(options={"price_dkk_per_kwh": 1.2}, data={"utility_id": "soroe-fjernvarme"}),
+        today=date(2026, 11, 23),
+        utilities=utilities,
+    )
+    assert overridden.price_dkk_per_kwh == 1.2
+    assert overridden.motivation_dkk_per_kwh_per_k == 0.012

@@ -92,13 +92,13 @@
       "name": "Frederikshavn Forsyning",
       "city": "Frederikshavn",
       "portal_url": "https://www.forsyningen.dk/selvbetjening",
-      "status": "pending_test",
-      "tier": "verified_portal",
+      "status": "confirmed",
+      "tier": "confirmed",
       "auth_method": "MitID",
       "backend": "kmd",
       "latitude": 57.441,
       "longitude": 10.536,
-      "notes": "Uses minForsyning (KMD) with MitID login."
+      "notes": "Uses minForsyning (KMD) with MitID login. Confirmed live in issue #24 by @tirolel (MWh, M3)."
     },
     {
       "id": "vestforsyning",
@@ -231,6 +231,32 @@
       "notes": "Chose KMD Easy Energy in 2023 (primarily electricity)."
     },
     {
+      "id": "soroe-fjernvarme",
+      "name": "Sorø Fjernvarme",
+      "city": "Sorø",
+      "portal_url": "https://eforsyning.dk/soroe/",
+      "status": "confirmed",
+      "tier": "confirmed",
+      "auth_method": "Forbrugernummer + webpinkode",
+      "backend": "eforsyning",
+      "eforsyning_supplier_id": "CE44A147-CE18-483B-81AF-29A188E33067",
+      "latitude": 55.43,
+      "longitude": 11.56,
+      "notes": "E|Forsyning (AffaldPlus). forsyningid og AppServerUri (https://apiapp.dff-edb.dk/soroe/) bekræftet live i issue #25 af @Crallebab (første fuldt bekræftede E|Forsyning-værk). Login med forbrugernummer + webpinkode fra regningen; data er daglige aflæsninger.",
+      "tariffs": [
+        {
+          "year": 2026,
+          "price_dkk_per_kwh": 0.981,
+          "price_dkk_per_m3": null,
+          "motivation_pct_per_k": 1.0,
+          "bonus_temp": 35.0,
+          "penalty_temp": 45.0,
+          "source": "https://www.affaldplus.dk/soroe-fjernvarme/fjernvarmepriser",
+          "source_note": "Variabelt bidrag 0,981 kr./kWh inkl. moms (0,784 ekskl.). Returtemperatur: 1 % pr. grad under 35 °C / over 45 °C (årligt gennemsnit, kun variabelt bidrag; kilde: affaldplus.dk/soroe-fjernvarme/returtemperatur)."
+        }
+      ]
+    },
+    {
       "id": "hjorring-varmeforsyning",
       "name": "Hjørring Varmeforsyning",
       "city": "Hjørring",
@@ -302,5 +328,5 @@
       "tariffs": []
     }
   ],
-  "last_updated": "2026-11-22"
+  "last_updated": "2026-11-23"
 }

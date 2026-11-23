@@ -365,14 +365,34 @@ def test_auto_sync_timer_only_for_eforsyning(tmp_path: Path) -> None:
 
 # ---------------------------------------------------------- config / entities
 def test_utilities_json_backend_field_and_hjorring() -> None:
+    from kmd_easy_energy.config_flow import _format_utility_label
+
     data = json.loads((ROOT / "custom_components/kmd_easy_energy/utilities.json").read_text())
     by_id = {u["id"]: u for u in data["utilities"]}
     hj = by_id["hjorring-varmeforsyning"]
     assert hj["backend"] == "eforsyning"
     assert hj["eforsyning_supplier_id"] == "B30A6948-2461-4827-B8EB-5D93169CCB8B"
     assert hj["portal_url"] == "https://eforsyning.dk/hjvarme/"
+    assert hj["status"] == "pending_test"
+    assert _format_utility_label(hj) == "🧪 Hjørring Varmeforsyning (Hjørring) — E|Forsyning (afventer 1. test)"
+
+    soroe = by_id["soroe-fjernvarme"]
+    assert soroe["backend"] == "eforsyning"
+    assert soroe["status"] == "confirmed"
+    assert soroe["tier"] == "confirmed"
+    assert soroe["eforsyning_supplier_id"] == "CE44A147-CE18-483B-81AF-29A188E33067"
+    assert soroe["portal_url"] == "https://eforsyning.dk/soroe/"
+    assert _format_utility_label(soroe) == "✅ Sorø Fjernvarme (Sorø) — E|Forsyning (bekræftet live)"
+
+    fh = by_id["frederikshavn-forsyning"]
+    assert fh["backend"] == "kmd"
+    assert fh["status"] == "confirmed"
+    assert fh["tier"] == "confirmed"
+
+    eforsyning = {u["id"] for u in data["utilities"] if u.get("backend") == "eforsyning"}
+    assert eforsyning >= {"soroe-fjernvarme", "hjorring-varmeforsyning"}
     wattson = {u["id"] for u in data["utilities"] if u.get("backend") == "wattson"}
-    others = {"hjorring-varmeforsyning"} | wattson
+    others = eforsyning | wattson
     assert wattson >= {"aalborg-forsyning", "forsyning-helsingor", "fjernvarme-fyn", "hillerod-forsyning"}
     assert all(u["backend"] == "kmd" for k, u in by_id.items() if k not in others)
 
@@ -469,11 +489,14 @@ def test_translations_cover_eforsyning_steps() -> None:
         for step in ("eforsyning", "eforsyning_installation", "reconfigure_eforsyning"):
             assert step in steps
         assert {"eforsyning_username", "eforsyning_password", "eforsyning_supplier_id"} <= set(steps["eforsyning"]["data"])
+        assert "{status_badge}" in steps["eforsyning"]["description"]
         assert {"invalid_auth", "cannot_connect", "eforsyning_supplier_required"} <= set(data["config"]["error"])
         assert {"auto_sync", "auto_sync_hour"} <= set(data["options"]["step"]["init"]["data"])
-    assert "Eksperimentel" in json.loads(
+    da_ef_desc = json.loads(
         (ROOT / "custom_components/kmd_easy_energy/translations/da.json").read_text()
     )["config"]["step"]["eforsyning"]["description"]
+    assert "Eksperimentel" in da_ef_desc
+    assert "Sorø Fjernvarme" in da_ef_desc
 
 
 @pytest.mark.asyncio

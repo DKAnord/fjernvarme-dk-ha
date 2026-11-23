@@ -2,6 +2,13 @@
 
 Alle væsentlige ændringer i **Dansk Fjernvarme** (tidligere *Fjernvarme (KMD Easy Energy)*) dokumenteres her.
 
+## [1.0.2] - 2026-11-23
+
+### Tilføjet & Bekræftet
+- **Frederikshavn Forsyning bekræftet live (KMD / MitID):** Markeret som ✅ **Bekræftet** efter live-verifikation fra `@tirolel` ([issue #24](https://github.com/DKAnord/fjernvarme-dk-ha/issues/24), `MWh` & `M3`).
+- **Sorø Fjernvarme tilføjet og bekræftet live (E|Forsyning):** Første fuldt bekræftede E|Forsyning-værk takket være `@Crallebab` ([issue #25](https://github.com/DKAnord/fjernvarme-dk-ha/issues/25)), inkl. forudfyldt `forsyningid` (`CE44A147-CE18-483B-81AF-29A188E33067`) og officiel 2026-takst (`0,981 kr./kWh` inkl. moms samt `±1 %/°C` under 35 °C / over 45 °C).
+- **E|Forsyning-vælger & statusbadge:** Værk-vælgeren og opsætningsguiden for E|Forsyning skelner nu mellem ✅ **Bekræftet live** (Sorø Fjernvarme) og 🧪 **Afventer 1. test** (øvrige værker).
+
 ## [1.0.1] - 2026-11-22
 
 ### Rettet

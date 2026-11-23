@@ -195,7 +195,9 @@ def _format_utility_label(u: dict[str, Any]) -> str:
     tier = u.get("tier") or ("confirmed" if u.get("status") == "confirmed" else "verified_portal")
     city = f" ({u['city']})" if u.get("city") else ""
     if utility_backend(u) == BACKEND_EFORSYNING:
-        return f"🧪 {u['name']}{city} — E|Forsyning (eksperimentel)"
+        if u.get("status") == "confirmed":
+            return f"✅ {u['name']}{city} — E|Forsyning (bekræftet live)"
+        return f"🧪 {u['name']}{city} — E|Forsyning (afventer 1. test)"
     if utility_backend(u) == BACKEND_WATTSON:
         if u.get("status") == "confirmed":
             return f"✅ {u['name']}{city} — Watts On (bekræftet live)"
@@ -530,6 +532,7 @@ class KMDEasyEnergyConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             description_placeholders={
                 "utility_name": str(u.get("name") or "E|Forsyning"),
                 "portal_url": str(u.get("portal_url") or "https://eforsyning.dk/"),
+                "status_badge": _status_badge(u.get("status")),
                 "example_url": "https://eforsyning.dk/hjvarme",
             },
         )

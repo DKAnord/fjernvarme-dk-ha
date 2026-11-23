@@ -56,7 +56,7 @@
         "data_description": {
           "eforsyning_username": "Printed on your heating bill.",
           "eforsyning_password": "The web PIN from your bill (stored only in Home Assistant).",
-          "eforsyning_supplier_id": "E.g. https://eforsyning.dk/horsens/, `horsens`, or a UUID like B30A6948-2461-4827-B8EB-5D93169CCB8B."
+          "eforsyning_supplier_id": "Utility portal address (e.g. eforsyning.dk/horsens), slug (horsens), or UUID like B30A6948-2461-4827-B8EB-5D93169CCB8B."
         }
       },
       "eforsyning_installation": {
@@ -113,7 +113,7 @@
       "unknown": "Unexpected error — see the log.",
       "eforsyning_missing": "Enter both consumer number and web PIN.",
       "eforsyning_supplier_required": "The supplier id or portal URL is required for this utility.",
-      "eforsyning_supplier_lookup_failed": "Could not resolve a valid supplier id from that URL/slug. Check the address (e.g. https://eforsyning.dk/horsens/) or paste the supplier UUID directly.",
+      "eforsyning_supplier_lookup_failed": "Could not resolve a valid supplier id from that URL/slug. Check the portal address (e.g. eforsyning.dk/horsens) or paste the supplier UUID directly.",
       "eforsyning_directory_failed": "Could not fetch the utility list from eforsyning.dk — enter the utility URL, slug, or supplier id instead.",
       "wattson_missing": "Paste the address starting with msauth:// (or a refresh token).",
       "wattson_no_code": "No code= found in what you pasted. Copy the whole msauth:// address and retry with the new login link.",

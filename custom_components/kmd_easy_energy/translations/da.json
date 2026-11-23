@@ -56,7 +56,7 @@
         "data_description": {
           "eforsyning_username": "Står på din varmeregning.",
           "eforsyning_password": "Webpinkoden fra regningen (gemmes kun i Home Assistant).",
-          "eforsyning_supplier_id": "F.eks. https://eforsyning.dk/horsens/, `horsens`, eller en UUID som B30A6948-2461-4827-B8EB-5D93169CCB8B."
+          "eforsyning_supplier_id": "Værkets portaladresse (f.eks. eforsyning.dk/horsens), slug (horsens) eller en UUID som B30A6948-2461-4827-B8EB-5D93169CCB8B."
         }
       },
       "eforsyning_installation": {
@@ -113,7 +113,7 @@
       "unknown": "Uventet fejl — se loggen.",
       "eforsyning_missing": "Udfyld både forbrugernummer og webpinkode.",
       "eforsyning_supplier_required": "Forsyningid eller portal-URL skal udfyldes for dette værk.",
-      "eforsyning_supplier_lookup_failed": "Kunne ikke finde et gyldigt forsyningid fra denne URL/slug. Tjek adressen (f.eks. https://eforsyning.dk/horsens/) eller indsæt værkets forsyningid (UUID) direkte.",
+      "eforsyning_supplier_lookup_failed": "Kunne ikke finde et gyldigt forsyningid fra denne URL/slug. Tjek portaladressen (f.eks. eforsyning.dk/horsens) eller indsæt værkets forsyningid (UUID) direkte.",
       "eforsyning_directory_failed": "Kunne ikke hente værkslisten fra eforsyning.dk — indtast i stedet værkets URL, slug eller forsyningid.",
       "wattson_missing": "Indsæt adressen, der starter med msauth:// (eller et refresh token).",
       "wattson_no_code": "Fandt ingen code= i det indsatte. Kopiér hele msauth://-adressen og prøv igen med det nye login-link.",

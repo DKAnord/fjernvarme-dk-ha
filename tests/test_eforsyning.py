@@ -528,6 +528,8 @@ def test_translations_cover_eforsyning_steps() -> None:
             "eforsyning_directory_failed",
         } <= set(data["config"]["error"])
         assert {"auto_sync", "auto_sync_hour"} <= set(data["options"]["step"]["init"]["data"])
+        raw_dump = json.dumps(data)
+        assert "https://" not in raw_dump and "http://" not in raw_dump
     da_ef_desc = json.loads(
         (ROOT / "custom_components/kmd_easy_energy/translations/da.json").read_text()
     )["config"]["step"]["eforsyning"]["description"]

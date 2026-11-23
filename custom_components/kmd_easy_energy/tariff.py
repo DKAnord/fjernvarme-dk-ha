@@ -14,6 +14,7 @@ from homeassistant.config_entries import ConfigEntry
 from .const import (
     CONF_BONUS_TEMP,
     CONF_MOTIVATION_DKK_PER_KWH_PER_K,
+    CONF_MOTIVATION_PCT_PER_K,
     CONF_NORMAL_HDD_YEAR,
     CONF_PENALTY_TEMP,
     CONF_PRICE_DKK_PER_KWH,
@@ -43,6 +44,7 @@ class ResolvedTariff:
     source_note: str | None
     utility_id: str
     motivation_pct_per_k: float | None = None
+    motivation_max_pct: float | None = None
 
 
 def load_utilities() -> list[dict[str, Any]]:
@@ -98,29 +100,47 @@ def resolve_tariff(
     *,
     today: date | None = None,
     utilities: list[dict[str, Any]] | None = None,
+    expected_return_temp: float | None = None,
 ) -> ResolvedTariff:
     """Options override published defaults; zero/empty option means "use default"."""
     today = today or copenhagen_today()
     utility_id = str(entry.data.get(CONF_UTILITY_ID) or "kredslob")
     published = published_tariff(utility_id, today.year, utilities)
 
-    def _pick(option_key: str, published_key: str) -> float | None:
-        option = _opt_float(entry, option_key, None)
-        if option is not None and option > 0:
-            return option
-        if published and published.get(published_key) is not None:
+    def _published_pos(key: str) -> float | None:
+        if published and published.get(key) is not None:
             try:
-                value = float(published[published_key])
+                value = float(published[key])
             except (TypeError, ValueError):
                 return None
             return value if value > 0 else None
         return None
 
-    bonus = _opt_float(entry, CONF_BONUS_TEMP, None)
-    penalty = _opt_float(entry, CONF_PENALTY_TEMP, None)
-    if bonus is None:
+    def _pick(option_key: str, published_key: str) -> float | None:
+        option = _opt_float(entry, option_key, None)
+        if option is not None and option > 0:
+            return option
+        return _published_pos(published_key)
+
+    opt_bonus = _opt_float(entry, CONF_BONUS_TEMP, None)
+    opt_penalty = _opt_float(entry, CONF_PENALTY_TEMP, None)
+    exp_rt = (
+        round(float(expected_return_temp), 1)
+        if expected_return_temp is not None and float(expected_return_temp) > 0
+        else None
+    )
+    if opt_bonus is not None and opt_bonus > 0:
+        bonus = opt_bonus
+    elif exp_rt is not None:
+        bonus = exp_rt
+    else:
         bonus = float((published or {}).get("bonus_temp") or 30.0)
-    if penalty is None:
+
+    if opt_penalty is not None and opt_penalty > 0:
+        penalty = opt_penalty
+    elif exp_rt is not None:
+        penalty = exp_rt
+    else:
         penalty = float((published or {}).get("penalty_temp") or 40.0)
 
     normal = _opt_float(entry, CONF_NORMAL_HDD_YEAR, None)
@@ -128,21 +148,24 @@ def resolve_tariff(
         normal = float((published or {}).get("normal_hdd_year") or DEFAULT_NORMAL_HDD_YEAR)
 
     price = _pick(CONF_PRICE_DKK_PER_KWH, "price_dkk_per_kwh")
-    pct_raw = (published or {}).get("motivation_pct_per_k")
-    motivation_pct: float | None = None
-    if pct_raw is not None:
-        try:
-            pct_val = float(pct_raw)
-            if pct_val > 0:
-                motivation_pct = pct_val
-        except (TypeError, ValueError):
-            pass
+    opt_motiv_pct = _opt_float(entry, CONF_MOTIVATION_PCT_PER_K, None)
+    if opt_motiv_pct is not None and opt_motiv_pct <= 0:
+        opt_motiv_pct = None
+    motivation_pct = opt_motiv_pct if opt_motiv_pct is not None else _published_pos("motivation_pct_per_k")
 
-    motivation_rate = _pick(CONF_MOTIVATION_DKK_PER_KWH_PER_K, "motivation_dkk_per_kwh_per_k")
-    if motivation_rate is None and motivation_pct is not None and price is not None:
-        # Percent-based motivation tariffs (e.g. Aalborg Forsyning ±2 %/°C)
-        # scale automatically when the user changes heat price in options.
-        motivation_rate = round(price * (motivation_pct / 100.0), 6)
+    opt_motiv_rate = _opt_float(entry, CONF_MOTIVATION_DKK_PER_KWH_PER_K, None)
+    if opt_motiv_rate is not None and opt_motiv_rate > 0:
+        motivation_rate: float | None = opt_motiv_rate
+    elif opt_motiv_pct is not None:
+        motivation_rate = round(price * (opt_motiv_pct / 100.0), 6) if price is not None else None
+    else:
+        motivation_rate = _published_pos("motivation_dkk_per_kwh_per_k")
+        if motivation_rate is None and motivation_pct is not None and price is not None:
+            # Percent-based motivation tariffs (e.g. Aalborg Forsyning ±2 %/°C)
+            # scale automatically when the user changes heat price in options.
+            motivation_rate = round(price * (motivation_pct / 100.0), 6)
+
+    motivation_max_pct = _published_pos("motivation_max_pct")
 
     return ResolvedTariff(
         price_dkk_per_kwh=price,
@@ -156,4 +179,5 @@ def resolve_tariff(
         source_note=(published or {}).get("source_note"),
         utility_id=utility_id,
         motivation_pct_per_k=motivation_pct,
+        motivation_max_pct=motivation_max_pct,
     )

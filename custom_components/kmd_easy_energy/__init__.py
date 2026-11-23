@@ -20,9 +20,12 @@ from .const import (
     CONF_BONUS_TEMP,
     CONF_LOCATION_NAME,
     CONF_MITID_USERNAME,
+    CONF_MOTIVATION_DKK_PER_KWH_PER_K,
+    CONF_MOTIVATION_PCT_PER_K,
     CONF_NOTIFY_SERVICE,
     CONF_PENALTY_TEMP,
     CONF_PORTAL_URL,
+    CONF_PRICE_DKK_PER_KWH,
     CONF_UTILITY,
     CONF_UTILITY_ID,
     CONF_UTILITY_LATITUDE,
@@ -129,41 +132,70 @@ async def _async_setup_services(hass: HomeAssistant) -> None:
             _LOGGER.error("No config entry found for kmd_easy_energy.configure_utility")
             return
         coord: KMDEasyEnergyCoordinator = hass.data[DOMAIN][entry.entry_id]
-        utility_id = str(call.data.get("utility_id") or entry.data.get(CONF_UTILITY_ID, "kredslob")).strip()
-        meta = await hass.async_add_executor_job(_find_utility_meta, utility_id)
 
-        updates: dict[str, Any] = {CONF_UTILITY_ID: utility_id}
-        if meta:
-            updates[CONF_UTILITY] = meta.get("name", utility_id)
-            updates[CONF_UTILITY_STATUS] = meta.get("status", "pending_test")
-            updates[CONF_PORTAL_URL] = meta.get("portal_url", DEFAULT_PORTAL_URL)
-            if meta.get("city"):
-                updates[CONF_LOCATION_NAME] = meta["city"]
-            if meta.get("latitude") is not None:
-                # Utility metadata / last-resort Open-Meteo location — not a
-                # user location override (that only lives in options).
-                updates[CONF_UTILITY_LATITUDE] = meta["latitude"]
-                updates[CONF_UTILITY_LONGITUDE] = meta["longitude"]
+        updates: dict[str, Any] = {}
+        if coord.uses_mitid:
+            utility_id = str(
+                call.data.get("utility_id") or entry.data.get(CONF_UTILITY_ID, "kredslob")
+            ).strip()
+            meta = await hass.async_add_executor_job(_find_utility_meta, utility_id)
+            updates[CONF_UTILITY_ID] = utility_id
+            if meta:
+                updates[CONF_UTILITY] = meta.get("name", utility_id)
+                updates[CONF_UTILITY_STATUS] = meta.get("status", "pending_test")
+                updates[CONF_PORTAL_URL] = meta.get("portal_url", DEFAULT_PORTAL_URL)
+                if meta.get("city"):
+                    updates[CONF_LOCATION_NAME] = meta["city"]
+                if meta.get("latitude") is not None:
+                    # Utility metadata / last-resort Open-Meteo location — not a
+                    # user location override (that only lives in options).
+                    updates[CONF_UTILITY_LATITUDE] = meta["latitude"]
+                    updates[CONF_UTILITY_LONGITUDE] = meta["longitude"]
+            if call.data.get("portal_url"):
+                updates[CONF_PORTAL_URL] = str(call.data["portal_url"]).strip()
 
-        if call.data.get("portal_url"):
-            updates[CONF_PORTAL_URL] = str(call.data["portal_url"]).strip()
         if call.data.get("location_name") is not None:
             updates[CONF_LOCATION_NAME] = str(call.data["location_name"]).strip()
-        if call.data.get("bonus_temp") is not None:
-            updates[CONF_BONUS_TEMP] = float(call.data["bonus_temp"])
-        if call.data.get("penalty_temp") is not None:
-            updates[CONF_PENALTY_TEMP] = float(call.data["penalty_temp"])
+
         mitid_user = call.data.get("mitid_username")
-        if mitid_user:
+        if coord.uses_mitid and mitid_user:
             updates[CONF_MITID_USERNAME] = str(mitid_user).strip()
         notify_svc = call.data.get("notify_service")
-        if notify_svc is not None:
+        if coord.uses_mitid and notify_svc is not None:
             updates[CONF_NOTIFY_SERVICE] = str(notify_svc).strip()
 
-        complete_setup = bool(call.data.get("complete_setup", False))
-        await coord.async_set_setup_state(complete_setup, meta_updates=updates)
+        tariff_updates: dict[str, Any] = {}
+        for key in (
+            CONF_BONUS_TEMP,
+            CONF_PENALTY_TEMP,
+            CONF_PRICE_DKK_PER_KWH,
+            CONF_MOTIVATION_PCT_PER_K,
+            CONF_MOTIVATION_DKK_PER_KWH_PER_K,
+        ):
+            if call.data.get(key) is not None:
+                tariff_updates[key] = float(call.data[key])
+        if (
+            CONF_BONUS_TEMP in tariff_updates
+            and tariff_updates[CONF_BONUS_TEMP] > 0
+            and (
+                (CONF_PENALTY_TEMP in tariff_updates and tariff_updates[CONF_PENALTY_TEMP] <= 0)
+                or (
+                    CONF_PENALTY_TEMP not in tariff_updates
+                    and not (entry.options.get(CONF_PENALTY_TEMP) or entry.data.get(CONF_PENALTY_TEMP))
+                )
+            )
+        ):
+            tariff_updates[CONF_PENALTY_TEMP] = tariff_updates[CONF_BONUS_TEMP]
 
-        if call.data.get("start_sync", False):
+        if tariff_updates:
+            cleaned_data = {k: v for k, v in entry.data.items() if k not in tariff_updates}
+            new_opts = {**entry.options, **tariff_updates}
+            hass.config_entries.async_update_entry(entry, data=cleaned_data, options=new_opts)
+
+        complete_setup = bool(call.data.get("complete_setup", False))
+        await coord.async_set_setup_state(complete_setup, meta_updates=updates or None)
+
+        if coord.uses_mitid and call.data.get("start_sync", False):
             await coord.async_start_mitid_sync(
                 mitid_username=str(mitid_user).strip() if mitid_user else None,
                 notify_service=str(notify_svc).strip() if notify_svc is not None else None,

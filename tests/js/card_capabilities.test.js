@@ -148,4 +148,40 @@ assert.ok(!html.includes("forbrugernummer") && !html.includes('id="mitidUserInpu
 card = render({ capabilities: ALL_KMD, initial_setup_complete: false, annual: {}, monthly: {}, daily: {} }, []);
 assert.ok(!card.shadowRoot.innerHTML.includes('value="aalborg-forsyning"'), "Aalborg not in MitID wizard");
 
+// 10) E|Forsyning without cost capability shows calm price hint, ⚙️ panel saves price/expected return without MitID,
+//     and single-target return temp (37/37) renders "Forventet retur (37°)".
+calls = [];
+card = render(Object.assign({}, EF_ATTRS, {
+  utility_id: "middelfart-fjernvarme",
+  utility: "Middelfart Fjernvarme",
+  bonus_temp: 37,
+  penalty_temp: 37,
+  expected_return_temp: 37,
+  capabilities: ["auto_sync", "daily", "monthly", "temperatures", "volume"],
+}), calls);
+html = card.shadowRoot.innerHTML;
+assert.ok(html.includes('id="costHintSetupBtn"'), "shows price & expected return hint when cost capability absent");
+assert.ok(html.includes("Forventet retur (37°)"), "single-target return temp chart title");
+assert.ok(!/MitID/.test(html), "no MitID wording on E|Forsyning view");
+card.shadowRoot.getElementById("costHintSetupBtn").listeners.click();
+html = card.shadowRoot.innerHTML;
+assert.ok(html.includes('id="efPriceInput"') && html.includes('id="efBonusInput"') && html.includes('id="efMotivPctInput"') && html.includes('id="saveTariffBtn"'), "shows quick price & expected return form");
+assert.ok(!/MitID/.test(html), "no MitID wording in E|Forsyning settings panel");
+card.shadowRoot.getElementById("efPriceInput").value = "0.705";
+card.shadowRoot.getElementById("efBonusInput").value = "37";
+card.shadowRoot.getElementById("efMotivPctInput").value = "1";
+card.shadowRoot.getElementById("saveTariffBtn").listeners.click();
+assert.deepStrictEqual(calls.pop(), [
+  "kmd_easy_energy",
+  "configure_utility",
+  {
+    complete_setup: true,
+    entry_id: "e1",
+    price_dkk_per_kwh: 0.705,
+    motivation_pct_per_k: 1,
+    bonus_temp: 37,
+    penalty_temp: 37,
+  },
+]);
+
 console.log("card_capabilities.test.js: OK");

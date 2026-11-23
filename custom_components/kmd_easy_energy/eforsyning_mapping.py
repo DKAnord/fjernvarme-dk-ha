@@ -116,18 +116,26 @@ def apply_daily_readings(
         k: float(v) for k, v in (state.get("daily_forward_temp") or {}).items()
         if isinstance(v, (int, float))
     }
+    exp_ret: dict[str, float] = {
+        k: float(v) for k, v in (state.get("daily_expected_return_temp") or {}).items()
+        if isinstance(v, (int, float))
+    }
     for row in rows:
         if row.get("temp_return") is not None and row["temp_return"] > 0:
             temps[row["date"]] = round(float(row["temp_return"]), 2)
         if row.get("temp_forward") is not None and row["temp_forward"] > 0:
             fwd[row["date"]] = round(float(row["temp_forward"]), 2)
+        if row.get("temp_expected_return") is not None and row["temp_expected_return"] > 0:
+            exp_ret[row["date"]] = round(float(row["temp_expected_return"]), 2)
     temps = {k: v for k, v in sorted(temps.items()) if cutoff <= k < today_s}
     fwd = {k: v for k, v in sorted(fwd.items()) if cutoff <= k < today_s}
+    exp_ret = {k: v for k, v in sorted(exp_ret.items()) if cutoff <= k < today_s}
 
     state["daily_kwh_history"] = kwh
     state["daily_m3_history"] = m3
     state["daily_return_temp"] = temps
     state["daily_forward_temp"] = fwd
+    state["daily_expected_return_temp"] = exp_ret
 
     # Current month ("daily") in the same shape as the KMD backend.
     yr, mo = today.year, today.month
@@ -172,6 +180,7 @@ def apply_daily_readings(
 
     # Return temperature: m³-weighted averages per month and per year.
     rt: dict[str, Any] = {"annual": {}}
+    exp_annual: dict[str, float] = {}
     for y in (yr - 1, yr):
         ys = str(y)
         ydays = [d for d in temps if d.startswith(f"{ys}-")]
@@ -186,16 +195,34 @@ def apply_daily_readings(
                 months[M_KEYS[m - 1]] = mavg
         if months:
             rt[f"monthly_{ys}"] = months
+
+        eydays = [d for d in exp_ret if d.startswith(f"{ys}-")]
+        eavg = _weighted_temp(eydays, exp_ret, m3)
+        if eavg is not None:
+            exp_annual[ys] = eavg
+        emonths: dict[str, float] = {}
+        for m in range(1, 13):
+            emdays = [d for d in eydays if int(d[5:7]) == m]
+            emavg = _weighted_temp(emdays, exp_ret, m3)
+            if emavg is not None:
+                emonths[M_KEYS[m - 1]] = emavg
+        if emonths:
+            rt[f"expected_monthly_{ys}"] = emonths
+    if exp_annual:
+        rt["expected_annual"] = exp_annual
     state["return_temp"] = rt
     if temps:
         last_day = max(temps)
-        state["latest_reading"] = {
+        latest_entry: dict[str, Any] = {
             "date": last_day,
             "temp_return": temps.get(last_day),
             "temp_forward": fwd.get(last_day),
             "kwh": kwh.get(last_day),
             "m3": m3.get(last_day),
         }
+        if last_day in exp_ret:
+            latest_entry["temp_expected_return"] = exp_ret[last_day]
+        state["latest_reading"] = latest_entry
     else:
         state["latest_reading"] = {}
 

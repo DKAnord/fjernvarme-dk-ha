@@ -426,15 +426,27 @@
       "name": "Middelfart Fjernvarme",
       "city": "Middelfart",
       "portal_url": "https://eforsyning.dk/middelfartfjernvarme/",
-      "status": "pending_test",
-      "tier": "verified_portal",
+      "status": "confirmed",
+      "tier": "confirmed",
       "auth_method": "Forbrugernummer + webpinkode",
       "backend": "eforsyning",
       "eforsyning_supplier_id": "EDB2E44E-9586-45DE-B6C3-80E4FE36C9F7",
       "latitude": 55.506,
       "longitude": 9.731,
-      "notes": "E|Forsyning (afventer 1. test). forsyningid og AppServerUri bekræftet offentligt via GetVaerkSettings. Login med forbrugernummer + webpinkode fra regningen; daglige aflæsninger.",
-      "tariffs": []
+      "notes": "E|Forsyning. forsyningid og AppServerUri (https://apiapp.dff-edb.dk/middelfart/) bekræftet live af Jesper Madsen. Login med forbrugernummer + webpinkode fra regningen; daglige aflæsninger.",
+      "tariffs": [
+        {
+          "year": 2026,
+          "price_dkk_per_kwh": 0.705,
+          "price_dkk_per_m3": null,
+          "motivation_pct_per_k": 1.0,
+          "motivation_max_pct": 20.0,
+          "bonus_temp": 37.0,
+          "penalty_temp": 37.0,
+          "source": "https://middelfartfjernvarme.dk/priser/varmepris",
+          "source_note": "Takstblad pr. 1. juli 2026: 0,705 kr./kWh inkl. moms (0,564 ekskl.). Motivationstarif: ±1 % pr. °C ift. forventet returtemperatur (maks. ±20 %; forventet retur 33–40 °C ved 75–50 °C fremløb, 37 °C ved 59–61 °C)."
+        }
+      ]
     },
     {
       "id": "solrod-fjernvarme",

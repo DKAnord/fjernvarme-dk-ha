@@ -129,18 +129,19 @@
   "options": {
     "step": {
       "init": {
-        "title": "Fjernvarme (KMD) Indstillinger",
+        "title": "Dansk Fjernvarme — Indstillinger",
         "data": {
           "portal_url": "Portal-URL",
           "location_name": "By / Lokationsnavn",
           "notify_service": "Mobil push-service (valgfri, til MitID-kode)",
-          "bonus_temp": "Bonusgrænse returtemperatur (°C)",
-          "penalty_temp": "Gebyrgrænse returtemperatur (°C)",
+          "bonus_temp": "Forventet retur / bonusgrænse (°C, 0 = fra E|Forsyning / standard)",
+          "penalty_temp": "Gebyrgrænse returtemperatur (°C, 0 = samme som forventet / standard)",
           "outdoor_temp_entity": "Udetemperatursensor (valgfri)",
           "latitude": "Breddegrad – egen placering (valgfri, Open-Meteo)",
           "longitude": "Længdegrad – egen placering (valgfri, Open-Meteo)",
-          "price_dkk_per_kwh": "Varmepris (kr./kWh, 0 = brug offentliggjort standard)",
+          "price_dkk_per_kwh": "Varmepris inkl. moms (kr./kWh, 0 = offentliggjort standard)",
           "price_dkk_per_m3": "Volumenpris (kr./m³, valgfri, 0 = ikke sat)",
+          "motivation_pct_per_k": "Motivationstarif i procent (% pr. °C, f.eks. 1, 0 = standard)",
           "motivation_dkk_per_kwh_per_k": "Motivationstarif (kr./kWh/°C, 0 = offentliggjort standard)",
           "normal_hdd_year": "Normalår-graddage HDD17 (0 = skøn 3100)",
           "sync_reminder": "Blød påmindelse i weekenden (vises lør/søn, hvis der ikke er synkroniseret tors–lør)",

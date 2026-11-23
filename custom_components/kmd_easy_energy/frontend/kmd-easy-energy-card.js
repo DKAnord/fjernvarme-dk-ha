@@ -3,7 +3,7 @@
  * Zero external dependencies, Shadow DOM, responsive, interactive tooltips, DA/EN i18n.
  */
 (() => {
-  const VER = "1.1.0";
+  const VER = "1.2.0";
   const MONTHS = ["Jan", "Feb", "Mar", "Apr", "Maj", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Dec"];
   const DAYS_IN_MONTH = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
   const isLeapYear = (y) => (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0;
@@ -94,6 +94,7 @@
     { id: "samn", name: "SAMN Forsyning", city: "Horsens / Odder", url: "https://www.samn.dk/", status: "pending_test" },
     { id: "go-energi", name: "go'energi", city: "Thy-Mors", url: "https://www.goenergi.dk/", status: "pending_test" },
     { id: "soroe-fjernvarme", name: "Sorø Fjernvarme", city: "Sorø", url: "https://eforsyning.dk/soroe/", status: "confirmed", backend: "eforsyning" },
+    { id: "middelfart-fjernvarme", name: "Middelfart Fjernvarme", city: "Middelfart", url: "https://eforsyning.dk/middelfartfjernvarme/", status: "confirmed", backend: "eforsyning" },
     { id: "hjorring-varmeforsyning", name: "Hjørring Varmeforsyning", city: "Hjørring", url: "https://eforsyning.dk/hjvarme/", status: "pending_test", backend: "eforsyning" },
     { id: "aalborg-forsyning", name: "Aalborg Forsyning", city: "Aalborg", url: "https://aalborgforsyning.dk/services/forbrug/watts-on/", status: "confirmed", backend: "wattson" },
     { id: "fjernvarme-fyn", name: "Fjernvarme Fyn", city: "Odense / Fyn", url: "https://www.fjernvarmefyn.dk/spar-paa-energien/overblik/watts-on-app/", status: "pending_test", backend: "wattson" },
@@ -181,8 +182,6 @@
   class KmdEasyEnergyCard extends HTMLElement {
     setConfig(config) {
       this._config = {
-        bonus_temp: 30,
-        penalty_temp: 40,
         language: "da",
         show_sync_bar: true,
         ...config,
@@ -606,6 +605,11 @@
       const prevYr = curYr - 1;
       const bonusT = Number(cfg.bonus_temp ?? a.bonus_temp ?? 30);
       const penaltyT = Number(cfg.penalty_temp ?? a.penalty_temp ?? 40);
+      const tariffObj = a.tariff || {};
+      const curPrice = a.energy_price_dkk_per_kwh ?? tariffObj.price_dkk_per_kwh ?? "";
+      const curMotivPct = tariffObj.motivation_pct_per_k ?? "";
+      const efExpectedRt = typeof a.expected_return_temp === "number" ? a.expected_return_temp : null;
+      const singleReturnTarget = Math.abs(bonusT - penaltyT) < 0.05;
 
       const ann = a.annual || {};
       const mon = a.monthly || {};
@@ -735,6 +739,12 @@
       const wizLocation = this._wizLocation ?? locName;
       const wizBonus = this._wizBonus ?? bonusT;
       const wizPenalty = this._wizPenalty ?? penaltyT;
+      const wizPrice = this._wizPrice ?? (curPrice !== "" && curPrice !== null ? curPrice : "");
+      const wizMotivPct = this._wizMotivPct ?? (curMotivPct !== "" && curMotivPct !== null ? curMotivPct : "");
+      const wizEfPrice = this._wizEfPrice ?? wizPrice;
+      const wizEfBonus = this._wizEfBonus ?? (efExpectedRt !== null ? efExpectedRt : bonusT);
+      const wizEfPenalty = this._wizEfPenalty ?? (singleReturnTarget ? "" : penaltyT);
+      const wizEfMotivPct = this._wizEfMotivPct ?? wizMotivPct;
       const mitidLiveBox = !hasMitid ? "" : otpCode
         ? `<div class="mitid-box otp"><div>🔑 Indtast denne 4-cifrede engangskode i MitID-appen:</div><div class="otp-digits">${esc(otpCode.split("").join(" "))}</div></div>`
         : (qrSvg ? `<div class="mitid-box qr"><div>📲 Scan QR-koden med MitID-appen på din telefon:</div><div class="qr-wrap"><img id="mitidQrImg" src="${esc(this._qrDataUrl((this._mitidQrFrames || [])[this._mitidQrIdx || 0] || qrSvg))}" alt="MitID QR-kode" /></div><div class="qr-hint">Koden skifter hvert sekund — hold telefonen roligt foran skærmen. Står kortet på samme telefon som MitID-appen, kan QR-koden ikke scannes — slå i stedet engangskoder til i MitID-appen (Menu → Godkend med QR- eller engangskoder → Engangskoder).</div></div>` : "");
@@ -781,20 +791,41 @@
             <div class="ob-head">
               <div class="tb-left">
                 <span class="tb-title">🔥 ${esc(activeUtil.name)} — ${esc(dataSource)}</span>
-                <span class="badge warn">🧪 Eksperimentel</span>
+                <span class="badge ${utilStatus === "confirmed" ? "ok" : "warn"}">${esc(statusBadge)}</span>
               </div>
               <div class="bn-btns">
                 ${!isInitialSetup ? `<button class="btn" id="closeSetupBtn">✕ Luk</button>` : ""}
               </div>
             </div>
-            <div class="ob-note">Data fra ${esc(dataSource)}. ${esc(loginHow)} er sat op i Home Assistant (Indstillinger → Enheder &amp; tjenester) — der bruges ikke MitID. Tryk <b>🔄 Hent data nu</b> for første hentning${autoHour ? "; derefter hentes data automatisk hver dag" : ""}.</div>
+            <div class="ob-note">Data fra ${esc(dataSource)}. ${esc(loginHow)} er sat op i Home Assistant (Indstillinger → Enheder &amp; tjenester). Tryk <b>🔄 Hent data nu</b> for synkronisering${autoHour ? "; der hentes også automatisk hver dag" : ""}.</div>
             ${(hasSyncMsg || this._startingSync) ? `<div class="ob-live ${hasSyncMsg && syncMsg.startsWith("Fejl") ? "red" : ""}">📡 ${esc(hasSyncMsg ? syncMsg : "Henter data…")}</div>` : ""}
             <div class="tb-actions">
               <button class="btn primary" id="efSyncBtn">🔄 Hent data nu</button>
             </div>
+            <div class="ob-step">💰 Pris &amp; Forventet returtemperatur (valgfrit — 0 = brug standard${backend === "eforsyning" ? " / E|Forsyning" : ""})</div>
+            <div class="ob-grid">
+              <label class="ob-field">Varmepris inkl. moms (kr./kWh)
+                <input id="efPriceInput" type="number" step="0.001" value="${esc(wizEfPrice)}" placeholder="f.eks. 0.705" />
+              </label>
+              <label class="ob-field">Motivation (% pr. °C)
+                <input id="efMotivPctInput" type="number" step="0.1" value="${esc(wizEfMotivPct)}" placeholder="f.eks. 1" />
+              </label>
+              <label class="ob-field">Forventet retur / Bonus (°C)
+                <input id="efBonusInput" type="number" step="0.5" value="${esc(wizEfBonus)}" placeholder="${backend === "eforsyning" ? "Auto fra E|Forsyning" : "f.eks. 37"}" />
+              </label>
+              <label class="ob-field">Gebyrgrænse (°C, tom = samme)
+                <input id="efPenaltyInput" type="number" step="0.5" value="${esc(wizEfPenalty)}" placeholder="Samme som forventet retur" />
+              </label>
+            </div>
+            <div class="tb-actions">
+              <button class="btn" id="saveTariffBtn">💾 Gem pris &amp; returkrav</button>
+            </div>
           </div>`;
       const syncNudge = (syncReminder && !hasSyncMsg && syncReminderMsg)
         ? `<div class="sync-nudge" role="status"><span aria-hidden="true">💧</span><span>${esc(syncReminderMsg)}</span></div>`
+        : "";
+      const costHint = (!has("cost") && hasData && !isInitialSetup)
+        ? `<div class="sync-nudge" data-section="cost-hint"><span aria-hidden="true">💡</span><span>Vil du også se <b>kr./øre</b> og forventet returkrav?</span><button class="btn" id="costHintSetupBtn" style="margin-left:auto;padding:4px 10px">⚙️ Indtast pris &amp; returtemp</button></div>`
         : "";
 
       this.shadowRoot.innerHTML = `
@@ -1002,6 +1033,12 @@
                   <input id="penaltyInput" type="number" step="0.5" value="${esc(wizPenalty)}" style="width:50%" />
                 </div>
               </label>
+              <label class="ob-field">Varmepris (kr./kWh) &amp; Motivation (%/°C)
+                <div style="display:flex;gap:6px">
+                  <input id="priceInput" type="number" step="0.001" value="${esc(wizPrice)}" placeholder="kr./kWh" style="width:50%" />
+                  <input id="motivPctInput" type="number" step="0.1" value="${esc(wizMotivPct)}" placeholder="%/°C" style="width:50%" />
+                </div>
+              </label>
               <label class="ob-field">MitID Bruger-ID (gemmes kun lokalt i HA)
                 <input id="mitidUserInput" value="${esc(this._wizMitidUser || "")}" placeholder="${hasMitidUser ? `Gemt i HA (${esc(mitidMasked)}) — udfyld kun for at ændre` : "Indtast dit MitID Bruger-ID"}" />
               </label>
@@ -1084,6 +1121,7 @@
           ${sourceNote}
           ${tempSourceNote}
           ${mitidLiveBox}
+          ${costHint}
           ${(utilStatus !== "confirmed" && hasData) ? `
           <div class="fb-bar">
             <span>🎉 Virker <b>${esc(activeUtil.name)}</b> hos dig? Hjælp med at flytte værket til ✅ Bekræftet:</span>
@@ -1105,7 +1143,7 @@
             ${has("temperatures") ? `<div class="kpi">
               <div class="k-lbl">${esc(t.kpi_ret)} ${curYr}</div>
               <div class="k-val ${rtCur > 0 ? (rtCur < bonusT ? "good" : (rtCur <= penaltyT ? "warn" : "bad")) : ""}">${rtCur > 0 ? `${fmtDec(rtCur)} °C` : "–"}</div>
-              <div class="k-sub">${rtCur > 0 ? (rtCur < bonusT ? `🟢 Bonus-zone (<${bonusT} °C)` : `${fmtDec(rtCur - bonusT)} °C til bonus (<${bonusT} °C)`) : `Grænser: <${bonusT}° bonus / >${penaltyT}° gebyr`}</div>
+              <div class="k-sub">${singleReturnTarget ? (rtCur > 0 ? (rtCur < bonusT ? `🟢 Under krav (<${bonusT} °C)` : (rtCur > penaltyT ? `+${fmtDec(rtCur - penaltyT)} °C over krav (${penaltyT} °C)` : `På forventet retur (${bonusT} °C)`)) : `Forventet retur: ${bonusT} °C`) : (rtCur > 0 ? (rtCur < bonusT ? `🟢 Bonus-zone (<${bonusT} °C)` : `${fmtDec(rtCur - bonusT)} °C til bonus (<${bonusT} °C)`) : `Grænser: <${bonusT}° bonus / >${penaltyT}° gebyr`)}</div>
             </div>` : ""}
             ${has("forecast") ? `<div class="kpi">
               <div class="k-lbl">${esc(t.kpi_fc)}</div>
@@ -1181,11 +1219,9 @@
 
             ${has("temperatures") ? `<div class="panel" data-section="return-temp">
               <div class="p-head">
-                <div class="p-title">🎯 Returtemperatur ${curYr} (°C) vs. Bonus (${bonusT}°) &amp; Gebyr (${penaltyT}°)</div>
+                <div class="p-title">${singleReturnTarget ? `🎯 Returtemperatur ${curYr} (°C) vs. Forventet retur (${bonusT}°)${efExpectedRt !== null ? " · E|Forsyning" : ""}` : `🎯 Returtemperatur ${curYr} (°C) vs. Bonus (${bonusT}°) &amp; Gebyr (${penaltyT}°)`}</div>
                 <div class="p-leg">
-                  <span><i class="dot" style="background:#22c55e"></i>Bonus &lt;${bonusT}°</span>
-                  <span><i class="dot" style="background:#f59e0b"></i>Neutral</span>
-                  <span><i class="dot" style="background:#ef4444"></i>Gebyr &gt;${penaltyT}°</span>
+                  ${singleReturnTarget ? `<span><i class="dot" style="background:#22c55e"></i>Under ${bonusT}° (bonus)</span><span><i class="dot" style="background:#ef4444"></i>Over ${penaltyT}° (gebyr)</span>` : `<span><i class="dot" style="background:#22c55e"></i>Bonus &lt;${bonusT}°</span><span><i class="dot" style="background:#f59e0b"></i>Neutral</span><span><i class="dot" style="background:#ef4444"></i>Gebyr &gt;${penaltyT}°</span>`}
                 </div>
               </div>
               ${this._renderReturnTempSvg(rtM, bonusT, penaltyT, curYr)}
@@ -1245,7 +1281,7 @@
               </div>` : ""}
               ${has("temperatures") ? `<div class="ins" data-section="ins-temp">
                 <div class="ins-title">⚡ Returtemperatur &amp; Afkøling</div>
-                Aktuelt års-snit er <b>${rtCur > 0 ? `${fmtDec(rtCur)} °C` : "–"}</b>${rtCur > 0 ? (rtDist < 0 ? ` (🟢 i bonus-zone under <b>${bonusT} °C</b>)` : ` (<b>${fmtDec(rtDist, 1)} °C</b> fra bonus under <b>${bonusT} °C</b>, gebyr over <b>${penaltyT} °C</b>)`) : ` (bonus under <b>${bonusT} °C</b>, gebyr over <b>${penaltyT} °C</b>)`}.
+                Aktuelt års-snit er <b>${rtCur > 0 ? `${fmtDec(rtCur)} °C` : "–"}</b>${singleReturnTarget ? (rtCur > 0 ? (rtDist < 0 ? ` (🟢 under forventet retur <b>${bonusT} °C</b>)` : (rtCur > penaltyT ? ` (<b>+${fmtDec(rtCur - penaltyT, 1)} °C</b> over forventet retur <b>${penaltyT} °C</b>)` : ` (på forventet retur <b>${bonusT} °C</b>)`)) : ` (forventet retur: <b>${bonusT} °C</b>)`) : (rtCur > 0 ? (rtDist < 0 ? ` (🟢 i bonus-zone under <b>${bonusT} °C</b>)` : ` (<b>${fmtDec(rtDist, 1)} °C</b> fra bonus under <b>${bonusT} °C</b>, gebyr over <b>${penaltyT} °C</b>)`) : ` (bonus under <b>${bonusT} °C</b>, gebyr over <b>${penaltyT} °C</b>)`)}.
               </div>` : ""}
               ${hddEntries.length ? `<div class="ins">
                 <div class="ins-title">📈 Effektivitet pr. graddag (kWh / HDD17)</div>
@@ -1290,6 +1326,12 @@
           if (/^https?:\/\//i.test(url)) window.open(url, "_blank", "noopener,noreferrer");
         });
       }
+      const numOrNull = (id) => {
+        const raw = this.shadowRoot.getElementById(id)?.value;
+        if (raw === undefined || raw === null || String(raw).trim() === "") return null;
+        const n = Number(raw);
+        return Number.isFinite(n) ? n : null;
+      };
       const readWizPayload = (startSync, completeSetup) => {
         const notifySelEl = this.shadowRoot.getElementById("notifySel");
         const notifyVal = notifySelEl && notifySelEl.value !== "__custom__"
@@ -1305,6 +1347,10 @@
           start_sync: startSync,
           complete_setup: completeSetup,
         };
+        const priceVal = numOrNull("priceInput");
+        if (priceVal !== null) p.price_dkk_per_kwh = priceVal;
+        const motivVal = numOrNull("motivPctInput");
+        if (motivVal !== null) p.motivation_pct_per_k = motivVal;
         const mu = this.shadowRoot.getElementById("mitidUserInput")?.value?.trim();
         if (mu) p.mitid_username = mu;
         return p;
@@ -1327,11 +1373,40 @@
         ["locInput", "_wizLocation"],
         ["bonusInput", "_wizBonus"],
         ["penaltyInput", "_wizPenalty"],
+        ["priceInput", "_wizPrice"],
+        ["motivPctInput", "_wizMotivPct"],
+        ["efPriceInput", "_wizEfPrice"],
+        ["efBonusInput", "_wizEfBonus"],
+        ["efPenaltyInput", "_wizEfPenalty"],
+        ["efMotivPctInput", "_wizEfMotivPct"],
         ["notifyInput", "_wizNotify"],
       ].forEach(([id, prop]) => {
         const el = this.shadowRoot.getElementById(id);
         if (el) el.addEventListener("input", (e) => { this[prop] = e.target.value; });
       });
+      const saveTariffBtn = this.shadowRoot.getElementById("saveTariffBtn");
+      if (saveTariffBtn && this._hass) {
+        saveTariffBtn.addEventListener("click", () => {
+          const payload = { complete_setup: true };
+          if (a.entry_id) payload.entry_id = a.entry_id;
+          else if (activeUtilId) payload.utility_id = activeUtilId;
+          const priceVal = numOrNull("efPriceInput");
+          if (priceVal !== null) payload.price_dkk_per_kwh = priceVal;
+          const motivVal = numOrNull("efMotivPctInput");
+          if (motivVal !== null) payload.motivation_pct_per_k = motivVal;
+          const bonusVal = numOrNull("efBonusInput");
+          if (bonusVal !== null) payload.bonus_temp = bonusVal;
+          const penaltyVal = numOrNull("efPenaltyInput");
+          if (penaltyVal !== null && penaltyVal > 0) {
+            payload.penalty_temp = penaltyVal;
+          } else if (bonusVal !== null) {
+            payload.penalty_temp = bonusVal;
+          }
+          this._setupOpen = false;
+          this._hass.callService("kmd_easy_energy", "configure_utility", payload);
+          this._render();
+        });
+      }
       const startMitidBtn = this.shadowRoot.getElementById("startMitidBtn");
       if (startMitidBtn && this._hass) {
         startMitidBtn.addEventListener("click", () => {
@@ -1414,6 +1489,10 @@
       const openSetupBtn = this.shadowRoot.getElementById("openSetupBtn");
       if (openSetupBtn) {
         openSetupBtn.addEventListener("click", () => { this._setupOpen = true; this._render(); });
+      }
+      const costHintSetupBtn = this.shadowRoot.getElementById("costHintSetupBtn");
+      if (costHintSetupBtn) {
+        costHintSetupBtn.addEventListener("click", () => { this._setupOpen = true; this._render(); });
       }
       const closeSetupBtn = this.shadowRoot.getElementById("closeSetupBtn");
       if (closeSetupBtn) {

@@ -322,6 +322,8 @@ _CONSUMPTION_CACHE_KEYS = (
     "billing",
     "balance",
     "return_temp",
+    "daily_expected_return_temp",
+    "expected_return_temp",
     "latest_reading",
     "statistics_imported_on",
     "statistics_imported",
@@ -844,12 +846,30 @@ class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         state["hourly_backfill_fetched_on"] = today_s
         state["hourly_kwh_points"] = len(state.get("hourly_kwh") or [])
 
+    @staticmethod
+    def _expected_return_temp_from_state(state: dict[str, Any], year: int) -> float | None:
+        """Best available expected return temperature from E|Forsyning (Forv_Retur)."""
+        exp_ann = ((state.get("return_temp") or {}).get("expected_annual") or {}).get(str(year))
+        if isinstance(exp_ann, (int, float)) and not isinstance(exp_ann, bool) and exp_ann > 0:
+            return round(float(exp_ann), 1)
+        latest_exp = (state.get("latest_reading") or {}).get("temp_expected_return")
+        if isinstance(latest_exp, (int, float)) and not isinstance(latest_exp, bool) and latest_exp > 0:
+            return round(float(latest_exp), 1)
+        return None
+
     def _enrich_derived(self, state: dict[str, Any]) -> None:
         """Attach tariff, motivation, forecast and leak flags to coordinator data."""
         from dataclasses import asdict
 
-        tariff = resolve_tariff(self.entry)
+        today = copenhagen_today()
+        ef_expected_rt = self._expected_return_temp_from_state(state, today.year)
+        tariff = resolve_tariff(
+            self.entry, today=today, expected_return_temp=ef_expected_rt
+        )
         state["tariff"] = asdict(tariff)
+        state["bonus_temp"] = tariff.bonus_temp
+        state["penalty_temp"] = tariff.penalty_temp
+        state["expected_return_temp"] = ef_expected_rt
         state["energy_price_dkk_per_kwh"] = tariff.price_dkk_per_kwh
         state["volume_price_dkk_per_m3"] = tariff.price_dkk_per_m3
 
@@ -866,9 +886,14 @@ class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 return_temp = float(latest_rt)
         if return_temp is None:
             rt_ann = (state.get("return_temp") or {}).get("annual") or {}
-            yr_s = str(copenhagen_today().year)
+            yr_s = str(today.year)
             if yr_s in rt_ann and rt_ann[yr_s] is not None:
                 return_temp = float(rt_ann[yr_s])
+        max_adj = (
+            (tariff.price_dkk_per_kwh * tariff.motivation_max_pct / 100.0)
+            if (tariff.price_dkk_per_kwh and tariff.motivation_max_pct)
+            else None
+        )
         state["motivation_status"] = motivation_status(
             return_temp, tariff.bonus_temp, tariff.penalty_temp
         )
@@ -877,9 +902,9 @@ class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             tariff.bonus_temp,
             tariff.penalty_temp,
             tariff.motivation_dkk_per_kwh_per_k,
+            max_dkk_per_kwh=max_adj,
         )
 
-        today = copenhagen_today()
         state["cost_estimate"] = estimate_variable_costs(
             price_dkk_per_kwh=tariff.price_dkk_per_kwh,
             bonus_temp=tariff.bonus_temp,
@@ -890,6 +915,7 @@ class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             monthly_cur_year=(state.get("monthly") or {}).get(str(today.year)),
             return_temp_monthly=(state.get("return_temp") or {}).get(f"monthly_{today.year}"),
             today=today,
+            max_pct=tariff.motivation_max_pct,
         )
         daily_kwh = daily_kwh_from_history(
             state.get("daily_kwh_history"),
@@ -1800,9 +1826,11 @@ class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             self.mitid_otp_code = None
             self.mitid_qr_svg = None
             self.mitid_qr_frames = []
+        await self.hass.async_add_executor_job(load_utilities)
         state = dict(self.data or await self._async_load_cache())
         state.update(self._base_meta())
         state["initial_setup_complete"] = complete
+        self._enrich_derived(state)
         await self._async_save_cache(state)
         self.async_set_updated_data(state)
 
@@ -1826,7 +1854,13 @@ class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self.mitid_qr_svg = frames[0] if frames else None
         if update_state:
             cur = dict(self.data or {})
-            cur.update(self._base_meta())
+            meta = self._base_meta()
+            if cur.get("bonus_temp") is not None and not (
+                self.entry.options.get(CONF_BONUS_TEMP) or self.entry.data.get(CONF_BONUS_TEMP)
+            ):
+                meta.pop("bonus_temp", None)
+                meta.pop("penalty_temp", None)
+            cur.update(meta)
             if self._initial_setup_complete is not None:
                 cur["initial_setup_complete"] = self._initial_setup_complete
             self.async_set_updated_data(cur)

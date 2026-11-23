@@ -175,6 +175,8 @@ def motivation_dkk_per_kwh(
     bonus_temp: float,
     penalty_temp: float,
     rate: float | None,
+    *,
+    max_dkk_per_kwh: float | None = None,
 ) -> float | None:
     """Variable motivation adjustment in DKK/kWh (negative is a bonus)."""
     if return_temp is None or rate is None or rate < 0:
@@ -183,10 +185,15 @@ def motivation_dkk_per_kwh(
     if status is None:
         return None
     if status == STATUS_BONUS:
-        return round(-(bonus_temp - return_temp) * rate, 5)
-    if status == STATUS_PENALTY:
-        return round((return_temp - penalty_temp) * rate, 5)
-    return 0.0
+        raw = -(bonus_temp - return_temp) * rate
+    elif status == STATUS_PENALTY:
+        raw = (return_temp - penalty_temp) * rate
+    else:
+        raw = 0.0
+    if max_dkk_per_kwh is not None and max_dkk_per_kwh > 0:
+        cap = float(max_dkk_per_kwh)
+        raw = max(-cap, min(cap, raw))
+    return round(raw, 5)
 
 
 def kwh_per_hdd(
@@ -408,14 +415,22 @@ def estimate_variable_costs(
     monthly_cur_year: dict[str, Any] | None,
     return_temp_monthly: dict[str, Any] | None,
     today: date | None = None,
+    max_pct: float | None = None,
 ) -> dict[str, Any]:
     """Estimate variable heating cost in DKK (excl. fixed fees) across all backends."""
     if price_dkk_per_kwh is None or price_dkk_per_kwh <= 0:
         return {}
     today = today or copenhagen_today()
     base_price = float(price_dkk_per_kwh)
+    max_adj = (base_price * (float(max_pct) / 100.0)) if (max_pct is not None and max_pct > 0) else None
     adj = (
-        motivation_dkk_per_kwh(current_return_temp, bonus_temp, penalty_temp, motivation_rate)
+        motivation_dkk_per_kwh(
+            current_return_temp,
+            bonus_temp,
+            penalty_temp,
+            motivation_rate,
+            max_dkk_per_kwh=max_adj,
+        )
         or 0.0
     )
     effective_price = round(max(0.0, base_price + adj), 4)
@@ -430,7 +445,16 @@ def estimate_variable_costs(
             continue
         raw_rt = rt_map.get(label)
         m_rt = float(raw_rt) if isinstance(raw_rt, (int, float)) else current_return_temp
-        m_adj = motivation_dkk_per_kwh(m_rt, bonus_temp, penalty_temp, motivation_rate) or 0.0
+        m_adj = (
+            motivation_dkk_per_kwh(
+                m_rt,
+                bonus_temp,
+                penalty_temp,
+                motivation_rate,
+                max_dkk_per_kwh=max_adj,
+            )
+            or 0.0
+        )
         m_price = max(0.0, base_price + m_adj)
         monthly_dkk[label] = int(round(float(raw_kwh) * m_price))
 

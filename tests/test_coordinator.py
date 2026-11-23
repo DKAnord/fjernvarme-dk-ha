@@ -512,7 +512,7 @@ def test_coordinator_base_meta_exposes_integration_version(tmp_path: Path) -> No
     entry = _entry(tmp_path)
     hass = _hass(tmp_path)
     with patch.object(DataUpdateCoordinator, "__init__", lambda *a, **k: None):
-        coord = KMDEasyEnergyCoordinator(hass, entry, integration_version="1.1.0")
+        coord = KMDEasyEnergyCoordinator(hass, entry, integration_version="1.2.0")
         default_coord = KMDEasyEnergyCoordinator(hass, entry)
-    assert coord._base_meta()["integration_version"] == "1.1.0"
+    assert coord._base_meta()["integration_version"] == "1.2.0"
     assert default_coord._base_meta()["integration_version"] is None

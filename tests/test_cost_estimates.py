@@ -158,3 +158,38 @@ def test_cost_estimate_sensors_and_translations() -> None:
         )["entity"]["sensor"]
         for key in ("effective_energy_price", "latest_day_cost", "month_cost", "year_cost"):
             assert key in sensors_tr and sensors_tr[key]["name"]
+
+
+def test_estimate_variable_costs_respects_motivation_max_pct_cap() -> None:
+    # Middelfart-style: 1.00 DKK/kWh, 1 %/°C (0.01), expected return 37 °C, max ±20 %.
+    bonus_capped = estimate_variable_costs(
+        price_dkk_per_kwh=1.0,
+        bonus_temp=37.0,
+        penalty_temp=37.0,
+        motivation_rate=0.01,
+        current_return_temp=10.0,  # -27 °C would be -27 %, capped at -20 %
+        daily={"days": {"21": 100.0}, "latest_complete": True, "month": "Nov"},
+        monthly_cur_year={"Nov": 100.0},
+        return_temp_monthly={"Nov": 10.0},
+        today=date(2026, 11, 23),
+        max_pct=20.0,
+    )
+    assert bonus_capped["adjustment_pct"] == -20.0
+    assert bonus_capped["effective_price_dkk_per_kwh"] == 0.8
+    assert bonus_capped["latest_day_dkk"] == 80
+
+    penalty_capped = estimate_variable_costs(
+        price_dkk_per_kwh=1.0,
+        bonus_temp=37.0,
+        penalty_temp=37.0,
+        motivation_rate=0.01,
+        current_return_temp=65.0,  # +28 °C would be +28 %, capped at +20 %
+        daily={"days": {"21": 100.0}, "latest_complete": True, "month": "Nov"},
+        monthly_cur_year={"Nov": 100.0},
+        return_temp_monthly={"Nov": 65.0},
+        today=date(2026, 11, 23),
+        max_pct=20.0,
+    )
+    assert penalty_capped["adjustment_pct"] == 20.0
+    assert penalty_capped["effective_price_dkk_per_kwh"] == 1.2
+    assert penalty_capped["latest_day_dkk"] == 120

@@ -374,38 +374,69 @@
       return `<svg viewBox="0 0 ${W} ${H}" class="svg"><defs><linearGradient id="gHeat" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#f97316"/><stop offset="100%" stop-color="#ef4444"/></linearGradient></defs>${grid}${bars}${line}</svg>`;
     }
 
-    _renderReturnTempSvg(rtMonthly, bonusT, penaltyT, curYr) {
+    _renderReturnTempSvg(rtMonthly, bonusT, penaltyT, curYr, expMonthly = {}) {
       const W = 540, H = 225, pad = { l: 42, r: 14, t: 28, b: 32 };
       const cw = W - pad.l - pad.r, ch = H - pad.t - pad.b;
-      const minY = 20, maxY = Math.max(44, penaltyT + 4);
+      const expVals = MONTHS.map((m) => expMonthly?.[m]).filter((v) => typeof v === "number" && Number.isFinite(v) && v > 0);
+      const useExpCurve = expVals.length >= 2;
+      const hasAnyExp = expVals.length >= 1;
+      const barVals = MONTHS.map((m) => rtMonthly?.[m]).filter((v) => typeof v === "number" && Number.isFinite(v) && v > 0);
+      const allVals = [...barVals, ...expVals, bonusT, penaltyT].filter((v) => Number.isFinite(v) && v > 0);
+      const minY = Math.min(20, allVals.length ? Math.floor(Math.min(...allVals) - 2) : 20);
+      const maxY = Math.max(44, allVals.length ? Math.ceil(Math.max(...allVals) + 3) : 44);
       const yPos = (v) => pad.t + ch - ((v - minY) / (maxY - minY)) * ch;
       const xStep = cw / 12;
 
       let grid = "";
-      [25, bonusT, 35, penaltyT].filter((v, i, a) => a.indexOf(v) === i).forEach((tv) => {
+      const refLines = useExpCurve
+        ? [25, 35]
+        : [25, bonusT, 35, penaltyT].filter((v, i, a) => a.indexOf(v) === i);
+      refLines.forEach((tv) => {
         const y = yPos(tv);
-        const col = tv === bonusT ? "#22c55e" : (tv === penaltyT ? "#ef4444" : "rgba(148,163,184,0.22)");
-        const dash = (tv === bonusT || tv === penaltyT) ? "5,4" : "3,3";
-        const sw = (tv === bonusT || tv === penaltyT) ? "1.6" : "1";
-        const cls = tv === bonusT ? "ax-bonus" : (tv === penaltyT ? "ax-penalty" : "ax");
+        const col = !useExpCurve && tv === bonusT ? "#22c55e" : (!useExpCurve && tv === penaltyT ? "#ef4444" : "rgba(148,163,184,0.22)");
+        const dash = !useExpCurve && (tv === bonusT || tv === penaltyT) ? "5,4" : "3,3";
+        const sw = !useExpCurve && (tv === bonusT || tv === penaltyT) ? "1.6" : "1";
+        const cls = !useExpCurve && tv === bonusT ? "ax-bonus" : (!useExpCurve && tv === penaltyT ? "ax-penalty" : "ax");
         grid += `<line x1="${pad.l}" y1="${y}" x2="${W - pad.r}" y2="${y}" stroke="${col}" stroke-width="${sw}" stroke-dasharray="${dash}"/>`;
         grid += `<text x="${pad.l - 6}" y="${y + 4}" text-anchor="end" class="${cls}">${tv}°</text>`;
       });
 
       let bars = "";
+      const expPts = [];
       MONTHS.forEach((m, i) => {
         const cx = pad.l + xStep * (i + 0.5);
         const v = rtMonthly[m];
+        const mExp = (hasAnyExp && typeof expMonthly?.[m] === "number" && Number.isFinite(expMonthly[m]) && expMonthly[m] > 0)
+          ? expMonthly[m]
+          : null;
+        const effB = mExp !== null ? mExp : bonusT;
+        const effP = mExp !== null ? mExp : penaltyT;
         if (typeof v === "number") {
           const y = yPos(Math.min(maxY, Math.max(minY, v)));
-          const col = v < bonusT ? "#22c55e" : (v <= penaltyT ? "#f59e0b" : "#ef4444");
+          const col = v < effB ? "#22c55e" : (v <= effP ? "#f59e0b" : "#ef4444");
           const bw = Math.min(24, xStep * 0.58);
-          bars += `<rect x="${cx - bw / 2}" y="${y}" width="${bw}" height="${Math.max(2, pad.t + ch - y)}" rx="5" fill="${col}" fill-opacity="0.88" data-tip="${m} ${curYr}: ${fmtDec(v)} °C (${v < bonusT ? 'Bonus!' : v <= penaltyT ? 'Neutral' : 'Gebyr!'})"/>`;
+          const tip = mExp !== null
+            ? `${m} ${curYr}: ${fmtDec(v)} °C · krav ${fmtDec(mExp)} °C (${v < effB ? "Bonus!" : v <= effP ? "På krav" : "Gebyr!"})`
+            : `${m} ${curYr}: ${fmtDec(v)} °C (${v < bonusT ? "Bonus!" : v <= penaltyT ? "Neutral" : "Gebyr!"})`;
+          bars += `<rect x="${cx - bw / 2}" y="${y}" width="${bw}" height="${Math.max(2, pad.t + ch - y)}" rx="5" fill="${col}" fill-opacity="0.88" data-tip="${esc(tip)}"/>`;
           bars += `<text x="${cx}" y="${y - 7}" text-anchor="middle" class="val val-sm">${fmtDec(v)}</text>`;
+        }
+        if (mExp !== null) {
+          expPts.push([cx, yPos(Math.min(maxY, Math.max(minY, mExp))), m, mExp]);
         }
         bars += `<text x="${cx}" y="${H - 8}" text-anchor="middle" class="ax">${m}</text>`;
       });
-      return `<svg viewBox="0 0 ${W} ${H}" class="svg">${grid}${bars}</svg>`;
+      let expLine = "";
+      if (expPts.length >= 2) {
+        const d = expPts.map((p, idx) => `${idx === 0 ? "M" : "L"}${p[0].toFixed(1)},${p[1].toFixed(1)}`).join(" ");
+        expLine = `<path d="${d}" fill="none" stroke="#38bdf8" stroke-width="2.2" stroke-dasharray="5,3" stroke-linecap="round" stroke-linejoin="round" data-role="expected-return-curve"/>`;
+      }
+      if (expPts.length >= 1) {
+        expPts.forEach(([x, y, m, mExp]) => {
+          expLine += `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="3.4" fill="#0ea5e9" stroke="#fff" stroke-width="1.2" data-tip="Forventet retur ${m} ${curYr}: ${fmtDec(mExp)} °C"/>`;
+        });
+      }
+      return `<svg viewBox="0 0 ${W} ${H}" class="svg">${grid}${bars}${expLine}</svg>`;
     }
 
     _renderHourlyAvgSvg(hourly, bonusT, peakInfo) {
@@ -620,6 +651,16 @@
       const rt = a.return_temp || {};
       const rtA = rt.annual || {};
       const rtM = rt[`monthly_${curYr}`] || rt.monthly_2026 || {};
+      const rtExpM = (cfg.bonus_temp == null && cfg.penalty_temp == null && a.expected_return_auto !== false)
+        ? (rt[`expected_monthly_${curYr}`] || rt.expected_monthly_2026 || {})
+        : {};
+      const expMList = MONTHS.map((m) => rtExpM[m]).filter((v) => typeof v === "number" && v > 0);
+      const hasExpMonthly = expMList.length > 0;
+      const expMin = hasExpMonthly ? Math.min(...expMList) : null;
+      const expMax = hasExpMonthly ? Math.max(...expMList) : null;
+      const expRangeTxt = hasExpMonthly && Math.abs(expMax - expMin) >= 0.5
+        ? `${fmtDec(expMin, 0)}–${fmtDec(expMax, 0)}°`
+        : `${bonusT}°`;
       const wx = a.weather || {};
       const ins = a.insights || {};
       const fc = a.forecast || {};
@@ -802,30 +843,35 @@
             <div class="tb-actions">
               <button class="btn primary" id="efSyncBtn">🔄 Hent data nu</button>
             </div>
-            <div class="ob-step">💰 Pris &amp; Forventet returtemperatur (valgfrit — 0 = brug standard${backend === "eforsyning" ? " / E|Forsyning" : ""})</div>
-            <div class="ob-grid">
-              <label class="ob-field">Varmepris inkl. moms (kr./kWh)
-                <input id="efPriceInput" type="number" step="0.001" value="${esc(wizEfPrice)}" placeholder="f.eks. 0.705" />
-              </label>
-              <label class="ob-field">Motivation (% pr. °C)
-                <input id="efMotivPctInput" type="number" step="0.1" value="${esc(wizEfMotivPct)}" placeholder="f.eks. 1" />
-              </label>
-              <label class="ob-field">Forventet retur / Bonus (°C)
-                <input id="efBonusInput" type="number" step="0.5" value="${esc(wizEfBonus)}" placeholder="${backend === "eforsyning" ? "Auto fra E|Forsyning" : "f.eks. 37"}" />
-              </label>
-              <label class="ob-field">Gebyrgrænse (°C, tom = samme)
-                <input id="efPenaltyInput" type="number" step="0.5" value="${esc(wizEfPenalty)}" placeholder="Samme som forventet retur" />
-              </label>
-            </div>
-            <div class="tb-actions">
-              <button class="btn" id="saveTariffBtn">💾 Gem pris &amp; returkrav</button>
-            </div>
+            <details class="ob-manual" ${!isInitialSetup ? "open" : ""}>
+              <summary>⚙️ Valgfrit: Tilpas varmepris (kr./kWh) &amp; forventet returtemperatur</summary>
+              <div style="display:flex;flex-direction:column;gap:10px;margin-top:8px">
+                <div class="ob-note">Udfyld kun hvis du vil se estimeret forbrug i <b>kr./øre</b> eller overstyre ${backend === "eforsyning" ? "værkets / E|Forsynings" : "standard"} returgrænser (<code>0</code> = automatisk).</div>
+                <div class="ob-grid">
+                  <label class="ob-field">Varmepris inkl. moms (kr./kWh)
+                    <input id="efPriceInput" type="number" step="0.001" value="${esc(wizEfPrice)}" placeholder="f.eks. 0.705" />
+                  </label>
+                  <label class="ob-field">Motivation (% pr. °C)
+                    <input id="efMotivPctInput" type="number" step="0.1" value="${esc(wizEfMotivPct)}" placeholder="f.eks. 1" />
+                  </label>
+                  <label class="ob-field">Forventet retur / Bonus (°C)
+                    <input id="efBonusInput" type="number" step="0.5" value="${esc(wizEfBonus)}" placeholder="${backend === "eforsyning" ? "Auto fra E|Forsyning" : "f.eks. 37"}" />
+                  </label>
+                  <label class="ob-field">Gebyrgrænse (°C, tom = samme)
+                    <input id="efPenaltyInput" type="number" step="0.5" value="${esc(wizEfPenalty)}" placeholder="Samme som forventet retur" />
+                  </label>
+                </div>
+                <div class="tb-actions">
+                  <button class="btn" id="saveTariffBtn">💾 Gem pris &amp; returkrav</button>
+                </div>
+              </div>
+            </details>
           </div>`;
       const syncNudge = (syncReminder && !hasSyncMsg && syncReminderMsg)
         ? `<div class="sync-nudge" role="status"><span aria-hidden="true">💧</span><span>${esc(syncReminderMsg)}</span></div>`
         : "";
       const costHint = (!has("cost") && hasData && !isInitialSetup)
-        ? `<div class="sync-nudge" data-section="cost-hint"><span aria-hidden="true">💡</span><span>Vil du også se <b>kr./øre</b> og forventet returkrav?</span><button class="btn" id="costHintSetupBtn" style="margin-left:auto;padding:4px 10px">⚙️ Indtast pris &amp; returtemp</button></div>`
+        ? `<div class="src-note" data-section="cost-hint">💰 Har du din kWh-pris? <button class="link-btn" id="costHintSetupBtn">Tilføj pris &amp; returkrav ⚙️</button></div>`
         : "";
 
       this.shadowRoot.innerHTML = `
@@ -923,6 +969,7 @@
             background: rgba(245,158,11,0.16); border: 1px solid rgba(245,158,11,0.3);
           }
           .src-note { font-size: 12px; color: var(--secondary-text-color); margin-top: -6px; padding: 0 4px; }
+          .link-btn { background: none; border: none; padding: 0; font: inherit; font-weight: 700; color: #0284c7; cursor: pointer; text-decoration: underline; }
           .sync-nudge {
             display: flex; align-items: center; gap: 8px; margin-top: -6px;
             padding: 7px 12px; border-radius: 999px; font-size: 12.5px; font-weight: 600; line-height: 1.35;
@@ -999,6 +1046,7 @@
             .warn, .badge.warn, .bn-ico.amber { color: #fbbf24; }
             .bad, .bn-ico.red, .ob-live.red { color: #f87171; }
             .bn-ico.blue { color: #38bdf8; }
+            .link-btn { color: #38bdf8; }
           }
         </style>
         <div class="wrap">
@@ -1013,7 +1061,7 @@
                 ${!isInitialSetup ? `<button class="btn" id="resetSetupBtn">↺ Nulstil til 1.-gangs opsætning</button><button class="btn" id="closeSetupBtn">✕ Luk</button>` : ""}
               </div>
             </div>
-            <div class="ob-step">1. Vælg dit forsyningsselskab &amp; login-portal</div>
+            <div class="ob-step">1. Vælg dit forsyningsselskab &amp; MitID Bruger-ID</div>
             <div class="ob-grid">
               <label class="ob-field">Forsyningsselskab (KMD Easy Energy)
                 <select id="utilSel" aria-label="Select utility login">
@@ -1021,24 +1069,9 @@
                   <optgroup label="${esc(t.pending_grp)}">${pendingOpts}</optgroup>
                 </select>
               </label>
-              <label class="ob-field">Login-portal URL
+              ${activeUtilId === "custom" ? `<label class="ob-field">Login-portal URL
                 <input id="portalUrlInput" value="${esc(wizPortalUrl)}" />
-              </label>
-              <label class="ob-field">By / Lokation (Open-Meteo vejr)
-                <input id="locInput" value="${esc(wizLocation)}" />
-              </label>
-              <label class="ob-field">Retur Bonus / Gebyr (°C)
-                <div style="display:flex;gap:6px">
-                  <input id="bonusInput" type="number" step="0.5" value="${esc(wizBonus)}" style="width:50%" />
-                  <input id="penaltyInput" type="number" step="0.5" value="${esc(wizPenalty)}" style="width:50%" />
-                </div>
-              </label>
-              <label class="ob-field">Varmepris (kr./kWh) &amp; Motivation (%/°C)
-                <div style="display:flex;gap:6px">
-                  <input id="priceInput" type="number" step="0.001" value="${esc(wizPrice)}" placeholder="kr./kWh" style="width:50%" />
-                  <input id="motivPctInput" type="number" step="0.1" value="${esc(wizMotivPct)}" placeholder="%/°C" style="width:50%" />
-                </div>
-              </label>
+              </label>` : ""}
               <label class="ob-field">MitID Bruger-ID (gemmes kun lokalt i HA)
                 <input id="mitidUserInput" value="${esc(this._wizMitidUser || "")}" placeholder="${hasMitidUser ? `Gemt i HA (${esc(mitidMasked)}) — udfyld kun for at ændre` : "Indtast dit MitID Bruger-ID"}" />
               </label>
@@ -1046,6 +1079,29 @@
                 ${notifySelectHtml}
               </label>
             </div>
+            <details class="ob-manual" ${!isInitialSetup ? "open" : ""}>
+              <summary>⚙️ Avanceret (valgfrit): Varmepris (kr./kWh), returkrav &amp; lokation</summary>
+              <div class="ob-grid" style="margin-top:8px">
+                ${activeUtilId !== "custom" ? `<label class="ob-field">Login-portal URL
+                  <input id="portalUrlInput" value="${esc(wizPortalUrl)}" />
+                </label>` : ""}
+                <label class="ob-field">By / Lokation (Open-Meteo vejr)
+                  <input id="locInput" value="${esc(wizLocation)}" />
+                </label>
+                <label class="ob-field">Retur Bonus / Gebyr (°C)
+                  <div style="display:flex;gap:6px">
+                    <input id="bonusInput" type="number" step="0.5" value="${esc(wizBonus)}" style="width:50%" />
+                    <input id="penaltyInput" type="number" step="0.5" value="${esc(wizPenalty)}" style="width:50%" />
+                  </div>
+                </label>
+                <label class="ob-field">Varmepris (kr./kWh) &amp; Motivation (%/°C)
+                  <div style="display:flex;gap:6px">
+                    <input id="priceInput" type="number" step="0.001" value="${esc(wizPrice)}" placeholder="kr./kWh" style="width:50%" />
+                    <input id="motivPctInput" type="number" step="0.1" value="${esc(wizMotivPct)}" placeholder="%/°C" style="width:50%" />
+                  </div>
+                </label>
+              </div>
+            </details>
             <div class="ob-step">2. Forbind med 1-klik MitID-synkronisering (Anbefalet — 100% i Home Assistant)</div>
             <div class="ob-guide">
               <ol>
@@ -1219,12 +1275,13 @@
 
             ${has("temperatures") ? `<div class="panel" data-section="return-temp">
               <div class="p-head">
-                <div class="p-title">${singleReturnTarget ? `🎯 Returtemperatur ${curYr} (°C) vs. Forventet retur (${bonusT}°)${efExpectedRt !== null ? " · E|Forsyning" : ""}` : `🎯 Returtemperatur ${curYr} (°C) vs. Bonus (${bonusT}°) &amp; Gebyr (${penaltyT}°)`}</div>
+                <div class="p-title">${(singleReturnTarget || hasExpMonthly) ? `🎯 Returtemperatur ${curYr} (°C) vs. Forventet retur (${expRangeTxt})${(efExpectedRt !== null || hasExpMonthly) ? " · E|Forsyning" : ""}` : `🎯 Returtemperatur ${curYr} (°C) vs. Bonus (${bonusT}°) &amp; Gebyr (${penaltyT}°)`}</div>
                 <div class="p-leg">
-                  ${singleReturnTarget ? `<span><i class="dot" style="background:#22c55e"></i>Under ${bonusT}° (bonus)</span><span><i class="dot" style="background:#ef4444"></i>Over ${penaltyT}° (gebyr)</span>` : `<span><i class="dot" style="background:#22c55e"></i>Bonus &lt;${bonusT}°</span><span><i class="dot" style="background:#f59e0b"></i>Neutral</span><span><i class="dot" style="background:#ef4444"></i>Gebyr &gt;${penaltyT}°</span>`}
+                  ${(singleReturnTarget || hasExpMonthly) ? `<span><i class="dot" style="background:#22c55e"></i>Under krav (bonus)</span><span><i class="dot" style="background:#ef4444"></i>Over krav (gebyr)</span>` : `<span><i class="dot" style="background:#22c55e"></i>Bonus &lt;${bonusT}°</span><span><i class="dot" style="background:#f59e0b"></i>Neutral</span><span><i class="dot" style="background:#ef4444"></i>Gebyr &gt;${penaltyT}°</span>`}
+                  ${expMList.length >= 2 ? `<span><i class="dot" style="background:#38bdf8"></i>Forventet retur °C</span>` : ""}
                 </div>
               </div>
-              ${this._renderReturnTempSvg(rtM, bonusT, penaltyT, curYr)}
+              ${this._renderReturnTempSvg(rtM, bonusT, penaltyT, curYr, rtExpM)}
             </div>` : ""}
           </div>` : ""}
 

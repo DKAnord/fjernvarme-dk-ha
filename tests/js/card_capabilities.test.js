@@ -88,12 +88,14 @@ html = card.shadowRoot.innerHTML;
 assert.ok(!sections(html).includes("return-temp") && !sections(html).includes("ins-temp"), "temp sections hidden");
 assert.ok(!html.includes("Bonus-zone") && !html.includes("Grænser:"), "temp KPI hidden");
 
-// 4) E|Forsyning first-time setup: simple onboarding, no MitID wizard.
+// 4) E|Forsyning first-time setup: simple onboarding, no MitID wizard, optional tariff section collapsed.
 calls = [];
 card = render(Object.assign({}, EF_ATTRS, { initial_setup_complete: false, annual: {}, monthly: {}, daily: {} }), calls);
 html = card.shadowRoot.innerHTML;
 assert.ok(html.includes('id="efSyncBtn"'), "E|Forsyning onboarding button");
 assert.ok(!html.includes('id="mitidUserInput"') && !html.includes("startMitidBtn"), "no MitID wizard");
+assert.ok(html.includes('<details class="ob-manual" >') || html.includes('<details class="ob-manual">'), "optional tariff fields collapsed for casual onboarding");
+assert.ok(!html.includes('<details class="ob-manual" open>'), "not expanded during initial onboarding");
 card.shadowRoot.getElementById("efSyncBtn").listeners.click();
 assert.deepStrictEqual(calls.pop()[1], "sync");
 
@@ -162,9 +164,11 @@ card = render(Object.assign({}, EF_ATTRS, {
 html = card.shadowRoot.innerHTML;
 assert.ok(html.includes('id="costHintSetupBtn"'), "shows price & expected return hint when cost capability absent");
 assert.ok(html.includes("Forventet retur (37°)"), "single-target return temp chart title");
+assert.ok(!html.includes('data-role="expected-return-curve"'), "no curve when expected_monthly data is absent");
 assert.ok(!/MitID/.test(html), "no MitID wording on E|Forsyning view");
 card.shadowRoot.getElementById("costHintSetupBtn").listeners.click();
 html = card.shadowRoot.innerHTML;
+assert.ok(html.includes('<details class="ob-manual" open>'), "settings details auto-opens when user clicks customize");
 assert.ok(html.includes('id="efPriceInput"') && html.includes('id="efBonusInput"') && html.includes('id="efMotivPctInput"') && html.includes('id="saveTariffBtn"'), "shows quick price & expected return form");
 assert.ok(!/MitID/.test(html), "no MitID wording in E|Forsyning settings panel");
 card.shadowRoot.getElementById("efPriceInput").value = "0.705";
@@ -183,5 +187,38 @@ assert.deepStrictEqual(calls.pop(), [
     penalty_temp: 37,
   },
 ]);
+
+// 11) Multi-month Forv_Retur curve renders ONLY when expected_monthly data exists and user hasn't overridden thresholds.
+calls = [];
+card = render(Object.assign({}, EF_ATTRS, {
+  utility_id: "middelfart-fjernvarme",
+  utility: "Middelfart Fjernvarme",
+  bonus_temp: 35,
+  penalty_temp: 35,
+  expected_return_temp: 35,
+  expected_return_auto: true,
+  return_temp: {
+    annual: { "2026": 34.0 },
+    monthly_2026: { Jan: 32.0, Feb: 35.0, Nov: 38.0 },
+    expected_monthly_2026: { Jan: 33.0, Feb: 34.0, Nov: 37.0 },
+  },
+}), calls);
+html = card.shadowRoot.innerHTML;
+assert.ok(html.includes('data-role="expected-return-curve"'), "draws monthly Forv_Retur curve when data exists");
+assert.ok(html.includes("33–37°"), "title shows Forv_Retur range");
+assert.ok(html.includes("krav 37,0 °C"), "bar tooltip includes monthly expected return target");
+
+// Advanced user override in card config hides the auto curve.
+const cardOverride = new Card();
+cardOverride.setConfig({ bonus_temp: 35, penalty_temp: 35 });
+cardOverride.hass = mkHass(Object.assign({}, EF_ATTRS, {
+  expected_return_auto: true,
+  return_temp: {
+    annual: { "2026": 34.0 },
+    monthly_2026: { Jan: 32.0, Feb: 35.0, Nov: 38.0 },
+    expected_monthly_2026: { Jan: 33.0, Feb: 34.0, Nov: 37.0 },
+  },
+}), []);
+assert.ok(!cardOverride.shadowRoot.innerHTML.includes('data-role="expected-return-curve"'), "curve hidden when user explicitly overrides thresholds");
 
 console.log("card_capabilities.test.js: OK");

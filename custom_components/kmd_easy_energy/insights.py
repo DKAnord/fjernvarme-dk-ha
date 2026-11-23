@@ -416,6 +416,7 @@ def estimate_variable_costs(
     return_temp_monthly: dict[str, Any] | None,
     today: date | None = None,
     max_pct: float | None = None,
+    expected_return_monthly: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Estimate variable heating cost in DKK (excl. fixed fees) across all backends."""
     if price_dkk_per_kwh is None or price_dkk_per_kwh <= 0:
@@ -445,11 +446,22 @@ def estimate_variable_costs(
             continue
         raw_rt = rt_map.get(label)
         m_rt = float(raw_rt) if isinstance(raw_rt, (int, float)) else current_return_temp
+        raw_exp = (expected_return_monthly or {}).get(label)
+        if (
+            isinstance(raw_exp, (int, float))
+            and not isinstance(raw_exp, bool)
+            and float(raw_exp) > 0
+        ):
+            m_bonus = float(raw_exp)
+            m_penalty = float(raw_exp)
+        else:
+            m_bonus = bonus_temp
+            m_penalty = penalty_temp
         m_adj = (
             motivation_dkk_per_kwh(
                 m_rt,
-                bonus_temp,
-                penalty_temp,
+                m_bonus,
+                m_penalty,
                 motivation_rate,
                 max_dkk_per_kwh=max_adj,
             )

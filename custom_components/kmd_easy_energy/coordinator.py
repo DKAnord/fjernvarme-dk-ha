@@ -324,6 +324,7 @@ _CONSUMPTION_CACHE_KEYS = (
     "return_temp",
     "daily_expected_return_temp",
     "expected_return_temp",
+    "expected_return_auto",
     "latest_reading",
     "statistics_imported_on",
     "statistics_imported",
@@ -870,6 +871,26 @@ class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         state["bonus_temp"] = tariff.bonus_temp
         state["penalty_temp"] = tariff.penalty_temp
         state["expected_return_temp"] = ef_expected_rt
+        raw_b = self.entry.options.get(CONF_BONUS_TEMP)
+        if raw_b is None:
+            raw_b = self.entry.data.get(CONF_BONUS_TEMP)
+        raw_p = self.entry.options.get(CONF_PENALTY_TEMP)
+        if raw_p is None:
+            raw_p = self.entry.data.get(CONF_PENALTY_TEMP)
+        user_overrode_rt = False
+        for raw_v in (raw_b, raw_p):
+            try:
+                if raw_v is not None and float(raw_v) > 0:
+                    user_overrode_rt = True
+            except (TypeError, ValueError):
+                pass
+        expected_return_auto = bool(ef_expected_rt is not None and not user_overrode_rt)
+        state["expected_return_auto"] = expected_return_auto
+        exp_monthly = (
+            (state.get("return_temp") or {}).get(f"expected_monthly_{today.year}")
+            if expected_return_auto
+            else None
+        )
         state["energy_price_dkk_per_kwh"] = tariff.price_dkk_per_kwh
         state["volume_price_dkk_per_m3"] = tariff.price_dkk_per_m3
 
@@ -916,6 +937,7 @@ class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             return_temp_monthly=(state.get("return_temp") or {}).get(f"monthly_{today.year}"),
             today=today,
             max_pct=tariff.motivation_max_pct,
+            expected_return_monthly=exp_monthly,
         )
         daily_kwh = daily_kwh_from_history(
             state.get("daily_kwh_history"),

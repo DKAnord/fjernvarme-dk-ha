@@ -193,3 +193,22 @@ def test_estimate_variable_costs_respects_motivation_max_pct_cap() -> None:
     assert penalty_capped["adjustment_pct"] == 20.0
     assert penalty_capped["effective_price_dkk_per_kwh"] == 1.2
     assert penalty_capped["latest_day_dkk"] == 120
+
+
+def test_estimate_variable_costs_uses_per_month_expected_return_when_present() -> None:
+    est = estimate_variable_costs(
+        price_dkk_per_kwh=1.0,
+        bonus_temp=36.0,
+        penalty_temp=36.0,
+        motivation_rate=0.01,  # 1%/°C
+        current_return_temp=35.0,
+        daily={"days": {"21": 100.0}, "latest_complete": True, "month": "Nov"},
+        monthly_cur_year={"Jan": 1000.0, "Jul": 1000.0, "Aug": 1000.0},
+        return_temp_monthly={"Jan": 35.0, "Jul": 35.0, "Aug": 35.0},
+        expected_return_monthly={"Jan": 33.0, "Jul": 39.0},  # Aug falls back to 36.0
+        today=date(2026, 11, 23),
+        max_pct=20.0,
+    )
+    # Jan: 35° vs 33° (+2° penalty -> +2% = 1020), Jul: 35° vs 39° (-4° bonus -> -4% = 960),
+    # Aug: 35° vs fallback 36° (-1° bonus -> -1% = 990)
+    assert est["monthly_dkk"] == {"Jan": 1020, "Jul": 960, "Aug": 990}

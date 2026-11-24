@@ -2,6 +2,18 @@
 
 Alle væsentlige ændringer i **Dansk Fjernvarme** (tidligere *Fjernvarme (KMD Easy Energy)*) dokumenteres her.
 
+## [1.2.3] - 2026-11-24
+
+### Forbedret
+- **Desktop (`>= 1280px`) & ultrawide (`>= 1600px`) dashboard-layout (`custom:kmd-easy-energy-card`):**
+  - Begrænset kortets maksimale bredde (`max-width: 1480px`), rettet 3+1-ombrydning i KPI-kort og de 4 vejrkorrelerede indsigter (`.insights`) når Home Assistants sidemenu er åben på desktop, og gjort `.bn-main`-klikfladen skarp uden utilsigtede klik på tom plads.
+  - Samlet alle aktive SVG-grafer i én `.grid2`: 4-grafs opsætninger uden timedata (f.eks. E|Forsyning) vises nu i et balanceret 2×2-gitter, mens 5-grafs opsætninger (KMD / Watts On) giver den 5. fuldbredde-graf (*Dagligt forbrug*) et bredt `960×220` `viewBox` med fulde dagsnumre og matchende højde på desktop.
+- **Graf-læsbarhed, tema-kontrast & flydende værktøjstip:**
+  - Tilføjet flydende desktop-tooltip (`#floatTip`) ved hover/fokus direkte over søjler og temperaturpunkter (ud over mobil-linjen `#tip`).
+  - Forbedret kontrast i både lyst og mørkt Home Assistant-tema for aksetekster (`.ax`, `.ax-t`, `.ax-bonus`, `.ax-penalty`), tal-glorier (`.val`), kortrammer (`--ha-card-border-color`) og udeblevne linjeskift i signaturforklaringer (`.p-leg span`).
+- **Indstillinger (⚙️), MitID QR/OTP & tastaturnavigation:**
+  - Centreret MitID QR/OTP-boksen (`max-width: 540px`, `aria-live="polite"`), erstattet overflydende `50%`-inputpar med CSS Grid `.ob-pair`, adskilt `<label for="notifySel">` fra brugerdefineret notify-felt samt tilføjet fuld tastaturbetjening (`Enter`/`Space` på synkroniseringsbanner, `tabindex="0"` på grafelementer, `:focus-visible`-rammer, `Escape` til at lukke indstillinger og `Enter` til at gemme/starte MitID).
+
 ## [1.2.2] - 2026-11-24
 
 ### Rettet

@@ -756,12 +756,22 @@
       );
       const freshText = retrievedLbl + (maxDay !== null ? ` · Data t.o.m. ${maxDay}. ${moLbl}${isPartial ? " (delvis)" : ""}` : "");
 
-      const activeUtilId = this._selectedUtilId || cfg.utility_id || a.utility_id || "kredslob";
+      const normPortal = (u) => String(u || "").trim().replace(/\/+$/, "").toLowerCase();
+      const rawUtilId = this._selectedUtilId || cfg.utility_id || a.utility_id || "kredslob";
+      const rawPortalUrl = cfg.portal_url || a.portal_url || "";
+      const portalMatch = (rawUtilId === "eforsyning-custom" || rawUtilId === "custom") && rawPortalUrl
+        ? UTILITIES.find((u) => u.url && normPortal(u.url) === normPortal(rawPortalUrl))
+        : null;
+      const activeUtilId = portalMatch ? portalMatch.id : rawUtilId;
       const activeUtil = UTILITIES.find((u) => u.id === activeUtilId)
         || (a.utility ? { id: activeUtilId, name: a.utility, city: a.location || "", url: a.portal_url || "", status: a.utility_status || "pending_test", backend } : UTILITIES[0]);
       const activePortalUrl = cfg.portal_url || a.portal_url || activeUtil.url;
       const locName = cfg.location || a.location || activeUtil.city || "Lokal";
-      const utilStatus = a.utility_status || activeUtil.status;
+      const utilStatus = portalMatch
+        ? portalMatch.status
+        : (activeUtil?.id === activeUtilId && activeUtil?.status === "confirmed"
+          ? "confirmed"
+          : (a.utility_status || activeUtil.status));
       const statusBadge = utilStatus === "confirmed" ? t.confirmed : t.pending;
 
       // The MitID wizard only lists KMD utilities (E|Forsyning / Watts On are set up in HA's config flow).
@@ -860,6 +870,15 @@
       const wxHasTemps = Object.keys(wx.monthly_temp || {}).length > 0 || Object.keys(wx.daily_temp || {}).length > 0;
       const tempTxt = (has("monthly") || has("daily")) && wxHasTemps ? outdoorTempText(a, lang) : "";
       const tempSourceNote = tempTxt ? `<div class="src-note temp-src" data-section="temp-source">🌡️ ${esc(tempTxt)}</div>` : "";
+      const feedbackFooter = `
+            <div class="fb-foot">
+              <span>📣 <b>Feedback om værker:</b> Virker <b>${esc(activeUtil.name)}</b> (uden persondata)?</span>
+              <div class="bn-btns">
+                <button class="btn primary" id="obFbGithubBtn">✅ Bekræft værk på GitHub ↗</button>
+                <button class="btn" id="obFbIssueBtn">🐞 Fejlmeld værk ↗</button>
+                <button class="btn" id="obFbCopyBtn">${this._fbCopied ? "✅ Kopieret!" : "📋 Kopiér teknisk rapport"}</button>
+              </div>
+            </div>`;
       const efOnboard = `
           <div class="onboard" id="onboardCard">
             <div class="ob-head">
@@ -898,7 +917,7 @@
                   <button class="btn" id="saveTariffBtn">💾 Gem pris &amp; returkrav</button>
                 </div>
               </div>
-            </details>
+            </details>${feedbackFooter}
           </div>`;
       const syncNudge = (syncReminder && !hasSyncMsg && syncReminderMsg)
         ? `<div class="sync-nudge" role="status"><span aria-hidden="true">💧</span><span>${esc(syncReminderMsg)}</span></div>`
@@ -1217,15 +1236,7 @@
               <div style="margin-top:8px">
                 <button class="btn primary" id="saveTokenBtn">▶️ Synkroniser én gang med token</button>
               </div>
-            </details>
-            <div class="fb-foot">
-              <span>📣 <b>Feedback om værker:</b> Virker <b>${esc(activeUtil.name)}</b> (uden persondata)?</span>
-              <div class="bn-btns">
-                <button class="btn primary" id="obFbGithubBtn">✅ Bekræft værk på GitHub ↗</button>
-                <button class="btn" id="obFbIssueBtn">🐞 Fejlmeld værk ↗</button>
-                <button class="btn" id="obFbCopyBtn">${this._fbCopied ? "✅ Kopieret!" : "📋 Kopiér teknisk rapport"}</button>
-              </div>
-            </div>
+            </details>${feedbackFooter}
           </div>` : `
           <div class="banner">
             <div class="bn-main" id="syncTap" role="button" tabindex="0" title="Tryk for at synkronisere">
@@ -1692,7 +1703,17 @@
         .trim()
         .slice(0, 140);
       const buildFeedbackBody = (kind) => {
-        const units = Array.isArray(a.available_units) ? a.available_units.map((u) => u.Name).filter(Boolean).join(", ") : "ukendt";
+        const listedUnits = Array.isArray(a.available_units)
+          ? a.available_units.map((u) => u.Name).filter(Boolean)
+          : [];
+        const inferredUnits = [];
+        if (!listedUnits.length) {
+          if (yCur > 0 || yPrev > 0 || Object.keys(dy.days || {}).length > 0) inferredUnits.push("kWh");
+          if (has("volume")) inferredUnits.push("m3");
+          if (has("temperatures") || rtCur > 0) inferredUnits.push("°C");
+        }
+        const units = (listedUnits.length ? listedUnits : inferredUnits).join(", ")
+          || (Array.isArray(a.available_units) ? "none" : "ukendt");
         const authMethodLabel = backend === "wattson"
           ? "Watts On (OAuth PKCE)"
           : backend === "eforsyning"

@@ -4,7 +4,11 @@ Alle væsentlige ændringer i **Dansk Fjernvarme** (tidligere *Fjernvarme (KMD E
 
 ## [1.2.3] - 2026-11-24
 
+### Tilføjet
+- **Hadsund Fjernvarme Takstblad 2026 ([issue #32](https://github.com/DKAnord/fjernvarme-dk-ha/issues/32)):** Indbygget officiel 2026-takst (`0,62938 kr./kWh` inkl. moms inkl. NOx-afgift og `±2 %/°C` motivationstarif under `30 °C` / over `40 °C` fra [Takstblad-2026.pdf](https://hadsundfjernvarme.dk/p/Hadsund%20Fjernvarme/Priser/Takstblad-2026.pdf)).
+
 ### Forbedret
+- **Automatisk opgradering af `eforsyning-custom` & `available_units`-rapportering ([issue #32](https://github.com/DKAnord/fjernvarme-dk-ha/issues/32)):** Eksisterende `eforsyning-custom`-opsætninger matches nu automatisk på `eforsyning_supplier_id` eller `portal_url` mod `utilities.json` (og kortets indbyggede værkliste), så de automatisk får ✅ **Bekræftet**-status, værkets standardtakster og bynavn uden genopsætning. Samtidig udfylder både `eforsyning_mapping.py` og `wattson_mapping.py` nu `available_units` (`kWh`, `m3`, `°C`), og dashboard-kortets feedback-rapport udleder enheder fra indlæste data som fallback.
 - **Desktop (`>= 1280px`) & ultrawide (`>= 1600px`) dashboard-layout (`custom:kmd-easy-energy-card`):**
   - Begrænset kortets maksimale bredde (`max-width: 1480px`), rettet 3+1-ombrydning i KPI-kort og de 4 vejrkorrelerede indsigter (`.insights`) når Home Assistants sidemenu er åben på desktop, og gjort `.bn-main`-klikfladen skarp uden utilsigtede klik på tom plads.
   - Samlet alle aktive SVG-grafer i én `.grid2`: 4-grafs opsætninger uden timedata (f.eks. E|Forsyning) vises nu i et balanceret 2×2-gitter, mens 5-grafs opsætninger (KMD / Watts On) giver den 5. fuldbredde-graf (*Dagligt forbrug*) et bredt `960×220` `viewBox` med fulde dagsnumre og matchende højde på desktop.

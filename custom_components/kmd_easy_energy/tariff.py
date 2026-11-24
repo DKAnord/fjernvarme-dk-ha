@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
@@ -13,10 +14,12 @@ from homeassistant.config_entries import ConfigEntry
 
 from .const import (
     CONF_BONUS_TEMP,
+    CONF_EF_SUPPLIER_ID,
     CONF_MOTIVATION_DKK_PER_KWH_PER_K,
     CONF_MOTIVATION_PCT_PER_K,
     CONF_NORMAL_HDD_YEAR,
     CONF_PENALTY_TEMP,
+    CONF_PORTAL_URL,
     CONF_PRICE_DKK_PER_KWH,
     CONF_PRICE_DKK_PER_M3,
     CONF_UTILITY_ID,
@@ -59,6 +62,62 @@ def load_utilities() -> list[dict[str, Any]]:
         _LOGGER.warning("Could not load utilities.json: %s", err)
         _UTILITIES_CACHE = []
     return _UTILITIES_CACHE
+
+
+def cached_utilities() -> list[dict[str, Any]] | None:
+    """Return the already-loaded utilities cache without disk I/O."""
+    return _UTILITIES_CACHE
+
+
+_GENERIC_UTILITY_IDS = ("custom", "eforsyning-custom")
+_GENERIC_PORTAL_URLS = {"https:", "http:", "https://eforsyning.dk", "http://eforsyning.dk"}
+
+
+def _norm_portal_url(url: Any) -> str:
+    return str(url or "").strip().rstrip("/").lower()
+
+
+def match_utility_for_entry(
+    entry_data: Mapping[str, Any],
+    utilities: list[dict[str, Any]] | None = None,
+) -> dict[str, Any] | None:
+    """Resolve an entry's utility preset, upgrading generic custom entries when known."""
+    utilities = utilities if utilities is not None else load_utilities()
+    utility_id = str(entry_data.get(CONF_UTILITY_ID) or "kredslob").strip() or "kredslob"
+    if utility_id not in _GENERIC_UTILITY_IDS:
+        direct = next((u for u in utilities if u.get("id") == utility_id), None)
+        if direct is not None:
+            return direct
+
+    supplier_id = str(entry_data.get(CONF_EF_SUPPLIER_ID) or "").strip().lower()
+    if supplier_id:
+        by_supplier = next(
+            (
+                u
+                for u in utilities
+                if u.get("id") not in _GENERIC_UTILITY_IDS
+                and str(u.get("eforsyning_supplier_id") or "").strip().lower() == supplier_id
+            ),
+            None,
+        )
+        if by_supplier is not None:
+            return by_supplier
+
+    portal_url = _norm_portal_url(entry_data.get(CONF_PORTAL_URL))
+    if portal_url and portal_url not in _GENERIC_PORTAL_URLS:
+        by_portal = next(
+            (
+                u
+                for u in utilities
+                if u.get("id") not in _GENERIC_UTILITY_IDS
+                and _norm_portal_url(u.get("portal_url")) == portal_url
+            ),
+            None,
+        )
+        if by_portal is not None:
+            return by_portal
+
+    return next((u for u in utilities if u.get("id") == utility_id), None)
 
 
 def published_tariff(
@@ -104,7 +163,10 @@ def resolve_tariff(
 ) -> ResolvedTariff:
     """Options override published defaults; zero/empty option means "use default"."""
     today = today or copenhagen_today()
-    utility_id = str(entry.data.get(CONF_UTILITY_ID) or "kredslob")
+    matched = match_utility_for_entry(entry.data, utilities)
+    utility_id = str(
+        (matched or {}).get("id") or entry.data.get(CONF_UTILITY_ID) or "kredslob"
+    )
     published = published_tariff(utility_id, today.year, utilities)
 
     def _published_pos(key: str) -> float | None:

@@ -460,8 +460,20 @@
       "eforsyning_supplier_id": "49C73776-76BE-4382-BA5C-2B4E7384CC34",
       "latitude": 56.716,
       "longitude": 10.117,
-      "notes": "E|Forsyning. forsyningid og AppServerUri (https://apiapp.dff-edb.dk/hdsfv/) bekræftet live i issue #16 af @cokeman0. Login med forbrugernummer + webpinkode fra regningen; daglige aflæsninger.",
-      "tariffs": []
+      "notes": "E|Forsyning. forsyningid og AppServerUri (https://apiapp.dff-edb.dk/hdsfv/) bekræftet live i issue #16 og #32 af @cokeman0. Login med forbrugernummer + webpinkode fra regningen; daglige aflæsninger. Takstblad 2026: 629,38 kr./MWh inkl. moms og ±2 %/°C motivationstarif (< 30 °C / > 40 °C).",
+      "tariffs": [
+        {
+          "year": 2026,
+          "effective_from": "2026-01-01",
+          "price_dkk_per_kwh": 0.62938,
+          "price_dkk_per_m3": null,
+          "motivation_pct_per_k": 2.0,
+          "bonus_temp": 30.0,
+          "penalty_temp": 40.0,
+          "source": "https://hadsundfjernvarme.dk/p/Hadsund%20Fjernvarme/Priser/Takstblad-2026.pdf",
+          "source_note": "Takstblad 2026: Variabelt bidrag 629,38 kr./MWh inkl. moms (626,68 kr./MWh + 2,70 kr./MWh NOx-afgift; 503,50 kr./MWh ekskl. moms) = 0,62938 kr./kWh. Motivationstarif: -2 % pr. °C under 30 °C og +2 % pr. °C over 40 °C (ved fremløb >= 60 °C)."
+        }
+      ]
     },
     {
       "id": "solrod-fjernvarme",

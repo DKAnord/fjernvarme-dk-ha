@@ -290,4 +290,29 @@ assert.ok(wizHtml.includes('class="ob-pair"'), ".ob-pair class rendered");
 kmdWide.shadowRoot.getElementById("onboardCard").listeners.keydown({ key: "Escape", preventDefault() {} });
 assert.strictEqual(kmdWide._setupOpen, false, "Escape closes settings dialog");
 
+// 14) Legacy eforsyning-custom entry with Hadsund portal URL upgrades to confirmed preset and infers discovered units in feedback.
+const customHadsund = render({
+  backend: "eforsyning",
+  data_source: "E|Forsyning",
+  utility: "Hadsund Fjernvarme a.m.b.a.",
+  utility_id: "eforsyning-custom",
+  utility_status: "pending_test",
+  portal_url: "https://eforsyning.dk/hadsundfjernvarme/",
+  available_units: [],
+  capabilities: ["auto_sync", "cost", "daily", "monthly", "temperatures", "volume"],
+  return_temp: { annual: { "2026": 31.2 }, monthly_2026: { Nov: 31.2 } },
+}, []);
+const chHtml = customHadsund.shadowRoot.innerHTML;
+assert.ok(chHtml.includes("✅ Bekræftet"), "eforsyning-custom with Hadsund portal URL resolves to confirmed badge");
+assert.ok(!chHtml.includes('id="fbGithubBtn"'), "unconfirmed feedback bar is hidden once upgraded to confirmed");
+customHadsund.shadowRoot.getElementById("openSetupBtn").listeners.click();
+let openedIssueUrl = "";
+const prevOpen = global.window.open;
+global.window.open = (u) => { openedIssueUrl = u; };
+customHadsund.shadowRoot.getElementById("obFbGithubBtn").listeners.click();
+global.window.open = prevOpen;
+const decodedIssue = decodeURIComponent(openedIssueUrl);
+assert.ok(decodedIssue.includes("Utility ID:** `hadsund-fjernvarme`"), "feedback report upgrades eforsyning-custom ID to hadsund-fjernvarme");
+assert.ok(decodedIssue.includes("Discovered Units:** kWh, m3, °C"), "feedback report infers units when available_units is empty");
+
 console.log("card_capabilities.test.js: OK");

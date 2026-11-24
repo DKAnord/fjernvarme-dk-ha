@@ -237,4 +237,12 @@ def apply_daily_readings(
     state["hourly"] = {}
     state["has_direct_temp"] = False
     state["data_granularity"] = "daily"
+    units: list[dict[str, str]] = []
+    if kwh:
+        units.append({"Name": "kWh"})
+    if m3:
+        units.append({"Name": "m3"})
+    if temps or fwd:
+        units.append({"Name": "°C"})
+    state["available_units"] = units
     return state

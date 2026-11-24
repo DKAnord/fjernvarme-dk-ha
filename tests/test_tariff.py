@@ -167,3 +167,52 @@ def test_bundled_utilities_json_has_middelfart_2026_tariff_and_expected_return()
     assert explicit.bonus_temp == 35.0 and explicit.penalty_temp == 35.0
     assert explicit.motivation_pct_per_k == 2.0
     assert explicit.motivation_dkk_per_kwh_per_k == 0.02
+
+
+def test_bundled_utilities_json_has_hadsund_2026_tariff_and_custom_matching() -> None:
+    from kmd_easy_energy.tariff import load_utilities, match_utility_for_entry
+
+    utilities = load_utilities()
+    bundled = published_tariff("hadsund-fjernvarme", 2026, utilities)
+    assert bundled is not None
+    assert bundled["price_dkk_per_kwh"] == 0.62938
+    assert bundled["motivation_pct_per_k"] == 2.0
+    assert bundled["bonus_temp"] == 30.0
+    assert bundled["penalty_temp"] == 40.0
+    assert bundled["source"].startswith("https://hadsundfjernvarme.dk/")
+
+    by_supplier = match_utility_for_entry(
+        {
+            "utility_id": "eforsyning-custom",
+            "eforsyning_supplier_id": "49c73776-76be-4382-ba5c-2b4e7384cc34",
+            "portal_url": "https://eforsyning.dk/",
+        },
+        utilities,
+    )
+    assert by_supplier is not None and by_supplier["id"] == "hadsund-fjernvarme"
+
+    by_portal = match_utility_for_entry(
+        {
+            "utility_id": "eforsyning-custom",
+            "portal_url": "https://eforsyning.dk/hadsundfjernvarme",
+        },
+        utilities,
+    )
+    assert by_portal is not None and by_portal["id"] == "hadsund-fjernvarme"
+
+    resolved = resolve_tariff(
+        _entry(
+            data={
+                "utility_id": "eforsyning-custom",
+                "eforsyning_supplier_id": "49C73776-76BE-4382-BA5C-2B4E7384CC34",
+                "portal_url": "https://eforsyning.dk/hadsundfjernvarme/",
+            }
+        ),
+        today=date(2026, 11, 24),
+        utilities=utilities,
+    )
+    assert resolved.utility_id == "hadsund-fjernvarme"
+    assert resolved.price_dkk_per_kwh == 0.62938
+    assert resolved.motivation_pct_per_k == 2.0
+    assert resolved.motivation_dkk_per_kwh_per_k == round(0.62938 * 0.02, 6)
+    assert resolved.bonus_temp == 30.0 and resolved.penalty_temp == 40.0

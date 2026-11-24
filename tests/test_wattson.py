@@ -416,6 +416,7 @@ def test_mapping_hourly_daily_temps_and_detection() -> None:
     assert s["return_temp"]["monthly_2026"]["Nov"] == 32.0
     assert s["latest_reading"]["temp_return"] == 32.0
     assert s["wattson"]["detected"] == ["daily", "hourly", "monthly", "temperatures", "volume"]
+    assert [u["Name"] for u in s["available_units"]] == ["kWh", "m3", "°C"]
     assert s["wattson"]["endpoint"] == "x" and s["wattson"]["energy_unit"] == "kWh"
     caps = effective_capabilities("wattson", s, reminder_enabled=False, auto_sync_enabled=True)
     assert {"hourly", "daily", "monthly", "temperatures", "volume", "auto_sync"} <= set(caps)
@@ -425,6 +426,7 @@ def test_mapping_hourly_daily_temps_and_detection() -> None:
 def test_mapping_only_energy_known_hides_temps_and_volume() -> None:
     s = _mapped(fx.heat_items(3, vol=None, ft=None, rt=None))
     assert s["wattson"]["detected"] == ["daily", "hourly", "monthly"]
+    assert [u["Name"] for u in s["available_units"]] == ["kWh"]
     caps = effective_capabilities("wattson", s)
     assert "temperatures" not in caps and "volume" not in caps and "hourly" in caps
     assert s["hourly_temp"] == [] and s["has_direct_temp"] is False

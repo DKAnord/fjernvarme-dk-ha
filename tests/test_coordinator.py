@@ -529,3 +529,21 @@ def test_coordinator_uses_async_get_time_zone_instead_of_zoneinfo() -> None:
     assert "zoneinfo" not in src
     assert "ZoneInfo(" not in src
     assert 'await dt_util.async_get_time_zone("Europe/Copenhagen")' in src
+
+
+@pytest.mark.asyncio
+async def test_initialize_cache_upgrades_eforsyning_custom_to_confirmed_utility(tmp_path: Path) -> None:
+    coord, _, _, _ = make_coordinator(
+        tmp_path,
+        store=FakeStore({}),
+        backend="eforsyning",
+        utility="Hadsund Fjernvarme a.m.b.a.",
+        utility_id="eforsyning-custom",
+        utility_status="pending_test",
+        portal_url="https://eforsyning.dk/hadsundfjernvarme/",
+        eforsyning_supplier_id="49C73776-76BE-4382-BA5C-2B4E7384CC34",
+    )
+    state = await coord.async_initialize_cache()
+    assert state["utility_id"] == "hadsund-fjernvarme"
+    assert state["utility_status"] == "confirmed"
+    assert state["location"] == "Hadsund"

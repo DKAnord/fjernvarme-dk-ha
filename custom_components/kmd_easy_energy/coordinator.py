@@ -118,7 +118,7 @@ from .insights import (
 )
 from .statistics import import_hourly_statistics
 from .sync_reminder import compute_sync_reminder, parse_last_sync
-from .tariff import load_utilities, resolve_tariff
+from .tariff import cached_utilities, load_utilities, match_utility_for_entry, resolve_tariff
 from .util import (
     cache_has_sensor_data,
     delete_legacy_www_cache,
@@ -601,6 +601,7 @@ class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     delete_legacy_www_cache, self._legacy_paths
                 )
         state = sanitize_cache(state or {})
+        await self.hass.async_add_executor_job(load_utilities)
         self._load_last_sync(state)
         state.update(self._base_meta())
         if self._initial_setup_complete is None:
@@ -718,10 +719,28 @@ class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             or self.entry.data.get(CONF_NOTIFY_SERVICE)
             or ""
         ).strip()
+        raw_utility_id = str(self.entry.data.get(CONF_UTILITY_ID, "kredslob")).strip() or "kredslob"
+        utility_id = raw_utility_id
+        utility_status = str(self.entry.data.get(CONF_UTILITY_STATUS, "confirmed") or "confirmed")
+        cached = cached_utilities()
+        matched = match_utility_for_entry(self.entry.data, cached) if cached is not None else None
+        if matched:
+            matched_id = str(matched.get("id") or "").strip()
+            if raw_utility_id in ("custom", "eforsyning-custom") and matched_id not in (
+                "",
+                "custom",
+                "eforsyning-custom",
+            ):
+                utility_id = matched_id
+                utility_status = str(matched.get("status") or "confirmed")
+            elif matched.get("status") == "confirmed" and utility_status == "pending_test":
+                utility_status = "confirmed"
+            if not location and matched.get("city"):
+                location = str(matched["city"])
         return {
             "utility": self.entry.data.get(CONF_UTILITY) or self.entry.title or "KMD Easy Energy",
-            "utility_id": self.entry.data.get(CONF_UTILITY_ID, "kredslob"),
-            "utility_status": self.entry.data.get(CONF_UTILITY_STATUS, "confirmed"),
+            "utility_id": utility_id,
+            "utility_status": utility_status,
             "portal_url": self._portal_url,
             "location": location,
             "bonus_temp": float(

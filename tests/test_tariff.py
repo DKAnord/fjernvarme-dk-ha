@@ -216,3 +216,20 @@ def test_bundled_utilities_json_has_hadsund_2026_tariff_and_custom_matching() ->
     assert resolved.motivation_pct_per_k == 2.0
     assert resolved.motivation_dkk_per_kwh_per_k == round(0.62938 * 0.02, 6)
     assert resolved.bonus_temp == 30.0 and resolved.penalty_temp == 40.0
+
+
+def test_bundled_utilities_json_has_fjernvarme_fyn_2026_tariff() -> None:
+    from kmd_easy_energy.tariff import load_utilities
+
+    utilities = load_utilities()
+    bundled = published_tariff("fjernvarme-fyn", 2026, utilities)
+    assert bundled is not None
+    assert bundled["price_dkk_per_kwh"] == 0.5895
+    assert bundled["source"].startswith("https://www.fjernvarmefyn.dk/")
+
+    resolved = resolve_tariff(
+        _entry(data={"utility_id": "fjernvarme-fyn"}),
+        today=date(2026, 11, 24),
+        utilities=utilities,
+    )
+    assert resolved.price_dkk_per_kwh == 0.5895

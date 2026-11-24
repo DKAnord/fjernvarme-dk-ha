@@ -797,12 +797,13 @@ def test_utilities_json_wattson_entries_and_status() -> None:
         assert isinstance(u["latitude"], (int, float)) and isinstance(u["longitude"], (int, float))
         assert u["portal_url"].startswith("https://")
         assert "Watts On" in u["auth_method"]
-    aalborg = by_id["aalborg-forsyning"]
-    assert aalborg["status"] == "confirmed"
-    assert aalborg["tier"] == "confirmed"
-    label = _format_utility_label(aalborg)
-    assert label.startswith("✅") and "Watts On" in label and "bekræftet" in label
-    for uid in wattson_ids - {"aalborg-forsyning"}:
+    for uid in ("aalborg-forsyning", "fjernvarme-fyn"):
+        u = by_id[uid]
+        assert u["status"] == "confirmed"
+        assert u["tier"] == "confirmed"
+        label = _format_utility_label(u)
+        assert label.startswith("✅") and "Watts On" in label and "bekræftet" in label
+    for uid in wattson_ids - {"aalborg-forsyning", "fjernvarme-fyn"}:
         u = by_id[uid]
         assert u["status"] == "pending_test"
         assert u["tier"] == "verified_portal"

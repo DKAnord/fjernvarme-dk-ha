@@ -5,6 +5,7 @@ Alle væsentlige ændringer i **Dansk Fjernvarme** (tidligere *Fjernvarme (KMD E
 ## [1.2.3] - 2026-11-24
 
 ### Tilføjet
+- **Fjernvarme Fyn bekræftet live + 2026-takst ([issue #29](https://github.com/DKAnord/fjernvarme-dk-ha/issues/29)):** Markeret som ✅ **Bekræftet** efter live-verifikation fra `@PalleEngkjaer` på Watts On (`GJ`-konvertering + `MQ` fallback fra `v1.2.1`), inkl. officiel 2026-energipris (`0,5895 kr./kWh` inkl. moms = `163,75 kr./GJ` / `589,50 kr./MWh` fra [Prisfolder 2026](https://www.fjernvarmefyn.dk/media/efafmmg2/fjernvarmepriser_jan_2026.pdf)).
 - **Hadsund Fjernvarme Takstblad 2026 ([issue #32](https://github.com/DKAnord/fjernvarme-dk-ha/issues/32)):** Indbygget officiel 2026-takst (`0,62938 kr./kWh` inkl. moms inkl. NOx-afgift og `±2 %/°C` motivationstarif under `30 °C` / over `40 °C` fra [Takstblad-2026.pdf](https://hadsundfjernvarme.dk/p/Hadsund%20Fjernvarme/Priser/Takstblad-2026.pdf)).
 
 ### Forbedret

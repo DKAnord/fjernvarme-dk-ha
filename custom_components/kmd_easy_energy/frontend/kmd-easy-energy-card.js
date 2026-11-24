@@ -3,7 +3,7 @@
  * Zero external dependencies, Shadow DOM, responsive, interactive tooltips, DA/EN i18n.
  */
 (() => {
-  const VER = "1.2.0";
+  const VER = "1.2.1";
   const MONTHS = ["Jan", "Feb", "Mar", "Apr", "Maj", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Dec"];
   const DAYS_IN_MONTH = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
   const isLeapYear = (y) => (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0;
@@ -95,6 +95,7 @@
     { id: "go-energi", name: "go'energi", city: "Thy-Mors", url: "https://www.goenergi.dk/", status: "pending_test" },
     { id: "soroe-fjernvarme", name: "Sorø Fjernvarme", city: "Sorø", url: "https://eforsyning.dk/soroe/", status: "confirmed", backend: "eforsyning" },
     { id: "middelfart-fjernvarme", name: "Middelfart Fjernvarme", city: "Middelfart", url: "https://eforsyning.dk/middelfartfjernvarme/", status: "confirmed", backend: "eforsyning" },
+    { id: "hadsund-fjernvarme", name: "Hadsund Fjernvarme", city: "Hadsund", url: "https://eforsyning.dk/hadsundfjernvarme/", status: "confirmed", backend: "eforsyning" },
     { id: "hjorring-varmeforsyning", name: "Hjørring Varmeforsyning", city: "Hjørring", url: "https://eforsyning.dk/hjvarme/", status: "pending_test", backend: "eforsyning" },
     { id: "aalborg-forsyning", name: "Aalborg Forsyning", city: "Aalborg", url: "https://aalborgforsyning.dk/services/forbrug/watts-on/", status: "confirmed", backend: "wattson" },
     { id: "fjernvarme-fyn", name: "Fjernvarme Fyn", city: "Odense / Fyn", url: "https://www.fjernvarmefyn.dk/spar-paa-energien/overblik/watts-on-app/", status: "pending_test", backend: "wattson" },
@@ -195,11 +196,14 @@
     _resolveEntity() {
       const states = this._hass?.states || {};
       if (this._config?.entity && states[this._config.entity]) return states[this._config.entity];
-      const overview = Object.values(states).find(
-        (s) =>
-          s.entity_id.endsWith("_overview") &&
-          (s.attributes?.utility_id || s.attributes?.portal_url)
-      );
+      const all = Object.values(states);
+      const isOverview = (s) =>
+        typeof s?.entity_id === "string" &&
+        s.entity_id.startsWith("sensor.") &&
+        Boolean(s.attributes?.utility_id || s.attributes?.portal_url);
+      const overview =
+        all.find((s) => isOverview(s) && (s.entity_id.endsWith("_overview") || s.entity_id.endsWith("_overblik"))) ||
+        all.find(isOverview);
       if (overview) return overview;
       if (states["sensor.kredslob_varme"]) return states["sensor.kredslob_varme"];
       return null;
@@ -1650,7 +1654,7 @@
         </style>
         <div class="ed">
           <label>Overview / Data Sensor
-            <input id="entity" value="${esc(c.entity || "")}" placeholder="Auto-detect (*_overview or sensor.kredslob_varme)" />
+            <input id="entity" value="${esc(c.entity || "")}" placeholder="Auto-detect (*_overview / *_overblik or sensor.kredslob_varme)" />
           </label>
           <label>Utility Login Portal (Smart Dropdown)
             <select id="utility_id"><option value="">Auto from sensor</option>${utilOpts}</select>

@@ -137,6 +137,7 @@ def _summarize_coordinator(data: dict[str, Any] | None) -> dict[str, Any]:
                 "probe",
                 "device",
                 "keys_seen",
+                "quality_seen",
                 "energy_unit",
                 "interval_hours",
                 "skipped",

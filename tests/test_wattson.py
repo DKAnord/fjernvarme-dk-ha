@@ -293,6 +293,104 @@ def test_parse_unknown_fields_only() -> None:
     assert p.intervals == [] and p.skipped == {"no_data": 1} and "foo" in p.keys_seen
 
 
+def test_parse_fjernvarme_fyn_gj_with_non_measured_mq_fallback() -> None:
+    # Case 1: All valid rows use MQ="Calculated", plus one "Missing" and one En=-1 no-data row.
+    fyn_items = [
+        {
+            "Id": fx.HEAT_DEVICE,
+            "SD": "2026-11-03T00:00:00Z",
+            "ED": "2026-11-03T01:00:00Z",
+            "En": 0.018,
+            "Vol": 0.25,
+            "Fl": 0.25,
+            "TI": 70.0,
+            "TO": 31.0,
+            "CD": 39.0,
+            "MQ": "Calculated",
+        },
+        {
+            "Id": fx.HEAT_DEVICE,
+            "SD": "2026-11-03T01:00:00Z",
+            "ED": "2026-11-03T02:00:00Z",
+            "En": 0.018,
+            "Vol": 0.25,
+            "Fl": 0.25,
+            "TI": 70.0,
+            "TO": 31.0,
+            "CD": 39.0,
+            "MQ": "Missing",
+        },
+        {
+            "Id": fx.HEAT_DEVICE,
+            "SD": "2026-11-03T02:00:00Z",
+            "ED": "2026-11-03T03:00:00Z",
+            "En": -1,
+            "Vol": -1,
+            "TI": -1,
+            "TO": -1,
+            "MQ": "Calculated",
+        },
+    ]
+    p = parse_heat_items(fyn_items, unit_hint="gj")
+    assert len(p.intervals) == 1
+    assert p.intervals[0]["kwh"] == pytest.approx(5.0)
+    assert p.intervals[0]["m3"] == 0.25
+    assert p.intervals[0]["t_fwd"] == 70.0 and p.intervals[0]["t_ret"] == 31.0
+    assert "quality_fallback" in p.assumptions
+    assert p.skipped == {"not_measured": 1, "no_data": 1}
+    assert p.quality_seen == {"Calculated": 2, "Missing": 1}
+
+    # Case 2: Empty MQ="" is accepted directly without triggering quality_fallback.
+    empty_mq = [dict(fyn_items[0], MQ="")]
+    p_empty = parse_heat_items(empty_mq, unit_hint="gj")
+    assert len(p_empty.intervals) == 1
+    assert "quality_fallback" not in p_empty.assumptions
+    assert p_empty.quality_seen == {"(empty)": 1}
+
+    # Case 3: Mixed "Measured" and "Estimated" keeps only "Measured".
+    mixed = [dict(fyn_items[0], MQ="Measured"), dict(fyn_items[0], SD="2026-11-03T01:00:00Z", MQ="Estimated")]
+    p_mixed = parse_heat_items(mixed, unit_hint="gj")
+    assert len(p_mixed.intervals) == 1
+    assert "quality_fallback" not in p_mixed.assumptions
+    assert p_mixed.skipped == {"not_measured": 1}
+    assert p_mixed.quality_seen == {"Estimated": 1, "Measured": 1}
+
+
+@pytest.mark.asyncio
+async def test_diagnostics_include_quality_seen_without_pii() -> None:
+    from kmd_easy_energy.diagnostics import async_get_config_entry_diagnostics
+
+    fyn_items = [
+        {
+            "Id": fx.HEAT_DEVICE,
+            "SD": "2026-11-03T00:00:00Z",
+            "ED": "2026-11-03T01:00:00Z",
+            "En": 0.018,
+            "Vol": 0.25,
+            "TI": 70.0,
+            "TO": 31.0,
+            "MQ": "Calculated",
+        }
+    ]
+    state = _mapped(fyn_items, unit="gj")
+    entry = SimpleNamespace(
+        entry_id="e1",
+        title="Fjernvarme Fyn",
+        unique_id="wattson:x",
+        domain="kmd_easy_energy",
+        version=1,
+        data=dict(W_ENTRY, wattson_device_id=fx.HEAT_DEVICE),
+        options={},
+    )
+    hass = MagicMock()
+    hass.data = {"kmd_easy_energy": {"e1": SimpleNamespace(data=state)}}
+    out = await async_get_config_entry_diagnostics(hass, entry)
+    w = out["coordinator"]["wattson"]
+    assert w["quality_seen"] == {"Calculated": 1}
+    assert "quality_fallback" in w["assumptions"]
+    assert fx.HEAT_DEVICE not in json.dumps(out, default=str)
+
+
 # ---------------------------------------------------------------- mapping
 def _mapped(items=None, unit="kWh", state=None):
     parsed = parse_heat_items(items if items is not None else fx.heat_items(3), unit_hint=unit)

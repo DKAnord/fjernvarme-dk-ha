@@ -221,4 +221,35 @@ cardOverride.hass = mkHass(Object.assign({}, EF_ATTRS, {
 }), []);
 assert.ok(!cardOverride.shadowRoot.innerHTML.includes('data-role="expected-return-curve"'), "curve hidden when user explicitly overrides thresholds");
 
+// 12) Auto-detection finds Danish *_overblik and suffixed *_overview_2 sensors instead of falling back to Kredsløb.
+for (const entityId of ["sensor.hadsund_fjernvarme_overblik", "sensor.hadsund_fjernvarme_overview_2", "sensor.varme_hadsund"]) {
+  const c = new Card();
+  c.setConfig({});
+  c.hass = {
+    states: {
+      [entityId]: {
+        entity_id: entityId,
+        state: "1234",
+        attributes: Object.assign({}, EF_ATTRS, {
+          utility: "Hadsund Fjernvarme",
+          utility_id: "hadsund-fjernvarme",
+          portal_url: "https://eforsyning.dk/hadsundfjernvarme/",
+          initial_setup_complete: true,
+          annual: { "2026": 1234 },
+          monthly: { "2026": { Jan: 100 } },
+          daily: { days: { "1": 10, "2": 11 }, month: "November 2026", total: 21, gennemsnit: 10.5 },
+        }),
+      },
+    },
+    services: { notify: {} },
+    language: "da",
+    connection: { subscribeMessage: () => Promise.resolve(() => {}) },
+    callService: async () => {},
+  };
+  const out = c.shadowRoot.innerHTML;
+  assert.strictEqual(c._resolveEntity()?.entity_id, entityId, `auto-detects ${entityId}`);
+  assert.ok(out.includes("Data fra E|Forsyning"), `renders E|Forsyning dashboard for ${entityId}`);
+  assert.ok(!out.includes("Førstegangsopsætning"), `does not fall back to Kredsløb wizard for ${entityId}`);
+}
+
 console.log("card_capabilities.test.js: OK");

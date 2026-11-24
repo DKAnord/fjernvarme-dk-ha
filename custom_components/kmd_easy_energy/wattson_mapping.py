@@ -137,6 +137,7 @@ def apply_wattson_data(
     state["wattson"] = {
         **meta,
         "keys_seen": getattr(parsed, "keys_seen", []),
+        "quality_seen": getattr(parsed, "quality_seen", {}),
         "energy_unit": getattr(parsed, "energy_unit", None),
         "interval_hours": interval,
         "skipped": getattr(parsed, "skipped", {}),

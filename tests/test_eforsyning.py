@@ -399,9 +399,10 @@ def test_utilities_json_backend_field_and_hjorring() -> None:
     assert fh["tier"] == "confirmed"
 
     eforsyning = {u["id"] for u in data["utilities"] if u.get("backend") == "eforsyning"}
-    assert len(eforsyning) == 22
+    assert len(eforsyning) == 23
     assert eforsyning >= {
         "soroe-fjernvarme",
+        "hadsund-fjernvarme",
         "hjorring-varmeforsyning",
         "fjernvarme-horsens",
         "vestforbraending",
@@ -409,6 +410,11 @@ def test_utilities_json_backend_field_and_hjorring() -> None:
         "sonderborg-varme",
         "kjellerup-fjernvarme",
     }
+    hadsund = by_id["hadsund-fjernvarme"]
+    assert hadsund["status"] == "confirmed"
+    assert hadsund["tier"] == "confirmed"
+    assert hadsund["eforsyning_supplier_id"] == "49C73776-76BE-4382-BA5C-2B4E7384CC34"
+    assert hadsund["portal_url"] == "https://eforsyning.dk/hadsundfjernvarme/"
     for uid in eforsyning:
         u = by_id[uid]
         assert is_uuid(u["eforsyning_supplier_id"]), uid

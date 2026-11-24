@@ -22,7 +22,7 @@ def test_card_uses_event_and_service() -> None:
     assert "start_mitid_sync" in js
     assert "mitid_otp_code" not in js
     assert "mitid_qr_svg" not in js
-    assert 'VER = "1.2.0"' in js
+    assert 'VER = "1.2.1"' in js
     assert "data-kmd-card-version" in js
     # Must not guess button.<utility_id>_sync as the only path
     assert "button.${activeUtilId" not in js
@@ -80,5 +80,6 @@ def test_card_cost_estimate_and_utilities_fallback() -> None:
     assert 'id: "aalborg-forsyning"' in js and 'status: "confirmed"' in js
     assert 'id: "frederikshavn-forsyning"' in js and 'id: "frederikshavn-forsyning", name: "Frederikshavn Forsyning", city: "Frederikshavn", url: "https://www.forsyningen.dk/selvbetjening", status: "confirmed"' in js
     assert 'id: "soroe-fjernvarme"' in js and 'backend: "eforsyning"' in js
+    assert 'id: "hadsund-fjernvarme"' in js and 'status: "confirmed"' in js
     assert 'id: "fjernvarme-fyn"' in js
     assert 'id: "hillerod-forsyning"' in js

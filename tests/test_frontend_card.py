@@ -12,6 +12,7 @@ import pytest
 from kmd_easy_energy.const import CARD_JS_FILENAME, CARD_RESOURCE_PATH
 from kmd_easy_energy.frontend_card import (
     async_ensure_lovelace_card_resource,
+    async_register_frontend_card_static_path,
     card_resource_url,
     install_frontend_card,
     integration_version,
@@ -22,8 +23,8 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def test_integration_version_matches_manifest() -> None:
-    assert integration_version() == "1.2.0"
-    assert card_resource_url() == "/local/js/kmd-easy-energy-card.js?v=1.2.0"
+    assert integration_version() == "1.2.1"
+    assert card_resource_url() == "/local/js/kmd-easy-energy-card.js?v=1.2.1"
     assert card_resource_url("0.3.0") == "/local/js/kmd-easy-energy-card.js?v=0.3.0"
 
 
@@ -212,8 +213,25 @@ def test_ensure_resource_removes_duplicates(monkeypatch: pytest.MonkeyPatch) -> 
 
 def test_readme_documents_versioned_resource() -> None:
     readme = (ROOT / "README.md").read_text()
-    assert "/local/js/kmd-easy-energy-card.js?v=1.2.0" in readme
+    assert "/local/js/kmd-easy-energy-card.js?v=1.2.1" in readme
     assert "31 dage" in readme or "31 days" in readme
     changelog = (ROOT / "CHANGELOG.md").read_text()
-    assert "## [1.2.0]" in changelog
+    assert "## [1.2.1]" in changelog
     assert CARD_RESOURCE_PATH in changelog or "kmd-easy-energy-card.js?v=" in changelog
+
+
+def test_register_frontend_card_static_path_is_idempotent() -> None:
+    recorded = []
+
+    async def fake_register(configs):
+        recorded.append(list(configs))
+
+    hass = SimpleNamespace(data={}, http=SimpleNamespace(async_register_static_paths=fake_register))
+    assert asyncio.run(async_register_frontend_card_static_path(hass)) is True
+    assert asyncio.run(async_register_frontend_card_static_path(hass)) is True
+    assert len(recorded) == 1
+    assert recorded[0][0].url_path == CARD_RESOURCE_PATH
+    assert recorded[0][0].cache_headers is True
+
+    hass_no_http = SimpleNamespace(data={})
+    assert asyncio.run(async_register_frontend_card_static_path(hass_no_http)) is False

@@ -20,9 +20,10 @@ from urllib.parse import urlsplit
 
 from homeassistant.core import HomeAssistant
 
-from .const import CARD_JS_FILENAME, CARD_RESOURCE_PATH
+from .const import CARD_JS_FILENAME, CARD_RESOURCE_PATH, DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
+_STATIC_CARD_REGISTERED = f"{DOMAIN}_card_static_registered"
 
 
 def integration_version() -> str:
@@ -59,6 +60,38 @@ def install_frontend_card(www_js_dir: Path) -> Path | None:
         _LOGGER.warning("Could not install frontend card to %s: %s", dst, err)
         return None
     return dst
+
+
+async def async_register_frontend_card_static_path(hass: HomeAssistant) -> bool:
+    """Serve the bundled card directly at ``/local/js/kmd-easy-energy-card.js``.
+
+    Home Assistant only mounts ``/local`` at startup if ``<config>/www`` already
+    existed then, so a fresh install would otherwise require a second restart
+    before Lovelace can load the module. Registering the static path directly
+    makes the card available immediately.
+    """
+    src = Path(__file__).parent / "frontend" / CARD_JS_FILENAME
+    if not src.exists():
+        return False
+    hass_data = getattr(hass, "data", None)
+    if isinstance(hass_data, dict) and hass_data.get(_STATIC_CARD_REGISTERED):
+        return True
+    http = getattr(hass, "http", None)
+    register = getattr(http, "async_register_static_paths", None)
+    if not callable(register):
+        return False
+    try:
+        from homeassistant.components.http import StaticPathConfig
+    except ImportError:
+        return False
+    try:
+        await register([StaticPathConfig(CARD_RESOURCE_PATH, str(src), cache_headers=True)])
+    except Exception as err:  # noqa: BLE001
+        _LOGGER.warning("Could not register static path %s: %s", CARD_RESOURCE_PATH, err)
+        return False
+    if isinstance(hass_data, dict):
+        hass_data[_STATIC_CARD_REGISTERED] = True
+    return True
 
 
 async def async_ensure_lovelace_card_resource(

@@ -452,6 +452,26 @@ RET_KEYS = ("rt", "returnTemperature", "tempReturn", "outletTemperature", "t2", 
 QUALITY_KEYS = ("mq", "measuredQuality", "quality")
 GENERIC_KEYS = ("value", "consumption", "val")
 
+_MEASURED_QUALITIES = frozenset(
+    {"measured", "m", "a04", "actual", "validated", "valid", "ok", "final"}
+)
+_INVALID_QUALITIES = frozenset(
+    {
+        "missing",
+        "invalid",
+        "error",
+        "nodata",
+        "no_data",
+        "no-data",
+        "notavailable",
+        "not_available",
+        "unavailable",
+        "deleted",
+        "corrupt",
+        "bad",
+    }
+)
+
 _ENERGY_UNITS = {"kwh": 1.0, "mwh": 1000.0, "gj": 1 / 0.0036}
 
 
@@ -505,6 +525,7 @@ class HeatParse:
     interval_hours: float | None = None
     skipped: dict[str, int] = field(default_factory=dict)
     assumptions: list[str] = field(default_factory=list)
+    quality_seen: dict[str, int] = field(default_factory=dict)
 
     @property
     def has_energy(self) -> bool:
@@ -537,7 +558,14 @@ def parse_heat_items(
     """
     out = HeatParse()
     keys: set[str] = set()
-    raw: list[dict[str, Any]] = []
+    measured_raw: list[dict[str, Any]] = []
+    fallback_raw: list[dict[str, Any]] = []
+    measured_assumptions: list[str] = []
+    fallback_assumptions: list[str] = []
+    quality_counts: dict[str, int] = {}
+    fallback_skipped = 0
+    fallback_no_data = 0
+    invalid_quality_skipped = 0
     hint_factor = energy_factor(unit_hint)
     for item in items or []:
         if not isinstance(item, dict):
@@ -548,37 +576,79 @@ def parse_heat_items(
             out.skipped["no_start"] = out.skipped.get("no_start", 0) + 1
             continue
         quality = ci_get(item, *QUALITY_KEYS)
-        if quality is not None and str(quality).strip().lower() not in ("measured", "m"):
-            out.skipped["not_measured"] = out.skipped.get("not_measured", 0) + 1
-            continue
+        if quality is None:
+            is_measured = True
+        else:
+            q_raw = str(quality).strip()
+            q_label = q_raw[:32] if q_raw else "(empty)"
+            quality_counts[q_label] = quality_counts.get(q_label, 0) + 1
+            q_low = q_raw.lower()
+            if not q_low or q_low in _MEASURED_QUALITIES:
+                is_measured = True
+            elif q_low in _INVALID_QUALITIES:
+                invalid_quality_skipped += 1
+                continue
+            else:
+                is_measured = False
         end = _parse_dt(ci_get(item, *END_KEYS))
         hours = (end - start).total_seconds() / 3600 if end and end > start else 1.0
         energy = _num(ci_get(item, *ENERGY_KEYS))
         volume = _num(ci_get(item, *VOLUME_KEYS))
         generic = _num(ci_get(item, *GENERIC_KEYS))
         has_energy_key = ci_get(item, *ENERGY_KEYS) is not None
+        target_assumptions = measured_assumptions if is_measured else fallback_assumptions
         if not has_energy_key and hint_factor is not None:
             if ci_get(item, *VOLUME_KEYS) is not None:
                 energy, volume = volume, None
-                if "vol_as_energy" not in out.assumptions:
-                    out.assumptions.append("vol_as_energy")
+                if "vol_as_energy" not in target_assumptions:
+                    target_assumptions.append("vol_as_energy")
             elif generic is not None:
                 energy = generic
-                if "value_as_energy" not in out.assumptions:
-                    out.assumptions.append("value_as_energy")
-        raw.append(
-            {
-                "start": start,
-                "hours": round(hours, 3),
-                "energy": energy,
-                "m3": volume,
-                "t_fwd": _temp(ci_get(item, *FWD_KEYS)),
-                "t_ret": _temp(ci_get(item, *RET_KEYS)),
-            }
-        )
-        if all(v is None for v in (energy, volume)) and raw[-1]["t_ret"] is None:
-            out.skipped["no_data"] = out.skipped.get("no_data", 0) + 1
-            raw.pop()
+                if "value_as_energy" not in target_assumptions:
+                    target_assumptions.append("value_as_energy")
+        rec = {
+            "start": start,
+            "hours": round(hours, 3),
+            "energy": energy,
+            "m3": volume,
+            "t_fwd": _temp(ci_get(item, *FWD_KEYS)),
+            "t_ret": _temp(ci_get(item, *RET_KEYS)),
+        }
+        if all(v is None for v in (energy, volume)) and rec["t_ret"] is None:
+            if is_measured:
+                out.skipped["no_data"] = out.skipped.get("no_data", 0) + 1
+            else:
+                fallback_no_data += 1
+            continue
+        if is_measured:
+            measured_raw.append(rec)
+        else:
+            fallback_raw.append(rec)
+            fallback_skipped += 1
+
+    out.quality_seen = dict(
+        sorted(quality_counts.items(), key=lambda kv: (-kv[1], kv[0]))[:12]
+    )
+    if measured_raw:
+        raw = measured_raw
+        out.assumptions.extend(measured_assumptions)
+        not_measured = invalid_quality_skipped + fallback_skipped
+        if not_measured:
+            out.skipped["not_measured"] = not_measured
+    elif fallback_raw:
+        raw = fallback_raw
+        out.assumptions.extend(fallback_assumptions)
+        if "quality_fallback" not in out.assumptions:
+            out.assumptions.append("quality_fallback")
+        if invalid_quality_skipped:
+            out.skipped["not_measured"] = invalid_quality_skipped
+        if fallback_no_data:
+            out.skipped["no_data"] = out.skipped.get("no_data", 0) + fallback_no_data
+    else:
+        raw = []
+        not_measured = invalid_quality_skipped + fallback_skipped
+        if not_measured:
+            out.skipped["not_measured"] = not_measured
 
     out.keys_seen = sorted(keys)[:40]
     factor: float | None = None

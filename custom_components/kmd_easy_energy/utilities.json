@@ -449,6 +449,21 @@
       ]
     },
     {
+      "id": "hadsund-fjernvarme",
+      "name": "Hadsund Fjernvarme",
+      "city": "Hadsund",
+      "portal_url": "https://eforsyning.dk/hadsundfjernvarme/",
+      "status": "confirmed",
+      "tier": "confirmed",
+      "auth_method": "Forbrugernummer + webpinkode",
+      "backend": "eforsyning",
+      "eforsyning_supplier_id": "49C73776-76BE-4382-BA5C-2B4E7384CC34",
+      "latitude": 56.716,
+      "longitude": 10.117,
+      "notes": "E|Forsyning. forsyningid og AppServerUri (https://apiapp.dff-edb.dk/hdsfv/) bekræftet live i issue #16 af @cokeman0. Login med forbrugernummer + webpinkode fra regningen; daglige aflæsninger.",
+      "tariffs": []
+    },
+    {
       "id": "solrod-fjernvarme",
       "name": "Solrød Fjernvarme",
       "city": "Solrød Strand",
@@ -640,5 +655,5 @@
       "tariffs": []
     }
   ],
-  "last_updated": "2026-11-23"
+  "last_updated": "2026-11-24"
 }

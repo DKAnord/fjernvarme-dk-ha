@@ -38,6 +38,7 @@ from .const import (
 from .coordinator import KMDEasyEnergyCoordinator
 from .frontend_card import (
     async_ensure_lovelace_card_resource,
+    async_register_frontend_card_static_path,
     install_frontend_card,
     integration_version,
 )
@@ -363,6 +364,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     await hass.async_add_executor_job(
         install_frontend_card, Path(hass.config.path("www/js"))
     )
+    await async_register_frontend_card_static_path(hass)
     ver = await hass.async_add_executor_job(integration_version)
     await async_ensure_lovelace_card_resource(hass, version=ver)
     portal_url = (

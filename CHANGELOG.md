@@ -2,6 +2,15 @@
 
 Alle væsentlige ændringer i **Dansk Fjernvarme** (tidligere *Fjernvarme (KMD Easy Energy)*) dokumenteres her.
 
+## [1.2.1] - 2026-11-24
+
+### Tilføjet & Bekræftet
+- **Hadsund Fjernvarme tilføjet og bekræftet live (E|Forsyning):** Markeret som ✅ **Bekræftet** efter live-verifikation fra `@cokeman0` ([issue #16](https://github.com/DKAnord/fjernvarme-dk-ha/issues/16)), inkl. forudfyldt `forsyningid` (`49C73776-76BE-4382-BA5C-2B4E7384CC34`) og portal-URL (`https://eforsyning.dk/hadsundfjernvarme/`).
+
+### Rettet
+- **Watts On `MQ`-kvalitetsfilter (Fjernvarme Fyn, [issue #29](https://github.com/DKAnord/fjernvarme-dk-ha/issues/29)):** `parse_heat_items()` accepterer nu også blanke/kendte gyldige kvalitetsværdier og falder sikkert tilbage til ikke-ugyldige intervaller med `quality_fallback`-markering, når et værk ikke returnerer `"Measured"`, så alle aflæsninger ikke længere springes over som `not_measured`. Samtidig registreres de sete `MQ`-værdier (kun nøgler og antal, ingen persondata) i `wattson.quality_seen` i diagnostics.
+- **Dashboard-kort på dansk Home Assistant og helt nye installationer ([issue #16](https://github.com/DKAnord/fjernvarme-dk-ha/issues/16)):** Kortet finder nu automatisk overblikssensorer med dansk endelse (`*_overblik`), suffikser (f.eks. `*_overview_2`) og omdøbte sensorer i stedet for at falde tilbage til Kredsløb/MitID-guiden. Derudover registrerer integrationen nu selve `/local/js/kmd-easy-energy-card.js?v=1.2.1` direkte via Home Assistants statiske HTTP-rute (`StaticPathConfig`), så kortet virker med det samme selv på nye installationer uden `<config>/www` ved opstart (uden en ekstra genstart).
+
 ## [1.2.0] - 2026-11-23
 
 ### Tilføjet & Bekræftet

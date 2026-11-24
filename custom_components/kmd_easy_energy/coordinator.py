@@ -10,7 +10,6 @@ import math
 from collections.abc import Callable
 from datetime import datetime, timedelta
 from typing import Any
-from zoneinfo import ZoneInfo
 
 import aiohttp
 
@@ -1285,7 +1284,7 @@ class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             yr = now_local.year
             mo = now_local.month
             last_dom = calendar.monthrange(yr, mo)[1]
-            cph_tz = ZoneInfo("Europe/Copenhagen")
+            cph_tz = await dt_util.async_get_time_zone("Europe/Copenhagen")
 
             state["meters"] = meters
             state["available_units"] = available_units

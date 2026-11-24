@@ -516,3 +516,16 @@ def test_coordinator_base_meta_exposes_integration_version(tmp_path: Path) -> No
         default_coord = KMDEasyEnergyCoordinator(hass, entry)
     assert coord._base_meta()["integration_version"] == "1.2.0"
     assert default_coord._base_meta()["integration_version"] is None
+
+
+def test_coordinator_uses_async_get_time_zone_instead_of_zoneinfo() -> None:
+    """Ensure coordinator.py never constructs ZoneInfo on the event loop."""
+    src = (
+        Path(__file__).resolve().parents[1]
+        / "custom_components"
+        / "kmd_easy_energy"
+        / "coordinator.py"
+    ).read_text(encoding="utf-8")
+    assert "zoneinfo" not in src
+    assert "ZoneInfo(" not in src
+    assert 'await dt_util.async_get_time_zone("Europe/Copenhagen")' in src

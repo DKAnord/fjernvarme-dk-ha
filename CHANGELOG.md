@@ -2,6 +2,12 @@
 
 Alle væsentlige ændringer i **Dansk Fjernvarme** (tidligere *Fjernvarme (KMD Easy Energy)*) dokumenteres her.
 
+## [1.2.2] - 2026-11-24
+
+### Rettet
+- **Asynkron tidszone-indlæsning i KMD-synkronisering ([hacs/default#14752](https://github.com/hacs/default/pull/14752#pullrequestreview-6036764245)):** `ZoneInfo("Europe/Copenhagen")` i `coordinator.py` (`_async_fetch_from_kmd`) er erstattet med `await dt_util.async_get_time_zone("Europe/Copenhagen")`, og `zoneinfo`-importen er fjernet, så første indlæsning sker i executor uden at blokere Home Assistants event loop.
+- **Hassfest-afhængighed for statisk kortsti (`manifest.json`):** Tilføjet `"http"` til `after_dependencies` i `manifest.json`, da integrationen registrerer `/local/js/kmd-easy-energy-card.js?v=1.2.2` direkte via `StaticPathConfig`.
+
 ## [1.2.1] - 2026-11-24
 
 ### Tilføjet & Bekræftet

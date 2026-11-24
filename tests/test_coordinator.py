@@ -529,3 +529,185 @@ def test_coordinator_uses_async_get_time_zone_instead_of_zoneinfo() -> None:
     assert "zoneinfo" not in src
     assert "ZoneInfo(" not in src
     assert 'await dt_util.async_get_time_zone("Europe/Copenhagen")' in src
+
+
+@pytest.mark.asyncio
+async def test_initialize_cache_upgrades_eforsyning_custom_to_confirmed_utility(tmp_path: Path) -> None:
+    coord, _, _, _ = make_coordinator(
+        tmp_path,
+        store=FakeStore({}),
+        backend="eforsyning",
+        utility="Hadsund Fjernvarme a.m.b.a.",
+        utility_id="eforsyning-custom",
+        utility_status="pending_test",
+        portal_url="https://eforsyning.dk/hadsundfjernvarme/",
+        eforsyning_supplier_id="49C73776-76BE-4382-BA5C-2B4E7384CC34",
+    )
+    state = await coord.async_initialize_cache()
+    assert state["utility_id"] == "hadsund-fjernvarme"
+    assert state["utility_status"] == "confirmed"
+    assert state["location"] == "Hadsund"
+
+
+def test_kmd_client_find_energy_unit_and_factor() -> None:
+    from kmd_easy_energy.api.kmd_client import KMDClient
+
+    mwh_units = [{"Id": "u1", "Name": "m3"}, {"Id": "u2", "Name": "MWh"}]
+    assert KMDClient.find_energy_unit(mwh_units) == {"Id": "u2", "Name": "MWh"}
+    kwh_units = [{"Id": "u1", "Name": "kWh"}, {"Id": "u2", "Name": "MWh"}]
+    assert KMDClient.find_energy_unit(kwh_units) == {"Id": "u1", "Name": "kWh"}
+    gj_units = [{"Id": "u1", "Name": "GJ"}]
+    assert KMDClient.find_energy_unit(gj_units) == {"Id": "u1", "Name": "GJ"}
+
+    assert KMDClient.energy_factor({"Name": "MWh"}) == 1000.0
+    assert KMDClient.energy_factor({"Name": "GJ"}) == pytest.approx(1.0 / 0.0036)
+    assert KMDClient.energy_factor({"Name": "kWh"}) == 1.0
+
+
+@pytest.mark.asyncio
+async def test_fetch_from_kmd_scales_mwh_meter_to_kwh(tmp_path: Path) -> None:
+    import datetime as dt
+    from kmd_easy_energy.insights import DK_TZ
+
+    coord, hass, _, _ = make_coordinator(
+        tmp_path,
+        utility="Bornholms Energi & Forsyning (BEOF)",
+        utility_id="beof",
+        portal_url="https://minforsyning.beof.dk/",
+    )
+    mwh_unit = {"Id": "u-mwh", "Name": "MWh", "Description": "Megawatttimer", "Decimals": 3, "Order": 1}
+    m3_unit = {"Id": "u-m3", "Name": "m3", "Description": "Kubikmeter", "Decimals": 2, "Order": 2}
+    fake_client = MagicMock()
+    fake_client.discover_accounts = AsyncMock(
+        return_value=[
+            {
+                "customer": {"CustomerId": "c1", "CustomerNumber": "cn1"},
+                "customer_index": 1,
+                "customer_id": "c1",
+                "customer_number": "cn1",
+                "meters": [
+                    {
+                        "InstallationId": "inst1",
+                        "MeasurementPointId": "mp1",
+                        "ConsumptionType": 5,
+                        "Units": [mwh_unit, m3_unit],
+                    }
+                ],
+            }
+        ]
+    )
+    fake_client.set_customer = MagicMock()
+
+    async def fake_ts(inst, mp, unit, zoom, d_from, d_to):
+        if zoom == 1 and d_from.year == 2026:
+            return {
+                "Series": [
+                    {
+                        "Data": [
+                            {"DateFrom": "2026-01-01T00:00:00", "Value": 2.5},
+                            {"DateFrom": "2026-02-01T00:00:00", "Value": 9.5},
+                        ]
+                    }
+                ]
+            }
+        if zoom == 2 and d_from == dt.datetime(2026, 11, 1):
+            return {
+                "Series": [
+                    {
+                        "Data": [
+                            {"DateFrom": "2026-11-22T00:00:00", "Value": 0.048, "IsComplete": True},
+                        ]
+                    }
+                ]
+            }
+        return {"Series": []}
+
+    hourly_mwh = [
+        {"DateFrom": f"2026-11-22T{h:02d}:00:00+01:00", "Value": 0.002, "IsComplete": True}
+        for h in range(24)
+    ]
+
+    async def fake_hourly(inst, mp, unit, d_from, d_to):
+        if unit.get("Name") == "MWh" and d_from.date() == dt.date(2026, 11, 22):
+            return hourly_mwh
+        return []
+
+    fake_client.get_consumption_timeseries = AsyncMock(side_effect=fake_ts)
+    fake_client.get_hourly_with_fallback = AsyncMock(side_effect=fake_hourly)
+    fake_client.get_current_settlement_period = AsyncMock(
+        return_value={"DateFrom": "2026-01-01T00:00:00Z", "DateTo": "2026-12-31T00:00:00Z"}
+    )
+    fake_client.get_consumption_overview = AsyncMock(
+        return_value={"Actual": {"Value": 12.0}, "Expected": {"Value": 14.5}}
+    )
+    fake_client.get_balance = AsyncMock(return_value={})
+    fake_client.get_balance_statement = AsyncMock(return_value=[])
+
+    coord.client = fake_client
+    coord._async_update_weather = AsyncMock()
+    fixed_now = dt.datetime(2026, 11, 24, 12, 0, tzinfo=DK_TZ)
+    with patch("kmd_easy_energy.coordinator.dt_util.now", return_value=fixed_now):
+        state = await coord._async_fetch_from_kmd({})
+
+    assert state["kmd_energy_factor"] == 1000.0
+    assert state["kmd_energy_unit"] == "MWh"
+    assert state["monthly"]["2026"]["Jan"] == 2500
+    assert state["monthly"]["2026"]["Feb"] == 9500
+    assert state["annual"]["2026"] == 12000
+    assert state["daily"]["days"]["22"] == 48
+    assert state["daily"]["total"] == 48
+    assert state["daily_kwh_history"]["2026-11-22"] == 48
+    assert len(state["hourly_kwh"]) == 24
+    assert state["hourly_kwh"][0]["Value"] == 2.0
+    assert state["hourly"]["kwh"][0] == 2.0
+    assert state["forecast"]["expected_kwh"] == 12000
+    assert state["forecast"]["budget_kwh"] == 14500
+
+
+@pytest.mark.asyncio
+async def test_initialize_cache_migrates_unscaled_mwh_kmd_cache(tmp_path: Path) -> None:
+    store = FakeStore(
+        {
+            "available_units": [{"Id": "u1", "Name": "MWh"}, {"Id": "u2", "Name": "m3"}],
+            "monthly": {"2026": {"Jan": 2.5, "Feb": 9.5}},
+            "annual": {"2026": 12},
+            "daily": {
+                "month": "November 2026",
+                "days": {"22": 0.048},
+                "total": 0.048,
+                "gennemsnit": 0.0,
+                "minimum": 0.048,
+                "maksimum": 0.048,
+            },
+            "daily_kwh_history": {"2026-11-22": 0.048},
+            "hourly_kwh": [{"DateFrom": "2026-11-22T00:00:00+01:00", "Value": 0.002, "IsComplete": True}],
+            "hourly": {"period": "nov-2026 MTD (1 dage)", "days_averaged": 1, "kwh": [0.002] * 24},
+            "forecast": {"period": "01.01.2026 - 31.12.2026", "expected_kwh": 12, "budget_kwh": 14.5},
+        }
+    )
+    coord, _, _, store = make_coordinator(
+        tmp_path,
+        store=store,
+        utility="Bornholms Energi & Forsyning (BEOF)",
+        utility_id="beof",
+        portal_url="https://minforsyning.beof.dk/",
+    )
+
+    state = await coord.async_initialize_cache()
+    assert state["kmd_unscaled_migrated"] == 1000.0
+    assert state["kmd_energy_unit"] == "MWh"
+    assert state["monthly"]["2026"]["Jan"] == 2500
+    assert state["monthly"]["2026"]["Feb"] == 9500
+    assert state["annual"]["2026"] == 12000
+    assert state["daily"]["days"]["22"] == 48
+    assert state["daily"]["total"] == 48.0
+    assert state["daily_kwh_history"]["2026-11-22"] == 48
+    assert state["hourly_kwh"][0]["Value"] == 2.0
+    assert state["hourly"]["kwh"][0] == 2.0
+    assert state["forecast"]["expected_kwh"] == 12000
+    assert state["forecast"]["budget_kwh"] == 14500
+    assert len(store.saved) == 1
+
+    # Subsequent cache-only update must not double-scale
+    state2 = await coord._async_update_data()
+    assert state2["annual"]["2026"] == 12000

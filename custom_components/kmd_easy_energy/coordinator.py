@@ -118,7 +118,7 @@ from .insights import (
 )
 from .statistics import import_hourly_statistics
 from .sync_reminder import compute_sync_reminder, parse_last_sync
-from .tariff import load_utilities, resolve_tariff
+from .tariff import cached_utilities, load_utilities, match_utility_for_entry, resolve_tariff
 from .util import (
     cache_has_sensor_data,
     delete_legacy_www_cache,
@@ -328,6 +328,9 @@ _CONSUMPTION_CACHE_KEYS = (
     "statistics_imported_on",
     "statistics_imported",
     "daily_hdd",
+    "kmd_energy_factor",
+    "kmd_energy_unit",
+    "kmd_unscaled_migrated",
 )
 
 
@@ -335,6 +338,94 @@ def clear_consumption_cache(state: dict[str, Any]) -> None:
     """Drop cached consumption so the next fetch is for the selected meter only."""
     for key in _CONSUMPTION_CACHE_KEYS:
         state.pop(key, None)
+
+
+def _scale_num(val: float | int, factor: float) -> int | float:
+    scaled = float(val) * factor
+    return int(scaled) if scaled.is_integer() else round(scaled, 2)
+
+
+def _is_num(val: Any) -> bool:
+    return isinstance(val, (int, float)) and not isinstance(val, bool)
+
+
+def _migrate_unscaled_kmd_cache(state: dict[str, Any]) -> bool:
+    """Scale legacy unscaled MWh/GJ KMD cache values into kWh once."""
+    if (
+        state.get("backend", BACKEND_KMD) != BACKEND_KMD
+        or state.get("kmd_energy_factor") is not None
+        or state.get("kmd_unscaled_migrated")
+    ):
+        return False
+    available_units = state.get("available_units") or []
+    if not available_units or not cache_has_sensor_data(state):
+        return False
+    unit = KMDClient.find_energy_unit(available_units)
+    factor = KMDClient.energy_factor(unit)
+    if not isinstance(factor, (int, float)) or isinstance(factor, bool) or factor == 1.0:
+        return False
+
+    monthly = state.get("monthly")
+    if isinstance(monthly, dict):
+        for mmap in monthly.values():
+            if not isinstance(mmap, dict):
+                continue
+            for mk, val in list(mmap.items()):
+                if _is_num(val):
+                    mmap[mk] = _scale_num(val, factor)
+
+    annual = state.get("annual")
+    if isinstance(annual, dict):
+        for yr_s, val in list(annual.items()):
+            mmap = monthly.get(yr_s) if isinstance(monthly, dict) else None
+            if isinstance(mmap, dict) and mmap:
+                annual[yr_s] = round(sum(v for v in mmap.values() if _is_num(v)))
+            elif _is_num(val):
+                annual[yr_s] = round(float(val) * factor)
+
+    daily = state.get("daily")
+    if isinstance(daily, dict):
+        days = daily.get("days")
+        if isinstance(days, dict):
+            for d_key, val in list(days.items()):
+                if _is_num(val):
+                    days[d_key] = _scale_num(val, factor)
+        if _is_num(daily.get("total")):
+            daily["total"] = round(float(daily["total"]) * factor, 2)
+        if _is_num(daily.get("gennemsnit")):
+            daily["gennemsnit"] = round(float(daily["gennemsnit"]) * factor, 1)
+        for key in ("minimum", "maksimum"):
+            if _is_num(daily.get(key)):
+                daily[key] = _scale_num(daily[key], factor)
+
+    history = state.get("daily_kwh_history")
+    if isinstance(history, dict):
+        for d_iso, val in list(history.items()):
+            if _is_num(val):
+                history[d_iso] = _scale_num(val, factor)
+
+    hourly_kwh = state.get("hourly_kwh")
+    if isinstance(hourly_kwh, list):
+        for pt in hourly_kwh:
+            if isinstance(pt, dict) and _is_num(pt.get("Value")):
+                pt["Value"] = round(float(pt["Value"]) * factor, 4)
+
+    hourly = state.get("hourly")
+    if isinstance(hourly, dict) and isinstance(hourly.get("kwh"), list):
+        hourly["kwh"] = [
+            round(float(v) * factor, 2) if _is_num(v) else v for v in hourly["kwh"]
+        ]
+
+    forecast = state.get("forecast")
+    if isinstance(forecast, dict):
+        for key in ("expected_kwh", "budget_kwh"):
+            if _is_num(forecast.get(key)):
+                forecast[key] = round(float(forecast[key]) * factor)
+
+    state["kmd_unscaled_migrated"] = factor
+    state["kmd_energy_unit"] = str((unit or {}).get("Name") or "")
+    refresh_insights(state)
+    return True
 
 
 def consumption_history_stale(state: dict[str, Any], tolerance: float = 0.25) -> bool:
@@ -601,8 +692,11 @@ class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     delete_legacy_www_cache, self._legacy_paths
                 )
         state = sanitize_cache(state or {})
+        await self.hass.async_add_executor_job(load_utilities)
         self._load_last_sync(state)
         state.update(self._base_meta())
+        if _migrate_unscaled_kmd_cache(state):
+            await self._store.async_save(sanitize_cache(state))
         if self._initial_setup_complete is None:
             self._initial_setup_complete = bool(
                 state.get("initial_setup_complete", cache_has_sensor_data(state))
@@ -718,10 +812,28 @@ class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             or self.entry.data.get(CONF_NOTIFY_SERVICE)
             or ""
         ).strip()
+        raw_utility_id = str(self.entry.data.get(CONF_UTILITY_ID, "kredslob")).strip() or "kredslob"
+        utility_id = raw_utility_id
+        utility_status = str(self.entry.data.get(CONF_UTILITY_STATUS, "confirmed") or "confirmed")
+        cached = cached_utilities()
+        matched = match_utility_for_entry(self.entry.data, cached) if cached is not None else None
+        if matched:
+            matched_id = str(matched.get("id") or "").strip()
+            if raw_utility_id in ("custom", "eforsyning-custom") and matched_id not in (
+                "",
+                "custom",
+                "eforsyning-custom",
+            ):
+                utility_id = matched_id
+                utility_status = str(matched.get("status") or "confirmed")
+            elif matched.get("status") == "confirmed" and utility_status == "pending_test":
+                utility_status = "confirmed"
+            if not location and matched.get("city"):
+                location = str(matched["city"])
         return {
             "utility": self.entry.data.get(CONF_UTILITY) or self.entry.title or "KMD Easy Energy",
-            "utility_id": self.entry.data.get(CONF_UTILITY_ID, "kredslob"),
-            "utility_status": self.entry.data.get(CONF_UTILITY_STATUS, "confirmed"),
+            "utility_id": utility_id,
+            "utility_status": utility_status,
             "portal_url": self._portal_url,
             "location": location,
             "bonus_temp": float(
@@ -778,6 +890,7 @@ class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if not inst or not point:
             return
 
+        energy_factor = KMDClient.energy_factor(kwh_unit)
         today_s = today.isoformat()
         if state.get("daily_history_fetched_on") != today_s and kwh_unit:
             history = dict(state.get("daily_kwh_history") or {})
@@ -797,7 +910,7 @@ class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                         continue
                     df = str(item.get("DateFrom") or "")[:10]
                     if len(df) == 10 and item.get("Value") is not None:
-                        history[df] = float(item["Value"])
+                        history[df] = _scale_num(item["Value"], energy_factor)
             state["daily_kwh_history"] = history
             state["daily_history_fetched_on"] = today_s
 
@@ -831,7 +944,7 @@ class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     )
                     state["hourly_kwh"] = merge_hourly_points(
                         state.get("hourly_kwh") or [],
-                        [p for x in series if (p := compact_hourly_point(x))],
+                        [p for x in series if (p := compact_hourly_point(x, factor=energy_factor))],
                     )
                 if m3_unit:
                     series = await self.client.get_hourly_with_fallback(
@@ -1003,6 +1116,7 @@ class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         state.pop("token_expired", None)
         state.update(self._base_meta())
         state["initial_setup_complete"] = self._initial_setup_complete
+        _migrate_unscaled_kmd_cache(state)
         self._enrich_derived(state)
         return state
 
@@ -1172,9 +1286,13 @@ class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         point = mp.get("MeasurementPointId")
         if not inst or not point:
             return
+        energy_factor = KMDClient.energy_factor(kwh_unit)
         month_start = today.replace(day=1)
         oldest = date_offset_months(today, -12)
-        for key, unit in (("hourly_kwh", kwh_unit), ("hourly_m3", m3_unit)):
+        for key, unit, factor in (
+            ("hourly_kwh", kwh_unit, energy_factor),
+            ("hourly_m3", m3_unit, 1.0),
+        ):
             if not unit:
                 continue
             points = state.get(key) or []
@@ -1190,7 +1308,7 @@ class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 datetime(month_start.year, month_start.month, month_start.day),
             )
             state[key] = merge_hourly_points(
-                points, [p for x in series if (p := compact_hourly_point(x))]
+                points, [p for x in series if (p := compact_hourly_point(x, factor=factor))]
             )
 
     async def _async_fetch_from_kmd(self, state: dict[str, Any]) -> dict[str, Any]:
@@ -1248,16 +1366,27 @@ class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 str(cid) if cid else None,
                 meter_point_id(mp),
             )
+            units = mp.get("Units") or []
+            kwh_unit = KMDClient.find_energy_unit(units)
+            energy_factor = KMDClient.energy_factor(kwh_unit)
             prev_supply = state.get("selected_supply_key")
-            if prev_supply and new_supply and prev_supply != new_supply:
+            prev_factor = state.get("kmd_energy_factor")
+            if (
+                (prev_supply and new_supply and prev_supply != new_supply)
+                or (energy_factor != 1.0 and prev_factor != energy_factor)
+                or (prev_factor is not None and prev_factor != energy_factor)
+            ):
                 _LOGGER.info(
-                    "KMD selected meter changed (kundeforhold %s); clearing cached consumption",
+                    "KMD selected meter or energy unit changed (kundeforhold %s, unit=%s, factor=%s); clearing cached consumption",
                     account.get("customer_index"),
+                    (kwh_unit or {}).get("Name") if isinstance(kwh_unit, dict) else None,
+                    energy_factor,
                 )
                 clear_consumption_cache(state)
                 first_sync = True
             state["selected_supply_key"] = new_supply
-            units = mp.get("Units") or []
+            state["kmd_energy_factor"] = energy_factor
+            state["kmd_energy_unit"] = str((kwh_unit or {}).get("Name") or "kWh")
             available_units = [
                 {
                     "Id": u.get("Id"),
@@ -1276,7 +1405,6 @@ class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 available_units,
             )
 
-            kwh_unit = KMDClient.find_unit(units, "kWh") or (units[0] if units else None)
             m3_unit = KMDClient.find_unit(units, "m3") or KMDClient.find_unit(units, "m³")
             temp_unit = KMDClient.find_unit(units, "°C") or KMDClient.find_unit(units, "C")
 
@@ -1314,7 +1442,7 @@ class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                                 df_str = item.get("DateFrom") or ""
                                 if len(df_str) >= 7 and item.get("Value") is not None:
                                     m_idx = int(df_str[5:7])
-                                    v = float(item["Value"])
+                                    v = float(item["Value"]) * energy_factor
                                     yr_dict[M_KEYS[m_idx - 1]] = int(v) if v.is_integer() else round(v, 2)
                             annual_map[yr_s] = round(
                                 sum(v for v in yr_dict.values() if isinstance(v, (int, float)))
@@ -1365,7 +1493,7 @@ class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                         df_str = item.get("DateFrom") or ""
                         if len(df_str) >= 10:
                             d_num = str(int(df_str[8:10]))
-                            fv = float(val or 0)
+                            fv = float(val or 0) * energy_factor
                             num_v: int | float = int(fv) if fv.is_integer() else round(fv, 2)
                             days[d_num] = num_v
                             latest_date = df_str[:10]
@@ -1406,7 +1534,7 @@ class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     state["hourly_kwh_points"] = len(h_series)
                     state["hourly_kwh"] = merge_hourly_points(
                         state.get("hourly_kwh") or [],
-                        [p for x in h_series if (p := compact_hourly_point(x))],
+                        [p for x in h_series if (p := compact_hourly_point(x, factor=energy_factor))],
                     )
                     valid_day_isos = {d.date().isoformat() for d in complete_day_dts}
                     by_day: dict[str, dict[int, list[float]]] = {}
@@ -1422,7 +1550,7 @@ class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                         if day_iso not in valid_day_isos:
                             continue
                         by_day.setdefault(day_iso, {}).setdefault(dt_loc.hour, []).append(
-                            float(x.get("Value") or 0)
+                            float(x.get("Value") or 0) * energy_factor
                         )
                     buckets: list[list[float]] = [[] for _ in range(24)]
                     n_days = 0
@@ -1502,8 +1630,8 @@ class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                             dt_p = str(sp.get("DateTo"))[:10].split("-")
                             state["forecast"] = {
                                 "period": f"{df_p[2]}.{df_p[1]}.{df_p[0]} - {dt_p[2]}.{dt_p[1]}.{dt_p[0]}",
-                                "expected_kwh": round(float(ov["Actual"]["Value"])),
-                                "budget_kwh": round(float(ov["Expected"]["Value"])),
+                                "expected_kwh": round(float(ov["Actual"]["Value"]) * energy_factor),
+                                "budget_kwh": round(float(ov["Expected"]["Value"]) * energy_factor),
                             }
             except Exception as err:  # noqa: BLE001
                 _LOGGER.warning("Optional settlement/overview failed: %s", err)

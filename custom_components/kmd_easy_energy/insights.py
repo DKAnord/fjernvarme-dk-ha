@@ -66,14 +66,17 @@ def hour_start_local(dt: datetime) -> datetime:
     return local.replace(minute=0, second=0, microsecond=0)
 
 
-def compact_hourly_point(item: dict[str, Any]) -> dict[str, Any] | None:
+def compact_hourly_point(item: dict[str, Any], *, factor: float = 1.0) -> dict[str, Any] | None:
     """Keep only the fields needed to rebuild Energy statistics."""
     date_from = item.get("DateFrom")
     if not date_from:
         return None
+    val = item.get("Value")
+    if val is not None and factor != 1.0:
+        val = round(float(val) * factor, 4)
     return {
         "DateFrom": date_from,
-        "Value": item.get("Value"),
+        "Value": val,
         "IsComplete": bool(item.get("IsComplete")),
     }
 

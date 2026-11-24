@@ -3,7 +3,7 @@
  * Zero external dependencies, Shadow DOM, responsive, interactive tooltips, DA/EN i18n.
  */
 (() => {
-  const VER = "1.2.2";
+  const VER = "1.2.3";
   const MONTHS = ["Jan", "Feb", "Mar", "Apr", "Maj", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Dec"];
   const DAYS_IN_MONTH = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
   const isLeapYear = (y) => (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0;
@@ -83,7 +83,7 @@
     { id: "envafors", name: "Envafors / SK Forsyning", city: "Slagelse / Næstved", url: "https://skenergi.dk/minforsyning/", status: "pending_test" },
     { id: "frederikshavn-forsyning", name: "Frederikshavn Forsyning", city: "Frederikshavn", url: "https://www.forsyningen.dk/selvbetjening", status: "confirmed" },
     { id: "vestforsyning", name: "Vestforsyning", city: "Holstebro", url: "https://www.vestforsyning.dk/selvbetjening/", status: "pending_test" },
-    { id: "beof", name: "Bornholms Energi & Forsyning", city: "Bornholm", url: "https://minforsyning.beof.dk/", status: "pending_test" },
+    { id: "beof", name: "Bornholms Energi & Forsyning", city: "Bornholm", url: "https://minforsyning.beof.dk/", status: "confirmed" },
     { id: "kalundborg-forsyning", name: "Kalundborg Forsyning", city: "Kalundborg", url: "https://kalfor.dk/selvbetjening/min-forsyning", status: "pending_test" },
     { id: "albertslund-forsyning", name: "Albertslund Forsyning", city: "Albertslund", url: "https://forsyning.albertslund.dk/selvbetjening", status: "pending_test" },
     { id: "nykobing-sj", name: "Nykøbing Sjælland Varmeværk", city: "Odsherred", url: "https://www.nsfv.dk/", status: "pending_test" },
@@ -98,7 +98,7 @@
     { id: "hadsund-fjernvarme", name: "Hadsund Fjernvarme", city: "Hadsund", url: "https://eforsyning.dk/hadsundfjernvarme/", status: "confirmed", backend: "eforsyning" },
     { id: "hjorring-varmeforsyning", name: "Hjørring Varmeforsyning", city: "Hjørring", url: "https://eforsyning.dk/hjvarme/", status: "pending_test", backend: "eforsyning" },
     { id: "aalborg-forsyning", name: "Aalborg Forsyning", city: "Aalborg", url: "https://aalborgforsyning.dk/services/forbrug/watts-on/", status: "confirmed", backend: "wattson" },
-    { id: "fjernvarme-fyn", name: "Fjernvarme Fyn", city: "Odense / Fyn", url: "https://www.fjernvarmefyn.dk/spar-paa-energien/overblik/watts-on-app/", status: "pending_test", backend: "wattson" },
+    { id: "fjernvarme-fyn", name: "Fjernvarme Fyn", city: "Odense / Fyn", url: "https://www.fjernvarmefyn.dk/spar-paa-energien/overblik/watts-on-app/", status: "confirmed", backend: "wattson" },
     { id: "hillerod-forsyning", name: "Hillerød Forsyning", city: "Hillerød", url: "https://hfors.dk/selvbetjening/se-forbrug-regninger/watts-on-din-forbrugsapp-til-vand-varme", status: "pending_test", backend: "wattson" },
   ];
 
@@ -289,10 +289,35 @@
       });
     }
 
+    _isDesktopWide() {
+      return (this.clientWidth || (typeof window !== "undefined" && window.innerWidth) || 1280) >= 768;
+    }
+
+    connectedCallback() {
+      const checkWidth = () => {
+        const wide = this._isDesktopWide();
+        if (this._lastDesktopWide !== undefined && wide !== this._lastDesktopWide) {
+          this._render();
+        }
+      };
+      if (typeof ResizeObserver === "function" && !this._ro) {
+        this._ro = new ResizeObserver(checkWidth);
+        this._ro.observe(this);
+      } else if (typeof window !== "undefined" && typeof window.addEventListener === "function" && !this._onResize) {
+        this._onResize = checkWidth;
+        window.addEventListener("resize", this._onResize);
+      }
+    }
+
     disconnectedCallback() {
       const unsub = this._unsubMitid;
       this._unsubMitid = null;
       if (this._qrTimer) { clearInterval(this._qrTimer); this._qrTimer = null; }
+      if (this._ro) { this._ro.disconnect(); this._ro = null; }
+      if (this._onResize && typeof window !== "undefined" && typeof window.removeEventListener === "function") {
+        window.removeEventListener("resize", this._onResize);
+        this._onResize = null;
+      }
       if (typeof unsub === "function") unsub();
       else if (unsub && typeof unsub.then === "function") unsub.then((fn) => fn && fn()).catch(() => {});
     }
@@ -354,12 +379,12 @@
 
         if (typeof vPrev === "number") {
           const y = yKwh(vPrev);
-          bars += `<rect x="${cx - bw - 1}" y="${y}" width="${bw}" height="${Math.max(1, pad.t + ch - y)}" rx="3" fill="rgba(148,163,184,0.45)" data-tip="${m}: ${prevYr} = ${fmtInt(vPrev)} kWh${typeof vCur === 'number' ? ` · ${curYr} = ${fmtInt(vCur)} kWh` : ''}${typeof tCur === 'number' ? ` · ${t.outdoor} ${fmtDec(tCur)}°C` : ''}"/>`;
+          bars += `<rect x="${cx - bw - 1}" y="${y}" width="${bw}" height="${Math.max(1, pad.t + ch - y)}" rx="3" fill="rgba(148,163,184,0.45)" tabindex="0" data-tip="${m}: ${prevYr} = ${fmtInt(vPrev)} kWh${typeof vCur === 'number' ? ` · ${curYr} = ${fmtInt(vCur)} kWh` : ''}${typeof tCur === 'number' ? ` · ${t.outdoor} ${fmtDec(tCur)}°C` : ''}"/>`;
         }
         if (typeof vCur === "number") {
           const y = yKwh(vCur);
           const costTip = typeof mCost[m] === "number" ? ` · ~${fmtInt(mCost[m])} kr.` : "";
-          bars += `<rect x="${cx + 1}" y="${y}" width="${bw}" height="${Math.max(1, pad.t + ch - y)}" rx="3" fill="url(#gHeat)" data-tip="${m}: ${curYr} = ${fmtInt(vCur)} kWh${costTip}${typeof vPrev === 'number' ? ` (${prevYr}: ${fmtInt(vPrev)} kWh)` : ''}${typeof tCur === 'number' ? ` · ${t.outdoor} ${fmtDec(tCur)}°C` : ''}"/>`;
+          bars += `<rect x="${cx + 1}" y="${y}" width="${bw}" height="${Math.max(1, pad.t + ch - y)}" rx="3" fill="url(#gHeat)" tabindex="0" data-tip="${m}: ${curYr} = ${fmtInt(vCur)} kWh${costTip}${typeof vPrev === 'number' ? ` (${prevYr}: ${fmtInt(vPrev)} kWh)` : ''}${typeof tCur === 'number' ? ` · ${t.outdoor} ${fmtDec(tCur)}°C` : ''}"/>`;
         }
         if (typeof tCur === "number") {
           pts.push([cx, yTmp(tCur), `${m} ${t.outdoor.toLowerCase()}: ${fmtDec(tCur)} °C`]);
@@ -372,7 +397,7 @@
         const d = pts.map((p, idx) => `${idx === 0 ? "M" : "L"}${p[0].toFixed(1)},${p[1].toFixed(1)}`).join(" ");
         line = `<path d="${d}" fill="none" stroke="#38bdf8" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>`;
         pts.forEach(([x, y, tip]) => {
-          line += `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="3.6" fill="#0ea5e9" stroke="#fff" stroke-width="1.4" data-tip="${esc(tip)}"/>`;
+          line += `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="3.6" fill="#0ea5e9" stroke="var(--card-background-color, #fff)" stroke-width="1.4" tabindex="0" data-tip="${esc(tip)}"/>`;
         });
       }
       return `<svg viewBox="0 0 ${W} ${H}" class="svg"><defs><linearGradient id="gHeat" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#f97316"/><stop offset="100%" stop-color="#ef4444"/></linearGradient></defs>${grid}${bars}${line}</svg>`;
@@ -422,7 +447,7 @@
           const tip = mExp !== null
             ? `${m} ${curYr}: ${fmtDec(v)} °C · krav ${fmtDec(mExp)} °C (${v < effB ? "Bonus!" : v <= effP ? "På krav" : "Gebyr!"})`
             : `${m} ${curYr}: ${fmtDec(v)} °C (${v < bonusT ? "Bonus!" : v <= penaltyT ? "Neutral" : "Gebyr!"})`;
-          bars += `<rect x="${cx - bw / 2}" y="${y}" width="${bw}" height="${Math.max(2, pad.t + ch - y)}" rx="5" fill="${col}" fill-opacity="0.88" data-tip="${esc(tip)}"/>`;
+          bars += `<rect x="${cx - bw / 2}" y="${y}" width="${bw}" height="${Math.max(2, pad.t + ch - y)}" rx="5" fill="${col}" fill-opacity="0.88" tabindex="0" data-tip="${esc(tip)}"/>`;
           bars += `<text x="${cx}" y="${y - 7}" text-anchor="middle" class="val val-sm">${fmtDec(v)}</text>`;
         }
         if (mExp !== null) {
@@ -437,7 +462,7 @@
       }
       if (expPts.length >= 1) {
         expPts.forEach(([x, y, m, mExp]) => {
-          expLine += `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="3.4" fill="#0ea5e9" stroke="#fff" stroke-width="1.2" data-tip="Forventet retur ${m} ${curYr}: ${fmtDec(mExp)} °C"/>`;
+          expLine += `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="3.6" fill="#0ea5e9" stroke="var(--card-background-color, #fff)" stroke-width="1.2" tabindex="0" data-tip="Forventet retur ${m} ${curYr}: ${fmtDec(mExp)} °C"/>`;
         });
       }
       return `<svg viewBox="0 0 ${W} ${H}" class="svg">${grid}${bars}${expLine}</svg>`;
@@ -488,7 +513,7 @@
           const y = yK(kv);
           const isPeak = info.peaks.has(h);
           const bw = Math.min(15, xStep * 0.64);
-          bars += `<rect x="${cx - bw / 2}" y="${y}" width="${bw}" height="${Math.max(2, pad.t + ch - y)}" rx="3.5" fill="${isPeak ? '#ec4899' : '#f59e0b'}" fill-opacity="${isPeak ? '0.94' : '0.72'}" data-tip="Kl. ${String(h).padStart(2, '0')}:00 snit: ${fmtDec(kv, 2)} kWh/t${isPeak ? ' (Spidstime)' : ''}${typeof tv === 'number' ? ` · Retur ${fmtDec(tv)} °C` : ''}"/>`;
+          bars += `<rect x="${cx - bw / 2}" y="${y}" width="${bw}" height="${Math.max(2, pad.t + ch - y)}" rx="3.5" fill="${isPeak ? '#ec4899' : '#f59e0b'}" fill-opacity="${isPeak ? '0.94' : '0.72'}" tabindex="0" data-tip="Kl. ${String(h).padStart(2, '0')}:00 snit: ${fmtDec(kv, 2)} kWh/t${isPeak ? ' (Spidstime)' : ''}${typeof tv === 'number' ? ` · Retur ${fmtDec(tv)} °C` : ''}"/>`;
           if (h === info.maxIdx && info.peaks.has(h)) {
             bars += `<text x="${cx}" y="${Math.max(pad.t - 4, y - 6)}" text-anchor="middle" class="val">${fmtDec(kv, 2)}</text>`;
           }
@@ -504,7 +529,7 @@
         const d = pts.map((p, i) => `${i === 0 ? "M" : "L"}${p[0].toFixed(1)},${p[1].toFixed(1)}`).join(" ");
         line = `<path d="${d}" fill="none" stroke="#38bdf8" stroke-width="2.4" stroke-linejoin="round"/>`;
         pts.forEach(([x, y, tip]) => {
-          line += `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="2.8" fill="#0ea5e9" stroke="#fff" stroke-width="1" data-tip="${esc(tip)}"/>`;
+          line += `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="3.4" fill="#0ea5e9" stroke="var(--card-background-color, #fff)" stroke-width="1" tabindex="0" data-tip="${esc(tip)}"/>`;
         });
       }
       return `<svg viewBox="0 0 ${W} ${H}" class="svg">${grid}${bars}${line}</svg>`;
@@ -562,7 +587,7 @@
         const cx = pad.l + xStep * (i + 0.5);
         const y = yPos(b.val);
         const bw = Math.min(54, xStep * 0.52);
-        bars += `<rect x="${cx - bw / 2}" y="${y}" width="${bw}" height="${Math.max(2, pad.t + ch - y)}" rx="7" fill="${b.col}" fill-opacity="0.88" data-tip="${esc(`${b.lbl}: ${fmtDec(b.val)} kWh/dag (${b.sub})`)}"/>`;
+        bars += `<rect x="${cx - bw / 2}" y="${y}" width="${bw}" height="${Math.max(2, pad.t + ch - y)}" rx="7" fill="${b.col}" fill-opacity="0.88" tabindex="0" data-tip="${esc(`${b.lbl}: ${fmtDec(b.val)} kWh/dag (${b.sub})`)}"/>`;
         bars += `<text x="${cx}" y="${y - 8}" text-anchor="middle" class="val val-lg">${fmtDec(b.val)} kWh/d</text>`;
         bars += `<text x="${cx}" y="${H - 22}" text-anchor="middle" class="ax">${esc(b.lbl)}</text>`;
         bars += `<text x="${cx}" y="${H - 6}" text-anchor="middle" class="ax-sub">${esc(b.sub)}</text>`;
@@ -570,14 +595,14 @@
       return `<svg viewBox="0 0 ${W} ${H}" class="svg">${grid}${bars}</svg>`;
     }
 
-    _renderDailySvg(daily, dailyTemp, t) {
+    _renderDailySvg(daily, dailyTemp, t, wide = false) {
       const days = daily?.days || {};
       const entries = Object.keys(days).map((k) => [parseInt(k, 10), days[k]]).sort((a, b) => a[0] - b[0]);
       const clean = entries.filter(([, v], idx) => !(idx === entries.length - 1 && entries.length > 2 && (daily?.latest_complete === false || v < 10)));
       if (clean.length === 0) return `<div class="empty">${esc(t.no_daily)}</div>`;
 
       const ymPrefix = (daily?.latest_date || new Date().toISOString().slice(0, 7)).slice(0, 7);
-      const W = 540, H = 220, pad = { l: 42, r: 40, t: 26, b: 32 };
+      const W = wide ? 960 : 540, H = 220, pad = { l: 42, r: 40, t: 26, b: 32 };
       const cw = W - pad.l - pad.r, ch = H - pad.t - pad.b;
       const topK = Math.max(70, ...clean.map((x) => x[1] * 1.08));
       const tVals = clean.map(([d]) => dailyTemp[`${ymPrefix}-${String(d).padStart(2, "0")}`]).filter((v) => typeof v === "number");
@@ -602,15 +627,15 @@
         });
       }
 
-      const labelStep = clean.length > 15 ? 2 : 1;
+      const labelStep = (!wide && clean.length > 15) ? 2 : (clean.length > 31 ? 2 : 1);
       let bars = "";
       const pts = [];
       clean.forEach(([d, v], idx) => {
         const cx = pad.l + xStep * (idx + 0.5);
         const y = yK(v);
-        const bw = Math.min(20, xStep * 0.64);
+        const bw = Math.min(wide ? 22 : 20, xStep * 0.64);
         const dt = dailyTemp[`${ymPrefix}-${String(d).padStart(2, "0")}`];
-        bars += `<rect x="${cx - bw / 2}" y="${y}" width="${bw}" height="${Math.max(2, pad.t + ch - y)}" rx="3.5" fill="url(#gDay)" data-tip="${esc(`${d}.: ${v} kWh${typeof dt === 'number' ? ` · ${t.outdoor} ${fmtDec(dt)} °C` : ''}`)}"/>`;
+        bars += `<rect x="${cx - bw / 2}" y="${y}" width="${bw}" height="${Math.max(2, pad.t + ch - y)}" rx="3.5" fill="url(#gDay)" tabindex="0" data-tip="${esc(`${d}.: ${v} kWh${typeof dt === 'number' ? ` · ${t.outdoor} ${fmtDec(dt)} °C` : ''}`)}"/>`;
         if (idx % labelStep === 0 || idx === clean.length - 1 && (clean.length - 1) % labelStep === 0) {
           bars += `<text x="${cx}" y="${H - 8}" text-anchor="middle" class="ax">${d}.</text>`;
         }
@@ -622,7 +647,7 @@
         const path = pts.map((p, i) => `${i === 0 ? "M" : "L"}${p[0].toFixed(1)},${p[1].toFixed(1)}`).join(" ");
         line = `<path d="${path}" fill="none" stroke="#38bdf8" stroke-width="2.3"/>`;
         pts.forEach(([x, y, tip]) => {
-          line += `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="3.2" fill="#0ea5e9" stroke="#fff" stroke-width="1" data-tip="${esc(tip)}"/>`;
+          line += `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="3.5" fill="#0ea5e9" stroke="var(--card-background-color, #fff)" stroke-width="1" tabindex="0" data-tip="${esc(tip)}"/>`;
         });
       }
       return `<svg viewBox="0 0 ${W} ${H}" class="svg"><defs><linearGradient id="gDay" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#fb923c"/><stop offset="100%" stop-color="#f59e0b"/></linearGradient></defs>${grid}${bars}${line}</svg>`;
@@ -731,12 +756,22 @@
       );
       const freshText = retrievedLbl + (maxDay !== null ? ` · Data t.o.m. ${maxDay}. ${moLbl}${isPartial ? " (delvis)" : ""}` : "");
 
-      const activeUtilId = this._selectedUtilId || cfg.utility_id || a.utility_id || "kredslob";
+      const normPortal = (u) => String(u || "").trim().replace(/\/+$/, "").toLowerCase();
+      const rawUtilId = this._selectedUtilId || cfg.utility_id || a.utility_id || "kredslob";
+      const rawPortalUrl = cfg.portal_url || a.portal_url || "";
+      const portalMatch = (rawUtilId === "eforsyning-custom" || rawUtilId === "custom") && rawPortalUrl
+        ? UTILITIES.find((u) => u.url && normPortal(u.url) === normPortal(rawPortalUrl))
+        : null;
+      const activeUtilId = portalMatch ? portalMatch.id : rawUtilId;
       const activeUtil = UTILITIES.find((u) => u.id === activeUtilId)
         || (a.utility ? { id: activeUtilId, name: a.utility, city: a.location || "", url: a.portal_url || "", status: a.utility_status || "pending_test", backend } : UTILITIES[0]);
       const activePortalUrl = cfg.portal_url || a.portal_url || activeUtil.url;
       const locName = cfg.location || a.location || activeUtil.city || "Lokal";
-      const utilStatus = a.utility_status || activeUtil.status;
+      const utilStatus = portalMatch
+        ? portalMatch.status
+        : (activeUtil?.id === activeUtilId && activeUtil?.status === "confirmed"
+          ? "confirmed"
+          : (a.utility_status || activeUtil.status));
       const statusBadge = utilStatus === "confirmed" ? t.confirmed : t.pending;
 
       // The MitID wizard only lists KMD utilities (E|Forsyning / Watts On are set up in HA's config flow).
@@ -774,12 +809,16 @@
           ${otherNotifyOpts ? `<optgroup label="🔔 Øvrige notify-tjenester">${otherNotifyOpts}</optgroup>` : ""}
           <option value="__custom__" ${isCustomNotify ? "selected" : ""}>✏️ Andet (indtast manuelt)…</option>
         </select>
-        ${isCustomNotify ? `<input id="notifyInput" value="${esc(notifySvc)}" placeholder="f.eks. mobile_app_min_telefon" style="margin-top:6px" />` : ""}`;
+        ${isCustomNotify ? `<input id="notifyInput" aria-label="Brugerdefineret notify-tjeneste" value="${esc(notifySvc)}" placeholder="f.eks. mobile_app_min_telefon" style="margin-top:6px" />` : ""}`;
       const hasData = Boolean(
         st && (Object.keys(ann).length > 0 || Object.keys(mon).length > 0 || Object.keys(dy.days || {}).length > 0)
       );
       const isInitialSetup = !hasData || a.initial_setup_complete === false;
       const showOnboarding = isInitialSetup || Boolean(this._setupOpen);
+      const chartCount = [has("monthly"), has("temperatures"), has("hourly"), has("daily"), has("daily")].filter(Boolean).length;
+      const isDesktopWide = this._isDesktopWide();
+      this._lastDesktopWide = isDesktopWide;
+      const wideDaily = chartCount % 2 === 1 && isDesktopWide;
       const wizPortalUrl = this._wizPortalUrl ?? activePortalUrl;
       const wizLocation = this._wizLocation ?? locName;
       const wizBonus = this._wizBonus ?? bonusT;
@@ -791,8 +830,8 @@
       const wizEfPenalty = this._wizEfPenalty ?? (singleReturnTarget ? "" : penaltyT);
       const wizEfMotivPct = this._wizEfMotivPct ?? wizMotivPct;
       const mitidLiveBox = !hasMitid ? "" : otpCode
-        ? `<div class="mitid-box otp"><div>🔑 Indtast denne 4-cifrede engangskode i MitID-appen:</div><div class="otp-digits">${esc(otpCode.split("").join(" "))}</div></div>`
-        : (qrSvg ? `<div class="mitid-box qr"><div>📲 Scan QR-koden med MitID-appen på din telefon:</div><div class="qr-wrap"><img id="mitidQrImg" src="${esc(this._qrDataUrl((this._mitidQrFrames || [])[this._mitidQrIdx || 0] || qrSvg))}" alt="MitID QR-kode" /></div><div class="qr-hint">Koden skifter hvert sekund — hold telefonen roligt foran skærmen. Står kortet på samme telefon som MitID-appen, kan QR-koden ikke scannes — slå i stedet engangskoder til i MitID-appen (Menu → Godkend med QR- eller engangskoder → Engangskoder).</div></div>` : "");
+        ? `<div class="mitid-box otp" role="region" aria-live="polite"><div>🔑 Indtast denne 4-cifrede engangskode i MitID-appen:</div><div class="otp-digits">${esc(otpCode.split("").join(" "))}</div></div>`
+        : (qrSvg ? `<div class="mitid-box qr" role="region" aria-live="polite"><div>📲 Scan QR-koden med MitID-appen på din telefon:</div><div class="qr-wrap"><img id="mitidQrImg" src="${esc(this._qrDataUrl((this._mitidQrFrames || [])[this._mitidQrIdx || 0] || qrSvg))}" alt="MitID QR-kode" /></div><div class="qr-hint">Koden skifter hvert sekund — hold telefonen roligt foran skærmen. Står kortet på samme telefon som MitID-appen, kan QR-koden ikke scannes — slå i stedet engangskoder til i MitID-appen (Menu → Godkend med QR- eller engangskoder → Engangskoder).</div></div>` : "");
 
       // Dynamic Mushroom-style banner state
       let bannerIcon = isToday ? "✓" : "↻";
@@ -831,8 +870,17 @@
       const wxHasTemps = Object.keys(wx.monthly_temp || {}).length > 0 || Object.keys(wx.daily_temp || {}).length > 0;
       const tempTxt = (has("monthly") || has("daily")) && wxHasTemps ? outdoorTempText(a, lang) : "";
       const tempSourceNote = tempTxt ? `<div class="src-note temp-src" data-section="temp-source">🌡️ ${esc(tempTxt)}</div>` : "";
+      const feedbackFooter = `
+            <div class="fb-foot">
+              <span>📣 <b>Feedback om værker:</b> Virker <b>${esc(activeUtil.name)}</b> (uden persondata)?</span>
+              <div class="bn-btns">
+                <button class="btn primary" id="obFbGithubBtn">✅ Bekræft værk på GitHub ↗</button>
+                <button class="btn" id="obFbIssueBtn">🐞 Fejlmeld værk ↗</button>
+                <button class="btn" id="obFbCopyBtn">${this._fbCopied ? "✅ Kopieret!" : "📋 Kopiér teknisk rapport"}</button>
+              </div>
+            </div>`;
       const efOnboard = `
-          <div class="onboard">
+          <div class="onboard" id="onboardCard">
             <div class="ob-head">
               <div class="tb-left">
                 <span class="tb-title">🔥 ${esc(activeUtil.name)} — ${esc(dataSource)}</span>
@@ -869,7 +917,7 @@
                   <button class="btn" id="saveTariffBtn">💾 Gem pris &amp; returkrav</button>
                 </div>
               </div>
-            </details>
+            </details>${feedbackFooter}
           </div>`;
       const syncNudge = (syncReminder && !hasSyncMsg && syncReminderMsg)
         ? `<div class="sync-nudge" role="status"><span aria-hidden="true">💧</span><span>${esc(syncReminderMsg)}</span></div>`
@@ -881,13 +929,13 @@
       this.shadowRoot.innerHTML = `
         <style>
           :host { display: block; font-family: inherit; color: var(--primary-text-color); }
-          .wrap { display: flex; flex-direction: column; gap: 14px; }
+          .wrap { display: flex; flex-direction: column; gap: 14px; max-width: 1480px; margin: 0 auto; width: 100%; box-sizing: border-box; position: relative; }
           .topbar {
             display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap;
             padding: 12px 16px; border-radius: 18px;
             background: color-mix(in srgb, var(--card-background-color, #fff) 68%, transparent);
             backdrop-filter: blur(16px) saturate(160%); -webkit-backdrop-filter: blur(16px) saturate(160%);
-            border: 1px solid rgba(255,255,255,0.28); box-shadow: 0 6px 20px rgba(0,0,0,0.08);
+            border: 1px solid var(--ha-card-border-color, var(--divider-color, rgba(148,163,184,0.28))); box-shadow: 0 6px 20px rgba(0,0,0,0.08);
           }
           .tb-left { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
           .tb-title { font-size: 15px; font-weight: 800; }
@@ -904,42 +952,47 @@
           }
           button.btn.login { background: rgba(14,165,233,0.18); border-color: rgba(14,165,233,0.4); }
           button.btn:hover { opacity: 0.85; }
+          button.btn:focus-visible, .link-btn:focus-visible, .bn-main:focus-visible, .ob-field input:focus-visible, .ob-field select:focus-visible, details.ob-manual summary:focus-visible, rect[data-tip]:focus-visible, circle[data-tip]:focus-visible {
+            outline: 2px solid var(--primary-color, #0284c7);
+            outline-offset: 2px;
+          }
           .badge {
             padding: 3px 9px; border-radius: 999px; font-size: 11.5px; font-weight: 700;
             background: rgba(148,163,184,0.16); border: 1px solid rgba(148,163,184,0.3);
           }
           .badge.ok { background: rgba(34,197,94,0.16); color: #16a34a; border-color: rgba(34,197,94,0.35); }
           .badge.warn { background: rgba(245,158,11,0.18); color: #d97706; border-color: rgba(245,158,11,0.35); }
-          .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(175px, 1fr)); gap: 10px; }
+          .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
           .kpi {
-            padding: 13px 15px; border-radius: 18px;
+            padding: 13px 15px; border-radius: 18px; min-width: 0;
             background: color-mix(in srgb, var(--card-background-color, #fff) 64%, transparent);
             backdrop-filter: blur(16px) saturate(160%); -webkit-backdrop-filter: blur(16px) saturate(160%);
-            border: 1px solid rgba(255,255,255,0.28); box-shadow: 0 6px 20px rgba(0,0,0,0.08);
+            border: 1px solid var(--ha-card-border-color, var(--divider-color, rgba(148,163,184,0.28))); box-shadow: 0 6px 20px rgba(0,0,0,0.08);
           }
           .k-lbl { font-size: 12px; font-weight: 700; color: var(--secondary-text-color); }
           .k-val { font-size: 21px; font-weight: 800; margin: 4px 0 2px; }
           .k-sub { font-size: 12px; font-weight: 600; color: var(--secondary-text-color); }
           .good { color: #16a34a; } .warn { color: #d97706; } .bad { color: #dc2626; }
-          .grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 14px; }
+          .grid2 { display: grid; grid-template-columns: 1fr; gap: 14px; }
           .panel {
-            padding: 16px 18px; border-radius: 20px; position: relative;
+            padding: 16px 18px; border-radius: 20px; position: relative; min-width: 0;
             background: color-mix(in srgb, var(--card-background-color, #fff) 64%, transparent);
             backdrop-filter: blur(16px) saturate(160%); -webkit-backdrop-filter: blur(16px) saturate(160%);
-            border: 1px solid rgba(255,255,255,0.28); box-shadow: 0 8px 26px rgba(0,0,0,0.10);
+            border: 1px solid var(--ha-card-border-color, var(--divider-color, rgba(148,163,184,0.28))); box-shadow: 0 8px 26px rgba(0,0,0,0.10);
           }
-          .p-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+          .p-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
           .p-title { font-size: 15.5px; font-weight: 800; }
           .p-leg { font-size: 12.5px; color: var(--secondary-text-color); display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+          .p-leg span { display: inline-flex; align-items: center; white-space: nowrap; }
           .dot { display: inline-block; width: 9px; height: 9px; border-radius: 3px; margin-right: 4px; vertical-align: middle; }
           .svg { width: 100%; height: auto; display: block; overflow: visible; }
-          .ax { font-size: 13px; fill: var(--primary-text-color, #e2e8f0); opacity: 0.84; font-weight: 600; }
-          .ax-sub { font-size: 11.5px; fill: var(--secondary-text-color, #94a3b8); font-weight: 600; }
-          .ax-unit { font-size: 11px; fill: var(--secondary-text-color, #94a3b8); font-weight: 700; }
-          .ax-t { font-size: 12.5px; fill: #38bdf8; font-weight: 700; }
-          .ax-bonus { font-size: 12.5px; fill: #22c55e; font-weight: 700; }
-          .ax-penalty { font-size: 12.5px; fill: #ef4444; font-weight: 700; }
-          .val { font-size: 12px; fill: var(--primary-text-color, #f8fafc); font-weight: 800; paint-order: stroke; stroke: var(--card-background-color, #1c1c1c); stroke-width: 4px; stroke-linejoin: round; }
+          .ax { font-size: 13px; fill: var(--primary-text-color, #1e293b); opacity: 0.88; font-weight: 600; }
+          .ax-sub { font-size: 11.5px; fill: var(--secondary-text-color, #64748b); font-weight: 600; }
+          .ax-unit { font-size: 11px; fill: var(--secondary-text-color, #64748b); font-weight: 700; }
+          .ax-t { font-size: 12.5px; fill: var(--kmd-temp-axis-color, #0284c7); font-weight: 700; }
+          .ax-bonus { font-size: 12.5px; fill: var(--kmd-bonus-axis-color, #16a34a); font-weight: 700; }
+          .ax-penalty { font-size: 12.5px; fill: var(--kmd-penalty-axis-color, #dc2626); font-weight: 700; }
+          .val { font-size: 12px; fill: var(--primary-text-color, #0f172a); font-weight: 800; paint-order: stroke; stroke: var(--card-background-color, #ffffff); stroke-width: 4px; stroke-linejoin: round; }
           .val-sm { font-size: 11.5px; }
           .val-lg { font-size: 13px; }
           rect[data-tip], circle[data-tip] { cursor: pointer; transition: opacity 0.12s ease; }
@@ -950,9 +1003,18 @@
             text-align: center; display: none; margin-top: 4px;
           }
           .tip.on { display: block; }
-          .insights { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 10px; }
+          .float-tip {
+            position: absolute; pointer-events: none; z-index: 20; max-width: min(360px, 90vw);
+            padding: 7px 11px; border-radius: 10px; background: rgba(15, 23, 42, 0.94); color: #f8fafc;
+            font-size: 12.5px; font-weight: 600; box-shadow: 0 8px 20px rgba(0,0,0,0.25);
+            opacity: 0; visibility: hidden; transform: translate(-50%, -100%); transition: opacity 0.12s ease;
+            white-space: normal; text-align: center;
+          }
+          .float-tip.below { transform: translate(-50%, 0); }
+          .float-tip.on { opacity: 1; visibility: visible; }
+          .insights { display: grid; grid-template-columns: 1fr; gap: 10px; }
           .ins {
-            padding: 13px 15px; border-radius: 16px;
+            padding: 13px 15px; border-radius: 16px; min-width: 0;
             background: color-mix(in srgb, var(--card-background-color, #fff) 55%, transparent);
             border: 1px solid rgba(148,163,184,0.22); font-size: 13px; line-height: 1.5;
           }
@@ -990,9 +1052,9 @@
             padding: 12px 16px; border-radius: 18px;
             background: color-mix(in srgb, var(--card-background-color, #fff) 68%, transparent);
             backdrop-filter: blur(16px) saturate(160%); -webkit-backdrop-filter: blur(16px) saturate(160%);
-            border: 1px solid rgba(255,255,255,0.28); box-shadow: 0 6px 20px rgba(0,0,0,0.08);
+            border: 1px solid var(--ha-card-border-color, var(--divider-color, rgba(148,163,184,0.28))); box-shadow: 0 6px 20px rgba(0,0,0,0.08);
           }
-          .bn-main { display: flex; align-items: center; gap: 12px; cursor: pointer; flex: 1; min-width: 220px; }
+          .bn-main { display: flex; align-items: center; gap: 12px; cursor: pointer; flex: 0 1 auto; min-width: 220px; max-width: 100%; border-radius: 12px; padding: 2px 4px; margin: -2px -4px; }
           .bn-ico {
             width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center;
             font-size: 16px; font-weight: 800; flex-shrink: 0;
@@ -1002,7 +1064,7 @@
           .bn-ico.blue { background: rgba(14,165,233,0.18); color: #0284c7; }
           .bn-ico.amber { background: rgba(245,158,11,0.18); color: #d97706; }
           .bn-ico.red { background: rgba(239,68,68,0.18); color: #dc2626; }
-          .bn-txt { display: flex; flex-direction: column; gap: 2px; }
+          .bn-txt { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
           .bn-title { font-size: 14.5px; font-weight: 800; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
           .bn-sub { font-size: 12px; font-weight: 600; color: var(--secondary-text-color); }
           .bn-btns { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
@@ -1014,13 +1076,16 @@
           }
           .ob-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
           .ob-note { font-size: 13px; color: var(--secondary-text-color); line-height: 1.45; }
-          .ob-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 10px; }
-          .ob-field { display: flex; flex-direction: column; gap: 4px; font-size: 12px; font-weight: 700; color: var(--secondary-text-color); }
+          .ob-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; align-items: start; }
+          .ob-field { display: flex; flex-direction: column; gap: 4px; font-size: 12px; font-weight: 700; color: var(--secondary-text-color); min-width: 0; }
+          .ob-field label { font-size: 12px; font-weight: 700; color: var(--secondary-text-color); }
           .ob-field input, .ob-field select {
+            width: 100%; max-width: 100%; min-width: 0; box-sizing: border-box; text-overflow: ellipsis;
             padding: 8px 10px; border-radius: 10px; font-size: 13px; font-weight: 600;
             background: var(--secondary-background-color, rgba(148,163,184,0.16));
             color: var(--primary-text-color); border: 1px solid rgba(148,163,184,0.35);
           }
+          .ob-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; width: 100%; }
           .ob-step { font-size: 13.5px; font-weight: 800; color: var(--primary-text-color); margin-top: 2px; }
           .ob-guide {
             padding: 10px 13px; border-radius: 12px; font-size: 13px; line-height: 1.5;
@@ -1032,16 +1097,34 @@
           .ob-live.red { background: rgba(239,68,68,0.16); border-color: rgba(239,68,68,0.42); color: #dc2626; }
           .mitid-box {
             padding: 14px 16px; border-radius: 14px; text-align: center; font-size: 13.5px; font-weight: 700;
+            max-width: 540px; margin: 0 auto; width: 100%; box-sizing: border-box;
             background: rgba(14,165,233,0.14); border: 2px solid rgba(14,165,233,0.5);
           }
           .otp-digits { font-size: 32px; font-weight: 900; letter-spacing: 6px; margin-top: 6px; color: #0284c7; }
           .qr-wrap { margin: 10px auto 0; width: min(240px, 70vw); aspect-ratio: 1 / 1; box-sizing: content-box; background: #fff; padding: 14px; border-radius: 12px; }
           .qr-wrap img, .qr-wrap svg { width: 100%; height: 100%; display: block; image-rendering: pixelated; }
-          .qr-hint { margin-top: 8px; font-size: 12px; font-weight: 600; color: var(--secondary-text-color); }
+          .qr-hint { margin: 8px auto 0; max-width: 54ch; line-height: 1.45; font-size: 12px; font-weight: 600; color: var(--secondary-text-color); }
           details.ob-manual { font-size: 12.5px; color: var(--secondary-text-color); padding-top: 4px; border-top: 1px solid rgba(148,163,184,0.22); }
           details.ob-manual summary { cursor: pointer; font-weight: 700; padding: 4px 0; }
           button.btn.primary { background: rgba(34,197,94,0.20); border-color: rgba(34,197,94,0.45); }
           button.btn:disabled { opacity: 0.55; cursor: wait; }
+          @media (min-width: 560px) and (max-width: 959px) {
+            .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+          }
+          @media (min-width: 960px) {
+            .kpis { grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; }
+          }
+          @media (min-width: 768px) {
+            .grid2 { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+            .grid2 > .panel:last-child:nth-child(odd) { grid-column: 1 / -1; }
+            .grid2 > .panel:last-child:nth-child(odd) .svg { max-height: 285px; }
+          }
+          @media (min-width: 600px) and (max-width: 1199px) {
+            .insights { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+          }
+          @media (min-width: 1200px) {
+            .insights { grid-template-columns: repeat(auto-fit, minmax(195px, 1fr)); gap: 12px; }
+          }
           @media (prefers-reduced-motion: reduce) {
             *, *::before, *::after { transition: none !important; animation: none !important; }
           }
@@ -1049,13 +1132,16 @@
             .good, .badge.ok, .fresh-pill.today, .bn-ico.ok { color: #4ade80; }
             .warn, .badge.warn, .bn-ico.amber { color: #fbbf24; }
             .bad, .bn-ico.red, .ob-live.red { color: #f87171; }
-            .bn-ico.blue { color: #38bdf8; }
-            .link-btn { color: #38bdf8; }
+            .bn-ico.blue, .link-btn, .otp-digits { color: #38bdf8; }
+            .ax-t { fill: #38bdf8; }
+            .ax-bonus { fill: #4ade80; }
+            .ax-penalty { fill: #f87171; }
+            .val { fill: var(--primary-text-color, #f8fafc); stroke: var(--card-background-color, #1c1c1c); }
           }
         </style>
-        <div class="wrap">
+        <div class="wrap" id="wrap">
           ${cfg.show_sync_bar !== false ? (showOnboarding && !hasMitid ? efOnboard : showOnboarding ? `
-          <div class="onboard">
+          <div class="onboard" id="onboardCard">
             <div class="ob-head">
               <div class="tb-left">
                 <span class="tb-title">🔥 ${isInitialSetup ? "Førstegangsopsætning — KMD Easy Energy Fjernvarme" : "Skift / test værk & indstillinger"}</span>
@@ -1079,9 +1165,9 @@
               <label class="ob-field">MitID Bruger-ID (gemmes kun lokalt i HA)
                 <input id="mitidUserInput" value="${esc(this._wizMitidUser || "")}" placeholder="${hasMitidUser ? `Gemt i HA (${esc(mitidMasked)}) — udfyld kun for at ændre` : "Indtast dit MitID Bruger-ID"}" />
               </label>
-              <label class="ob-field">Mobil Push-service (valgfri, til kode på telefon)
+              <div class="ob-field"><label for="notifySel">Mobil Push-service (valgfri, til kode på telefon)</label>
                 ${notifySelectHtml}
-              </label>
+              </div>
             </div>
             <details class="ob-manual" ${!isInitialSetup ? "open" : ""}>
               <summary>⚙️ Avanceret (valgfrit): Varmepris (kr./kWh), returkrav &amp; lokation</summary>
@@ -1092,18 +1178,18 @@
                 <label class="ob-field">By / Lokation (Open-Meteo vejr)
                   <input id="locInput" value="${esc(wizLocation)}" />
                 </label>
-                <label class="ob-field">Retur Bonus / Gebyr (°C)
-                  <div style="display:flex;gap:6px">
-                    <input id="bonusInput" type="number" step="0.5" value="${esc(wizBonus)}" style="width:50%" />
-                    <input id="penaltyInput" type="number" step="0.5" value="${esc(wizPenalty)}" style="width:50%" />
+                <div class="ob-field"><span>Retur Bonus / Gebyr (°C)</span>
+                  <div class="ob-pair">
+                    <input id="bonusInput" type="number" step="0.5" value="${esc(wizBonus)}" aria-label="Retur Bonus (°C)" />
+                    <input id="penaltyInput" type="number" step="0.5" value="${esc(wizPenalty)}" aria-label="Retur Gebyr (°C)" />
                   </div>
-                </label>
-                <label class="ob-field">Varmepris (kr./kWh) &amp; Motivation (%/°C)
-                  <div style="display:flex;gap:6px">
-                    <input id="priceInput" type="number" step="0.001" value="${esc(wizPrice)}" placeholder="kr./kWh" style="width:50%" />
-                    <input id="motivPctInput" type="number" step="0.1" value="${esc(wizMotivPct)}" placeholder="%/°C" style="width:50%" />
+                </div>
+                <div class="ob-field"><span>Varmepris (kr./kWh) &amp; Motivation (%/°C)</span>
+                  <div class="ob-pair">
+                    <input id="priceInput" type="number" step="0.001" value="${esc(wizPrice)}" placeholder="kr./kWh" aria-label="Varmepris (kr./kWh)" />
+                    <input id="motivPctInput" type="number" step="0.1" value="${esc(wizMotivPct)}" placeholder="%/°C" aria-label="Motivation (%/°C)" />
                   </div>
-                </label>
+                </div>
               </div>
             </details>
             <div class="ob-step">2. Forbind med 1-klik MitID-synkronisering (Anbefalet — 100% i Home Assistant)</div>
@@ -1150,18 +1236,10 @@
               <div style="margin-top:8px">
                 <button class="btn primary" id="saveTokenBtn">▶️ Synkroniser én gang med token</button>
               </div>
-            </details>
-            <div class="fb-foot">
-              <span>📣 <b>Feedback om værker:</b> Virker <b>${esc(activeUtil.name)}</b> (uden persondata)?</span>
-              <div class="bn-btns">
-                <button class="btn primary" id="obFbGithubBtn">✅ Bekræft værk på GitHub ↗</button>
-                <button class="btn" id="obFbIssueBtn">🐞 Fejlmeld værk ↗</button>
-                <button class="btn" id="obFbCopyBtn">${this._fbCopied ? "✅ Kopieret!" : "📋 Kopiér teknisk rapport"}</button>
-              </div>
-            </div>
+            </details>${feedbackFooter}
           </div>` : `
           <div class="banner">
-            <div class="bn-main" id="syncTap" title="Tryk for at synkronisere">
+            <div class="bn-main" id="syncTap" role="button" tabindex="0" title="Tryk for at synkronisere">
               <div class="bn-ico ${bannerTone}">${bannerIcon}</div>
               <div class="bn-txt">
                 <div class="bn-title">
@@ -1264,7 +1342,7 @@
             </div>`;
           })() : ""}
 
-          ${(has("monthly") || has("temperatures")) ? `<div class="grid2">
+          ${(has("monthly") || has("temperatures") || has("hourly") || has("daily")) ? `<div class="grid2">
             ${has("monthly") ? `<div class="panel" data-section="monthly">
               <div class="p-head">
                 <div class="p-title">📊 Månedligt forbrug: ${curYr} vs. ${prevYr} &amp; Udetemp</div>
@@ -1287,9 +1365,7 @@
               </div>
               ${this._renderReturnTempSvg(rtM, bonusT, penaltyT, curYr, rtExpM)}
             </div>` : ""}
-          </div>` : ""}
 
-          ${(has("hourly") || has("daily")) ? `<div class="grid2">
             ${has("hourly") ? `<div class="panel" data-section="hourly">
               <div class="p-head">
                 <div class="p-title">🚿 Timeprofil · ${esc(hr.period || `${curYr} MTD`)} (snit pr. time)</div>
@@ -1308,17 +1384,17 @@
               </div>
               ${this._renderMtdVsYtdSvg(ann, mPrev, dy, curYr, prevYr)}
             </div>` : ""}
-          </div>` : ""}
 
-          ${has("daily") ? `<div class="panel" data-section="daily">
-            <div class="p-head">
-              <div class="p-title">📅 ${esc(dy.month || `${curYr}`)}: Dagligt forbrug (kWh) &amp; Udetemp</div>
-              <div class="p-leg">
-                <span>Snit ${fmtDec(dy.gennemsnit || 0)} ${esc(t.avg_day)}</span>
-                <span><i class="dot" style="background:#38bdf8"></i>${esc(t.outdoor)} °C</span>
+            ${has("daily") ? `<div class="panel" data-section="daily">
+              <div class="p-head">
+                <div class="p-title">📅 ${esc(dy.month || `${curYr}`)}: Dagligt forbrug (kWh) &amp; Udetemp</div>
+                <div class="p-leg">
+                  <span>Snit ${fmtDec(dy.gennemsnit || 0)} ${esc(t.avg_day)}</span>
+                  <span><i class="dot" style="background:#38bdf8"></i>${esc(t.outdoor)} °C</span>
+                </div>
               </div>
-            </div>
-            ${this._renderDailySvg(dy, wx.daily_temp || {}, t)}
+              ${this._renderDailySvg(dy, wx.daily_temp || {}, t, wideDaily)}
+            </div>` : ""}
           </div>` : ""}
 
           <div class="panel">
@@ -1354,15 +1430,42 @@
             </div>
             <div class="tip" id="tip">${esc(t.tip_hint)}</div>
           </div>`}
+          <div class="float-tip" id="floatTip" role="tooltip" aria-hidden="true"></div>
         </div>
       `;
 
+      const wrapEl = this.shadowRoot.getElementById("wrap");
       const tip = this.shadowRoot.getElementById("tip");
+      const floatTip = this.shadowRoot.getElementById("floatTip");
       if (tip) {
+        const positionFloat = (el) => {
+          if (!floatTip || !wrapEl || typeof wrapEl.getBoundingClientRect !== "function" || typeof el.getBoundingClientRect !== "function") return;
+          const wr = wrapEl.getBoundingClientRect();
+          const er = el.getBoundingClientRect();
+          if (!wr.width || !er.width) return;
+          floatTip.textContent = el.dataset.tip || "";
+          const rawX = er.left - wr.left + er.width / 2;
+          const clampedX = Math.min(Math.max(120, rawX), Math.max(120, wr.width - 120));
+          const topY = er.top - wr.top - 10;
+          const flipBelow = topY < 38;
+          floatTip.style.left = `${clampedX}px`;
+          floatTip.style.top = `${flipBelow ? er.bottom - wr.top + 8 : topY}px`;
+          floatTip.classList.toggle("below", flipBelow);
+          floatTip.classList.add("on");
+          floatTip.setAttribute("aria-hidden", "false");
+        };
+        const hideFloat = () => {
+          if (!floatTip) return;
+          floatTip.classList.remove("on");
+          floatTip.setAttribute("aria-hidden", "true");
+        };
         this.shadowRoot.querySelectorAll("[data-tip]").forEach((el) => {
-          const show = () => { tip.textContent = el.dataset.tip; tip.classList.add("on"); };
+          const show = () => { tip.textContent = el.dataset.tip; tip.classList.add("on"); positionFloat(el); };
           el.addEventListener("mouseenter", show);
-          el.addEventListener("click", show);
+          el.addEventListener("focus", show);
+          el.addEventListener("mouseleave", hideFloat);
+          el.addEventListener("blur", hideFloat);
+          el.addEventListener("click", () => { tip.textContent = el.dataset.tip; tip.classList.add("on"); });
         });
       }
 
@@ -1546,7 +1649,39 @@
       const syncBtn = this.shadowRoot.getElementById("syncBtn");
       if (syncBtn) syncBtn.addEventListener("click", triggerSync);
       const syncTap = this.shadowRoot.getElementById("syncTap");
-      if (syncTap) syncTap.addEventListener("click", triggerSync);
+      if (syncTap) {
+        syncTap.addEventListener("click", triggerSync);
+        syncTap.addEventListener("keydown", (ev) => {
+          if (ev.key === "Enter" || ev.key === " ") {
+            ev.preventDefault();
+            triggerSync();
+          }
+        });
+      }
+      const onboardCard = this.shadowRoot.getElementById("onboardCard");
+      if (onboardCard && showOnboarding && !isInitialSetup) {
+        onboardCard.addEventListener("keydown", (ev) => {
+          if (ev.key === "Escape") {
+            ev.preventDefault();
+            this._setupOpen = false;
+            this._render();
+          }
+        });
+      }
+      ["efPriceInput", "efMotivPctInput", "efBonusInput", "efPenaltyInput"].forEach((id) => {
+        const el = this.shadowRoot.getElementById(id);
+        if (el && saveTariffBtn) {
+          el.addEventListener("keydown", (ev) => {
+            if (ev.key === "Enter") { ev.preventDefault(); saveTariffBtn.click(); }
+          });
+        }
+      });
+      const mitidUserEl = this.shadowRoot.getElementById("mitidUserInput");
+      if (mitidUserEl && startMitidBtn) {
+        mitidUserEl.addEventListener("keydown", (ev) => {
+          if (ev.key === "Enter") { ev.preventDefault(); startMitidBtn.click(); }
+        });
+      }
       const openSetupBtn = this.shadowRoot.getElementById("openSetupBtn");
       if (openSetupBtn) {
         openSetupBtn.addEventListener("click", () => { this._setupOpen = true; this._render(); });
@@ -1568,7 +1703,17 @@
         .trim()
         .slice(0, 140);
       const buildFeedbackBody = (kind) => {
-        const units = Array.isArray(a.available_units) ? a.available_units.map((u) => u.Name).filter(Boolean).join(", ") : "ukendt";
+        const listedUnits = Array.isArray(a.available_units)
+          ? a.available_units.map((u) => u.Name).filter(Boolean)
+          : [];
+        const inferredUnits = [];
+        if (!listedUnits.length) {
+          if (yCur > 0 || yPrev > 0 || Object.keys(dy.days || {}).length > 0) inferredUnits.push("kWh");
+          if (has("volume")) inferredUnits.push("m3");
+          if (has("temperatures") || rtCur > 0) inferredUnits.push("°C");
+        }
+        const units = (listedUnits.length ? listedUnits : inferredUnits).join(", ")
+          || (Array.isArray(a.available_units) ? "none" : "ukendt");
         const authMethodLabel = backend === "wattson"
           ? "Watts On (OAuth PKCE)"
           : backend === "eforsyning"

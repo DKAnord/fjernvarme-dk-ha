@@ -134,6 +134,14 @@ def apply_wattson_data(
         detected.add("volume")
     if any(v[3] is not None for v in store.values()):
         detected.add("temperatures")
+    wattson_units: list[dict[str, str]] = []
+    if hourly_kwh or any(r.get("kwh") is not None for r in rows) or any(v[0] is not None for v in store.values()):
+        wattson_units.append({"Name": "kWh"})
+    if "volume" in detected:
+        wattson_units.append({"Name": "m3"})
+    if "temperatures" in detected:
+        wattson_units.append({"Name": "°C"})
+    state["available_units"] = wattson_units
     state["wattson"] = {
         **meta,
         "keys_seen": getattr(parsed, "keys_seen", []),

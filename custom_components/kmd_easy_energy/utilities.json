@@ -118,13 +118,26 @@
       "name": "Bornholms Energi & Forsyning (BEOF)",
       "city": "Bornholm",
       "portal_url": "https://minforsyning.beof.dk/",
-      "status": "pending_test",
-      "tier": "verified_portal",
+      "status": "confirmed",
+      "tier": "confirmed",
       "auth_method": "MitID",
       "backend": "kmd",
       "latitude": 55.1,
       "longitude": 14.7,
-      "notes": "Explicit minForsyning portal with MitID or email login."
+      "notes": "Explicit minForsyning portal (Min Forsyning 2) with MitID login. Confirmed live in issue #33 by @danieln431 (MWh converted to kWh). 2026 tariff: 697,50 kr./MWh + 30,00 kr./MWh garantiprovision = 727,50 kr./MWh (0,7275 kr./kWh inkl. moms) and ±1 %/°C return temperature adjustment.",
+      "tariffs": [
+        {
+          "year": 2026,
+          "effective_from": "2026-01-01",
+          "price_dkk_per_kwh": 0.7275,
+          "price_dkk_per_m3": null,
+          "motivation_pct_per_k": 1.0,
+          "bonus_temp": 35.0,
+          "penalty_temp": 40.0,
+          "source": "https://beof.dk/vores-varme/priser-og-gebyrer/",
+          "source_note": "Takstblad 2026 (Bornholms Varme, inkl. moms): Variabel afgift 697,50 kr./MWh + garantiprovision 30,00 kr./MWh = 727,50 kr./MWh (0,7275 kr./kWh; 0,6975 kr./kWh ekskl. garantiprovision; Pedersker Fjernvarme overgangsordning: 1.231,25 kr./MWh). Afkølingsafregning: ±1 % pr. °C ift. forventet/acceptabel returtemperatur."
+        }
+      ]
     },
     {
       "id": "kalundborg-forsyning",
@@ -460,8 +473,20 @@
       "eforsyning_supplier_id": "49C73776-76BE-4382-BA5C-2B4E7384CC34",
       "latitude": 56.716,
       "longitude": 10.117,
-      "notes": "E|Forsyning. forsyningid og AppServerUri (https://apiapp.dff-edb.dk/hdsfv/) bekræftet live i issue #16 af @cokeman0. Login med forbrugernummer + webpinkode fra regningen; daglige aflæsninger.",
-      "tariffs": []
+      "notes": "E|Forsyning. forsyningid og AppServerUri (https://apiapp.dff-edb.dk/hdsfv/) bekræftet live i issue #16 og #32 af @cokeman0. Login med forbrugernummer + webpinkode fra regningen; daglige aflæsninger. Takstblad 2026: 629,38 kr./MWh inkl. moms og ±2 %/°C motivationstarif (< 30 °C / > 40 °C).",
+      "tariffs": [
+        {
+          "year": 2026,
+          "effective_from": "2026-01-01",
+          "price_dkk_per_kwh": 0.62938,
+          "price_dkk_per_m3": null,
+          "motivation_pct_per_k": 2.0,
+          "bonus_temp": 30.0,
+          "penalty_temp": 40.0,
+          "source": "https://hadsundfjernvarme.dk/p/Hadsund%20Fjernvarme/Priser/Takstblad-2026.pdf",
+          "source_note": "Takstblad 2026: Variabelt bidrag 629,38 kr./MWh inkl. moms (626,68 kr./MWh + 2,70 kr./MWh NOx-afgift; 503,50 kr./MWh ekskl. moms) = 0,62938 kr./kWh. Motivationstarif: -2 % pr. °C under 30 °C og +2 % pr. °C over 40 °C (ved fremløb >= 60 °C)."
+        }
+      ]
     },
     {
       "id": "solrod-fjernvarme",
@@ -631,14 +656,25 @@
       "name": "Fjernvarme Fyn",
       "city": "Odense / Fyn",
       "portal_url": "https://www.fjernvarmefyn.dk/spar-paa-energien/overblik/watts-on-app/",
-      "status": "pending_test",
-      "tier": "verified_portal",
+      "status": "confirmed",
+      "tier": "confirmed",
       "auth_method": "Watts On-konto (browser-login, ingen MitID)",
       "backend": "wattson",
       "latitude": 55.403,
       "longitude": 10.388,
-      "notes": "Watts On (eksperimentel, ikke testet live). Verificeret på fjernvarmefyn.dk (lanceret nov. 2025). Par først varmemåleren i Watts On-appen med kundenummer + pinkode fra regningen / Administrationsservice Fyn.",
-      "tariffs": []
+      "notes": "Watts On. Bekræftet live i issue #29 af @PalleEngkjaer (v1.2.1 MQ quality fallback; enhed GJ konverteret til kWh). Par først varmemåleren i Watts On-appen med kundenummer + pinkode fra regningen / Administrationsservice Fyn. 2026-takst: 163,75 kr./GJ = 589,50 kr./MWh = 0,5895 kr./kWh inkl. moms.",
+      "tariffs": [
+        {
+          "year": 2026,
+          "effective_from": "2026-01-01",
+          "price_dkk_per_kwh": 0.5895,
+          "price_dkk_per_m3": null,
+          "bonus_temp": 30.0,
+          "penalty_temp": 40.0,
+          "source": "https://www.fjernvarmefyn.dk/media/efafmmg2/fjernvarmepriser_jan_2026.pdf",
+          "source_note": "Fjernvarmepriser gældende fra 1. januar 2026: 163,75 kr./GJ inkl. moms (131,00 ekskl.) svarende til 589,50 kr./MWh inkl. moms (471,60 ekskl.) = 0,5895 kr./kWh inkl. moms."
+        }
+      ]
     },
     {
       "id": "hillerod-forsyning",

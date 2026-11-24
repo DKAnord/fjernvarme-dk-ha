@@ -252,4 +252,67 @@ for (const entityId of ["sensor.hadsund_fjernvarme_overblik", "sensor.hadsund_fj
   assert.ok(!out.includes("Førstegangsopsætning"), `does not fall back to Kredsløb wizard for ${entityId}`);
 }
 
+// 13) Desktop layout proportions, unified chart grid, theme contrast, and keyboard accessibility.
+calls = [];
+const kmdWide = render({ capabilities: ALL_KMD, backend: "kmd", hourly: { kwh: Array(24).fill(1) } }, calls);
+const kmdHtml = kmdWide.shadowRoot.innerHTML;
+assert.strictEqual((kmdHtml.match(/<div class="grid2">/g) || []).length, 1, "all chart panels share a single .grid2 container");
+assert.ok(kmdHtml.includes('data-section="daily"') && kmdHtml.includes('viewBox="0 0 960 220"'), "5-chart desktop daily chart uses wide 960x220 viewBox");
+assert.ok(kmdHtml.includes('id="syncTap" role="button" tabindex="0"'), "sync banner trigger is keyboard accessible");
+assert.ok(kmdHtml.includes('tabindex="0" data-tip='), "SVG chart elements are keyboard focusable");
+assert.ok(kmdHtml.includes('id="floatTip" role="tooltip"'), "floating tooltip container rendered");
+
+// Enter key on syncTap triggers MitID sync.
+kmdWide.shadowRoot.getElementById("syncTap").listeners.keydown({ key: "Enter", preventDefault() {} });
+assert.deepStrictEqual(calls.pop(), ["kmd_easy_energy", "start_mitid_sync", { entry_id: "e1" }], "Enter on syncTap triggers sync");
+
+// Narrow viewport switches daily chart back to compact 540x220 viewBox.
+const kmdNarrow = new Card();
+kmdNarrow.clientWidth = 390;
+kmdNarrow.setConfig({});
+kmdNarrow.hass = mkHass({ capabilities: ALL_KMD, backend: "kmd", hourly: { kwh: Array(24).fill(1) } }, []);
+assert.ok(kmdNarrow.shadowRoot.innerHTML.includes('viewBox="0 0 540 220"') && !kmdNarrow.shadowRoot.innerHTML.includes('viewBox="0 0 960 220"'), "narrow viewport keeps 540x220 daily viewBox");
+
+// 4-chart E|Forsyning layout uses 2x2 grid (540x220 daily chart even on desktop).
+const efDesktop = render(EF_ATTRS, []);
+const efHtml = efDesktop.shadowRoot.innerHTML;
+assert.strictEqual((efHtml.match(/<div class="grid2">/g) || []).length, 1, "E|Forsyning uses unified .grid2");
+assert.ok(!efHtml.includes('viewBox="0 0 960 220"'), "4-chart 2x2 grid uses standard 540x220 daily viewBox");
+
+// Settings dialog: separate notify label, .ob-pair without width:50% overflow, and Escape closes when setup complete.
+kmdWide.shadowRoot.getElementById("openSetupBtn").listeners.click();
+kmdWide._wizNotifyCustom = true;
+kmdWide._render();
+const wizHtml = kmdWide.shadowRoot.innerHTML;
+assert.ok(wizHtml.includes('<label for="notifySel">'), "notifySel has explicit for= label");
+assert.ok(!wizHtml.includes('style="width:50%"'), "paired inputs use CSS grid .ob-pair instead of overflowing width:50%");
+assert.ok(wizHtml.includes('class="ob-pair"'), ".ob-pair class rendered");
+kmdWide.shadowRoot.getElementById("onboardCard").listeners.keydown({ key: "Escape", preventDefault() {} });
+assert.strictEqual(kmdWide._setupOpen, false, "Escape closes settings dialog");
+
+// 14) Legacy eforsyning-custom entry with Hadsund portal URL upgrades to confirmed preset and infers discovered units in feedback.
+const customHadsund = render({
+  backend: "eforsyning",
+  data_source: "E|Forsyning",
+  utility: "Hadsund Fjernvarme a.m.b.a.",
+  utility_id: "eforsyning-custom",
+  utility_status: "pending_test",
+  portal_url: "https://eforsyning.dk/hadsundfjernvarme/",
+  available_units: [],
+  capabilities: ["auto_sync", "cost", "daily", "monthly", "temperatures", "volume"],
+  return_temp: { annual: { "2026": 31.2 }, monthly_2026: { Nov: 31.2 } },
+}, []);
+const chHtml = customHadsund.shadowRoot.innerHTML;
+assert.ok(chHtml.includes("✅ Bekræftet"), "eforsyning-custom with Hadsund portal URL resolves to confirmed badge");
+assert.ok(!chHtml.includes('id="fbGithubBtn"'), "unconfirmed feedback bar is hidden once upgraded to confirmed");
+customHadsund.shadowRoot.getElementById("openSetupBtn").listeners.click();
+let openedIssueUrl = "";
+const prevOpen = global.window.open;
+global.window.open = (u) => { openedIssueUrl = u; };
+customHadsund.shadowRoot.getElementById("obFbGithubBtn").listeners.click();
+global.window.open = prevOpen;
+const decodedIssue = decodeURIComponent(openedIssueUrl);
+assert.ok(decodedIssue.includes("Utility ID:** `hadsund-fjernvarme`"), "feedback report upgrades eforsyning-custom ID to hadsund-fjernvarme");
+assert.ok(decodedIssue.includes("Discovered Units:** kWh, m3, °C"), "feedback report infers units when available_units is empty");
+
 console.log("card_capabilities.test.js: OK");

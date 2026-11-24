@@ -2,6 +2,27 @@
 
 Alle væsentlige ændringer i **Dansk Fjernvarme** (tidligere *Fjernvarme (KMD Easy Energy)*) dokumenteres her.
 
+## [1.2.3] - 2026-11-24
+
+### Tilføjet
+- **Bornholms Energi & Forsyning (BEOF) bekræftet live + 2026-takst ([issue #33](https://github.com/DKAnord/fjernvarme-dk-ha/issues/33)):** Markeret som ✅ **Bekræftet** efter live-verifikation fra `@danieln431` via MitID (Min Forsyning 2), inkl. officiel 2026-takst (`0,7275 kr./kWh` inkl. moms og garantiprovision samt `±1 %/°C` afkølingsregulering fra [BEOF priser](https://beof.dk/vores-varme/priser-og-gebyrer/)).
+- **Fjernvarme Fyn bekræftet live + 2026-takst ([issue #29](https://github.com/DKAnord/fjernvarme-dk-ha/issues/29)):** Markeret som ✅ **Bekræftet** efter live-verifikation fra `@PalleEngkjaer` på Watts On (`GJ`-konvertering + `MQ` fallback fra `v1.2.1`), inkl. officiel 2026-energipris (`0,5895 kr./kWh` inkl. moms = `163,75 kr./GJ` / `589,50 kr./MWh` fra [Prisfolder 2026](https://www.fjernvarmefyn.dk/media/efafmmg2/fjernvarmepriser_jan_2026.pdf)).
+- **Hadsund Fjernvarme Takstblad 2026 ([issue #32](https://github.com/DKAnord/fjernvarme-dk-ha/issues/32)):** Indbygget officiel 2026-takst (`0,62938 kr./kWh` inkl. moms inkl. NOx-afgift og `±2 %/°C` motivationstarif under `30 °C` / over `40 °C` fra [Takstblad-2026.pdf](https://hadsundfjernvarme.dk/p/Hadsund%20Fjernvarme/Priser/Takstblad-2026.pdf)).
+
+### Rettet
+- **KMD-målere i `MWh` og `GJ` konverteres nu til `kWh` ([issue #33](https://github.com/DKAnord/fjernvarme-dk-ha/issues/33)):** Når et KMD-/Min Forsyning-værk (f.eks. Bornholms Energi & Forsyning) leverer varmemålerdata i `MWh` eller `GJ` i stedet for `kWh`, ganges års-, måneds-, dags-, time- og prognosetal nu automatisk med `1000` (`MWh`) eller `1 / 0,0036` (`GJ`), så både kortet, HA Energy-statistik og `kr./kWh`-beregninger vises i rigtige `kWh`. Eksisterende ukorrigerede `MWh`/`GJ`-caches migreres automatisk ved opstart.
+
+### Forbedret
+- **Automatisk opgradering af `eforsyning-custom` & `available_units`-rapportering ([issue #32](https://github.com/DKAnord/fjernvarme-dk-ha/issues/32)):** Eksisterende `eforsyning-custom`-opsætninger matches nu automatisk på `eforsyning_supplier_id` eller `portal_url` mod `utilities.json` (og kortets indbyggede værkliste), så de automatisk får ✅ **Bekræftet**-status, værkets standardtakster og bynavn uden genopsætning. Samtidig udfylder både `eforsyning_mapping.py` og `wattson_mapping.py` nu `available_units` (`kWh`, `m3`, `°C`), og dashboard-kortets feedback-rapport udleder enheder fra indlæste data som fallback.
+- **Desktop (`>= 1280px`) & ultrawide (`>= 1600px`) dashboard-layout (`custom:kmd-easy-energy-card`):**
+  - Begrænset kortets maksimale bredde (`max-width: 1480px`), rettet 3+1-ombrydning i KPI-kort og de 4 vejrkorrelerede indsigter (`.insights`) når Home Assistants sidemenu er åben på desktop, og gjort `.bn-main`-klikfladen skarp uden utilsigtede klik på tom plads.
+  - Samlet alle aktive SVG-grafer i én `.grid2`: 4-grafs opsætninger uden timedata (f.eks. E|Forsyning) vises nu i et balanceret 2×2-gitter, mens 5-grafs opsætninger (KMD / Watts On) giver den 5. fuldbredde-graf (*Dagligt forbrug*) et bredt `960×220` `viewBox` med fulde dagsnumre og matchende højde på desktop.
+- **Graf-læsbarhed, tema-kontrast & flydende værktøjstip:**
+  - Tilføjet flydende desktop-tooltip (`#floatTip`) ved hover/fokus direkte over søjler og temperaturpunkter (ud over mobil-linjen `#tip`).
+  - Forbedret kontrast i både lyst og mørkt Home Assistant-tema for aksetekster (`.ax`, `.ax-t`, `.ax-bonus`, `.ax-penalty`), tal-glorier (`.val`), kortrammer (`--ha-card-border-color`) og udeblevne linjeskift i signaturforklaringer (`.p-leg span`).
+- **Indstillinger (⚙️), MitID QR/OTP & tastaturnavigation:**
+  - Centreret MitID QR/OTP-boksen (`max-width: 540px`, `aria-live="polite"`), erstattet overflydende `50%`-inputpar med CSS Grid `.ob-pair`, adskilt `<label for="notifySel">` fra brugerdefineret notify-felt samt tilføjet fuld tastaturbetjening (`Enter`/`Space` på synkroniseringsbanner, `tabindex="0"` på grafelementer, `:focus-visible`-rammer, `Escape` til at lukke indstillinger og `Enter` til at gemme/starte MitID).
+
 ## [1.2.2] - 2026-11-24
 
 ### Rettet

@@ -304,6 +304,8 @@ async def test_eforsyning_sync_maps_saves_and_reports_capabilities(tmp_path: Pat
     assert {"daily", "monthly", "temperatures", "volume"} <= caps
     assert not caps & {"hourly", "billing", "forecast", "mitid"}
     assert saved["backend"] == "eforsyning" and saved["data_source"] == "E|Forsyning"
+    assert [u["Name"] for u in saved["available_units"]] == ["kWh", "m3", "°C"]
+    assert saved["has_direct_temp"] is False
     dumped = json.dumps(saved, default=str, ensure_ascii=False)
     assert fx.PASSWORD not in dumped and fx.USERNAME not in dumped
     hass.config_entries.async_update_entry.assert_not_called()

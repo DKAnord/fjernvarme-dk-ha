@@ -233,3 +233,27 @@ def test_bundled_utilities_json_has_fjernvarme_fyn_2026_tariff() -> None:
         utilities=utilities,
     )
     assert resolved.price_dkk_per_kwh == 0.5895
+
+
+def test_bundled_utilities_json_has_beof_2026_tariff() -> None:
+    from kmd_easy_energy.tariff import load_utilities
+
+    utilities = load_utilities()
+    by_id = {u["id"]: u for u in utilities}
+    assert by_id["beof"]["status"] == "confirmed"
+    assert by_id["beof"]["tier"] == "confirmed"
+
+    bundled = published_tariff("beof", 2026, utilities)
+    assert bundled is not None
+    assert bundled["price_dkk_per_kwh"] == 0.7275
+    assert bundled["motivation_pct_per_k"] == 1.0
+    assert bundled["source"] == "https://beof.dk/vores-varme/priser-og-gebyrer/"
+
+    resolved = resolve_tariff(
+        _entry(data={"utility_id": "beof"}),
+        today=date(2026, 11, 24),
+        utilities=utilities,
+    )
+    assert resolved.price_dkk_per_kwh == 0.7275
+    assert resolved.motivation_pct_per_k == 1.0
+    assert resolved.motivation_dkk_per_kwh_per_k == round(0.7275 * 0.01, 6)

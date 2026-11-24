@@ -371,9 +371,38 @@ class KMDClient:
         """Return first unit matching Name (case-insensitive)."""
         name_l = name.lower()
         for u in units or []:
-            if str(u.get("Name") or "").lower() == name_l:
+            if isinstance(u, dict) and str(u.get("Name") or "").lower() == name_l:
                 return u
         return None
+
+    @staticmethod
+    def find_energy_unit(units: list[dict[str, Any]]) -> dict[str, Any] | None:
+        """Return first district-heating energy unit (kWh, MWh, or GJ)."""
+        for name in ("kWh", "MWh", "GJ"):
+            found = KMDClient.find_unit(units, name)
+            if found is not None:
+                return found
+        for u in units or []:
+            if not isinstance(u, dict):
+                continue
+            norm = str(u.get("Name") or "").strip().lower().replace("³", "3").replace("°", "")
+            if norm not in ("m3", "c", "l", "liter"):
+                return u
+        return units[0] if units else None
+
+    @staticmethod
+    def energy_factor(unit: dict[str, Any] | str | None) -> float:
+        """Multiplier converting raw API values in ``unit`` to kWh."""
+        if isinstance(unit, dict):
+            raw = unit.get("Name") or unit.get("Description") or ""
+        else:
+            raw = str(unit or "")
+        norm = str(raw).strip().lower().replace(" ", "")
+        if norm in ("mwh", "megawatthour", "megawatt-hour"):
+            return 1000.0
+        if norm in ("gj", "gigajoule"):
+            return 1.0 / 0.0036
+        return 1.0
 
     @staticmethod
     def find_unit_matching(

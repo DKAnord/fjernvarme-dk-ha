@@ -118,13 +118,26 @@
       "name": "Bornholms Energi & Forsyning (BEOF)",
       "city": "Bornholm",
       "portal_url": "https://minforsyning.beof.dk/",
-      "status": "pending_test",
-      "tier": "verified_portal",
+      "status": "confirmed",
+      "tier": "confirmed",
       "auth_method": "MitID",
       "backend": "kmd",
       "latitude": 55.1,
       "longitude": 14.7,
-      "notes": "Explicit minForsyning portal with MitID or email login."
+      "notes": "Explicit minForsyning portal (Min Forsyning 2) with MitID login. Confirmed live in issue #33 by @danieln431 (MWh converted to kWh). 2026 tariff: 697,50 kr./MWh + 30,00 kr./MWh garantiprovision = 727,50 kr./MWh (0,7275 kr./kWh inkl. moms) and ±1 %/°C return temperature adjustment.",
+      "tariffs": [
+        {
+          "year": 2026,
+          "effective_from": "2026-01-01",
+          "price_dkk_per_kwh": 0.7275,
+          "price_dkk_per_m3": null,
+          "motivation_pct_per_k": 1.0,
+          "bonus_temp": 35.0,
+          "penalty_temp": 40.0,
+          "source": "https://beof.dk/vores-varme/priser-og-gebyrer/",
+          "source_note": "Takstblad 2026 (Bornholms Varme, inkl. moms): Variabel afgift 697,50 kr./MWh + garantiprovision 30,00 kr./MWh = 727,50 kr./MWh (0,7275 kr./kWh; 0,6975 kr./kWh ekskl. garantiprovision; Pedersker Fjernvarme overgangsordning: 1.231,25 kr./MWh). Afkølingsafregning: ±1 % pr. °C ift. forventet/acceptabel returtemperatur."
+        }
+      ]
     },
     {
       "id": "kalundborg-forsyning",

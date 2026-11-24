@@ -5,8 +5,12 @@ Alle væsentlige ændringer i **Dansk Fjernvarme** (tidligere *Fjernvarme (KMD E
 ## [1.2.3] - 2026-11-24
 
 ### Tilføjet
+- **Bornholms Energi & Forsyning (BEOF) bekræftet live + 2026-takst ([issue #33](https://github.com/DKAnord/fjernvarme-dk-ha/issues/33)):** Markeret som ✅ **Bekræftet** efter live-verifikation fra `@danieln431` via MitID (Min Forsyning 2), inkl. officiel 2026-takst (`0,7275 kr./kWh` inkl. moms og garantiprovision samt `±1 %/°C` afkølingsregulering fra [BEOF priser](https://beof.dk/vores-varme/priser-og-gebyrer/)).
 - **Fjernvarme Fyn bekræftet live + 2026-takst ([issue #29](https://github.com/DKAnord/fjernvarme-dk-ha/issues/29)):** Markeret som ✅ **Bekræftet** efter live-verifikation fra `@PalleEngkjaer` på Watts On (`GJ`-konvertering + `MQ` fallback fra `v1.2.1`), inkl. officiel 2026-energipris (`0,5895 kr./kWh` inkl. moms = `163,75 kr./GJ` / `589,50 kr./MWh` fra [Prisfolder 2026](https://www.fjernvarmefyn.dk/media/efafmmg2/fjernvarmepriser_jan_2026.pdf)).
 - **Hadsund Fjernvarme Takstblad 2026 ([issue #32](https://github.com/DKAnord/fjernvarme-dk-ha/issues/32)):** Indbygget officiel 2026-takst (`0,62938 kr./kWh` inkl. moms inkl. NOx-afgift og `±2 %/°C` motivationstarif under `30 °C` / over `40 °C` fra [Takstblad-2026.pdf](https://hadsundfjernvarme.dk/p/Hadsund%20Fjernvarme/Priser/Takstblad-2026.pdf)).
+
+### Rettet
+- **KMD-målere i `MWh` og `GJ` konverteres nu til `kWh` ([issue #33](https://github.com/DKAnord/fjernvarme-dk-ha/issues/33)):** Når et KMD-/Min Forsyning-værk (f.eks. Bornholms Energi & Forsyning) leverer varmemålerdata i `MWh` eller `GJ` i stedet for `kWh`, ganges års-, måneds-, dags-, time- og prognosetal nu automatisk med `1000` (`MWh`) eller `1 / 0,0036` (`GJ`), så både kortet, HA Energy-statistik og `kr./kWh`-beregninger vises i rigtige `kWh`. Eksisterende ukorrigerede `MWh`/`GJ`-caches migreres automatisk ved opstart.
 
 ### Forbedret
 - **Automatisk opgradering af `eforsyning-custom` & `available_units`-rapportering ([issue #32](https://github.com/DKAnord/fjernvarme-dk-ha/issues/32)):** Eksisterende `eforsyning-custom`-opsætninger matches nu automatisk på `eforsyning_supplier_id` eller `portal_url` mod `utilities.json` (og kortets indbyggede værkliste), så de automatisk får ✅ **Bekræftet**-status, værkets standardtakster og bynavn uden genopsætning. Samtidig udfylder både `eforsyning_mapping.py` og `wattson_mapping.py` nu `available_units` (`kWh`, `m3`, `°C`), og dashboard-kortets feedback-rapport udleder enheder fra indlæste data som fallback.

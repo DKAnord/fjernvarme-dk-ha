@@ -542,3 +542,58 @@ def test_bundled_utilities_json_has_dronninglund_2026_tariff_and_custom_matching
     assert resolved.annual_fixed_fee_dkk == 3500.0
     assert resolved.motivation_pct_per_k == 1.0
     assert resolved.motivation_dkk_per_kwh_per_k == round(0.81875 * 0.01, 6)
+
+
+def test_bundled_utilities_2026_tariffs_and_non_heating_cleanup() -> None:
+    from kmd_easy_energy.tariff import load_utilities
+
+    utilities = load_utilities()
+    by_id = {u["id"]: u for u in utilities}
+
+    # Non-district-heating utilities removed.
+    for removed in ("lef", "provas", "skanderborg-forsyning", "samn", "go-energi"):
+        assert removed not in by_id
+
+    # Spot-check newly populated 2026/2027 tariffs and resolution.
+    aalborg = resolve_tariff(
+        _entry(data={"utility_id": "aalborg-forsyning"}),
+        today=date(2026, 11, 25),
+        utilities=utilities,
+    )
+    assert aalborg.price_dkk_per_kwh == 0.95625
+    assert aalborg.fixed_fee_dkk_per_m2_year == 14.0
+    assert aalborg.motivation_pct_per_k == 2.0
+
+    egedal_2026 = resolve_tariff(
+        _entry(data={"utility_id": "egedal-fjernvarme"}),
+        today=date(2026, 11, 25),
+        utilities=utilities,
+    )
+    assert egedal_2026.price_dkk_per_kwh == 0.54625
+    assert egedal_2026.fixed_fee_dkk_per_m2_year == 26.25
+    assert egedal_2026.motivation_bonus is False
+    assert egedal_2026.penalty_temp == 37.0
+
+    egedal_2027 = resolve_tariff(
+        _entry(data={"utility_id": "egedal-fjernvarme"}),
+        today=date(2027, 2, 1),
+        utilities=utilities,
+    )
+    assert egedal_2027.fixed_fee_dkk_per_m2_year == 33.125
+
+    fredericia = resolve_tariff(
+        _entry(data={"utility_id": "fredericia-fjernvarme"}),
+        today=date(2026, 11, 25),
+        utilities=utilities,
+    )
+    assert fredericia.price_dkk_per_kwh == 0.4185
+    assert fredericia.price_dkk_per_m3 == 3.0
+    assert fredericia.fixed_fee_dkk_per_m2_year == 34.5
+
+    # Every published tariff entry has valid positive kWh price and official https source.
+    with_tariffs = [u for u in utilities if u.get("tariffs")]
+    assert len(with_tariffs) >= 35
+    for u in with_tariffs:
+        for t in u["tariffs"]:
+            assert t["price_dkk_per_kwh"] > 0, u["id"]
+            assert str(t.get("source", "")).startswith("https://"), u["id"]

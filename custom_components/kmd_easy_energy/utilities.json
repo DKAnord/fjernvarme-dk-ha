@@ -46,7 +46,25 @@
       "backend": "kmd",
       "latitude": 56.159,
       "longitude": 9.917,
-      "notes": "Shares the Min Varme / Kredsløb KMD Easy Energy platform."
+      "notes": "Shares the Min Varme / Kredsløb KMD Easy Energy platform.",
+      "tariffs": [
+        {
+          "year": 2026,
+          "effective_from": "2026-01-01",
+          "price_dkk_per_kwh": 0.45,
+          "price_dkk_per_m3": null,
+          "source": "https://www.galten-varmevaerk.dk/media/qxagonpo/galten-varmevaerk-takstblad-2026.pdf",
+          "source_note": "Takstblad 2026: Forbrugsbidrag 360,00 kr./MWh ekskl. moms / 450,00 kr./MWh inkl. moms (0,45 kr./kWh inkl. moms; generel +4 % regulering varslet pr. 2026-07-01). Faste bidrag (rumfangsbaseret): Effektbidrag 3,40 ekskl. / 4,25 kr./m³/år inkl. moms, produktionsomkostninger 3.000,00 ekskl. / 3.750,00 kr./enhed/år inkl. moms og målerbidrag 270,00 ekskl. / 337,50 kr./år inkl. moms. Afkølingstarif (kun straf på årsafkøling ΔT): 7,50 kr./MWh/K inkl. moms under 30 °C ΔT, 12,50 kr./MWh/K under 20 °C og 25,00 kr./MWh/K under 10 °C."
+        },
+        {
+          "year": 2027,
+          "effective_from": "2027-01-01",
+          "price_dkk_per_kwh": 0.515,
+          "price_dkk_per_m3": null,
+          "source": "https://galten-varmevaerk.dk/media/uqpk0jrc/takstblad-2027-11-282.pdf",
+          "source_note": "Takstblad 2027 (gældende fra 2027-01-01): Forbrugsbidrag 412,00 kr./MWh ekskl. moms / 515,00 kr./MWh inkl. moms (0,515 kr./kWh inkl. moms). Effektbidrag 3,55 ekskl. / 4,44 kr./m³/år inkl. moms, produktionsomkostninger 3.120,00 ekskl. / 3.900,00 kr./år inkl. moms og målerbidrag 281,00 ekskl. / 351,25 kr./år inkl. moms. Afkølingstarif (årsafkøling ΔT): 7,50 kr./MWh/K inkl. moms under 30 °C ΔT."
+        }
+      ]
     },
     {
       "id": "energi-ikast",
@@ -72,7 +90,21 @@
       "backend": "kmd",
       "latitude": 56.492,
       "longitude": 8.594,
-      "notes": "Min Forsyning (KMD). MitID or email + activation code."
+      "notes": "Min Forsyning (KMD). MitID or email + activation code.",
+      "tariffs": [
+        {
+          "year": 2026,
+          "effective_from": "2026-01-01",
+          "price_dkk_per_kwh": 0.725,
+          "price_dkk_per_m3": null,
+          "fixed_fee_dkk_per_m2_year": 10.25,
+          "motivation_dkk_per_kwh_per_k": 0.01,
+          "bonus_temp": 33.0,
+          "penalty_temp": 35.0,
+          "source": "https://struerenergi.dk/wp-content/uploads/2026/05/Struer-Energi-Fjernvarme-tariffer-2026_0.pdf",
+          "source_note": "Tariffer 2026 (Struer Energi Fjernvarme A/S): Energipris 0,580 kr./kWh ekskl. moms / 0,725 kr./kWh inkl. moms. Abonnementsbidrag standardisoleret bolig: 8,20 ekskl. / 10,25 kr./m²/år inkl. moms (BR18 lavenergi: 6,15 ekskl. / 7,69 inkl.; kælder: 2,05 ekskl. / 2,56 inkl.). Måler- og administrationsbidrag: 780,00 ekskl. / 975,00 kr./år inkl. moms. Motivationstarif: ±0,008 kr./kWh/K ekskl. moms / ±0,01 kr./kWh/K inkl. moms ift. fremløbsafhængigt neutralbånd (fx 33–35 °C ved 60 °C fremløb, 30–32 °C ved 66–70 °C)."
+        }
+      ]
     },
     {
       "id": "envafors",
@@ -124,7 +156,29 @@
       "backend": "kmd",
       "latitude": 56.36,
       "longitude": 8.616,
-      "notes": "Uses minForsyning with MitID or email login."
+      "notes": "Uses minForsyning with MitID or email login.",
+      "tariffs": [
+        {
+          "year": 2026,
+          "effective_from": "2026-01-01",
+          "price_dkk_per_kwh": 0.67375,
+          "price_dkk_per_m3": null,
+          "fixed_fee_dkk_per_m2_year": 20.4,
+          "motivation_dkk_per_kwh_per_k": 0.00375,
+          "source": "https://www.vestforsyning.dk/media/v05bx2cn/takster_2026.pdf",
+          "source_note": "Takster 2026 (Vestforsyning Varme A/S): Variabelt varmeforbrug 0,539 kr./kWh ekskl. moms / 0,67375 kr./kWh inkl. moms (vist som 0,674 kr./kWh). Fast abonnement: 16,32 ekskl. / 20,40 kr./m²/år inkl. moms af BBR bolig-/erhvervsareal (måler indgår i m²-abonnementet). Motivationstarif: ±0,003 kr./kWh/K ekskl. moms / ±0,00375 kr./kWh/K inkl. moms mod fremløbsafhængig forventet returtemperatur (+4 K neutralzone over forventet)."
+        },
+        {
+          "year": 2027,
+          "effective_from": "2027-01-01",
+          "price_dkk_per_kwh": 0.70125,
+          "price_dkk_per_m3": null,
+          "fixed_fee_dkk_per_m2_year": 21.2125,
+          "motivation_dkk_per_kwh_per_k": 0.00375,
+          "source": "https://www.vestforsyning.dk/varme/priser/",
+          "source_note": "Offentliggjorte 2027-takster (gældende fra 2027-01-01): Variabelt varmeforbrug 0,561 kr./kWh ekskl. moms / 0,70125 kr./kWh inkl. moms. Fast abonnement: 16,97 ekskl. / 21,2125 kr./m²/år inkl. moms (måler indgår). Motivationstarif: ±0,00375 kr./kWh/K inkl. moms mod fremløbsafhængig forventet returtemperatur (+4 K neutralzone)."
+        }
+      ]
     },
     {
       "id": "beof",
@@ -163,7 +217,21 @@
       "backend": "kmd",
       "latitude": 55.68,
       "longitude": 11.089,
-      "notes": "Min Forsyning portal with MitID login for heat and water."
+      "notes": "Min Forsyning portal with MitID login for heat and water.",
+      "tariffs": [
+        {
+          "year": 2026,
+          "effective_from": "2026-01-01",
+          "price_dkk_per_kwh": 0.80625,
+          "price_dkk_per_m3": 0.625,
+          "fixed_fee_dkk_per_m2_year": 45.625,
+          "motivation_dkk_per_kwh_per_k": 0.00375,
+          "bonus_temp": 45.0,
+          "penalty_temp": 45.0,
+          "source": "https://kalfor.dk/fjernvarme/priser-fjernvarme",
+          "source_note": "Takster 2026 (Kalundborg Varmeforsyning): Variabel energipris 645,00 kr./MWh ekskl. moms / 806,25 kr./MWh inkl. moms (0,80625 kr./kWh). Belastningsbidrag: 0,50 ekskl. / 0,625 kr./m³ inkl. moms. Fast arealpris: 36,50 ekskl. / 45,625 kr./m²/år inkl. moms. Målerleje: 270,00 ekskl. / 337,50 kr./år inkl. moms (<= 1.000 m²). Motivationsfaktor: ±3,00 kr./MWh/°C ekskl. moms / ±0,00375 kr./kWh/°C inkl. moms ift. 45 °C årsgennemsnitlig returtemperatur."
+        }
+      ]
     },
     {
       "id": "albertslund-forsyning",
@@ -176,7 +244,31 @@
       "backend": "kmd",
       "latitude": 55.657,
       "longitude": 12.357,
-      "notes": "Confirmed KMD Easy Energy billing/customer master; self-service uses email + customer number/password."
+      "notes": "Confirmed KMD Easy Energy billing/customer master; self-service uses email + customer number/password.",
+      "tariffs": [
+        {
+          "year": 2026,
+          "effective_from": "2026-01-01",
+          "price_dkk_per_kwh": 0.84048,
+          "price_dkk_per_m3": null,
+          "motivation_pct_per_k": 1.0,
+          "bonus_temp": 35.0,
+          "penalty_temp": 40.0,
+          "source": "https://forsyning.albertslund.dk/media/tz1igz2x/fjernvarmetakster-2026_v2.pdf",
+          "source_note": "Fjernvarmetakster 2026 (månedsdifferentieret MWh-pris fra 716,05 kr./MWh i juli til 1.014,26 kr./MWh i jan inkl. moms; simpelt årssnit 672,38 kr./MWh ekskl. moms / 840,48 kr./MWh = 0,84048 kr./kWh inkl. moms). Faste takster (kW-baseret, ikke m²): kW-takst 1.975,68 ekskl. / 2.469,60 kr./kW/år inkl. moms og målertakst 263,14 ekskl. / 328,93 kr./år inkl. moms. Afkølingstakst: ±1 %/°C under 35 °C / over 40 °C (neutralzone 35–40 °C)."
+        },
+        {
+          "year": 2027,
+          "effective_from": "2027-01-01",
+          "price_dkk_per_kwh": 0.79863,
+          "price_dkk_per_m3": null,
+          "motivation_pct_per_k": 1.0,
+          "bonus_temp": 35.0,
+          "penalty_temp": 40.0,
+          "source": "https://forsyning.albertslund.dk/media/2lojeotl/fjernvarmetakster-2027_v1.pdf",
+          "source_note": "Fjernvarmetakster 2027 (månedsdifferentieret MWh-pris fra 638,83 kr./MWh i aug til 988,28 kr./MWh i jan inkl. moms; simpelt årssnit 638,90 kr./MWh ekskl. moms / 798,63 kr./MWh = 0,79863 kr./kWh inkl. moms). Faste takster: kW-takst 2.017,20 ekskl. / 2.521,50 kr./kW/år inkl. moms og målertakst 208,64 ekskl. / 260,80 kr./år inkl. moms. Afkølingstakst: ±1 %/°C under 35 °C / over 40 °C."
+        }
+      ]
     },
     {
       "id": "nykobing-sj",
@@ -189,72 +281,27 @@
       "backend": "kmd",
       "latitude": 55.922,
       "longitude": 11.671,
-      "notes": "Named in KMD press release as migrated to KMD Easy Energy."
-    },
-    {
-      "id": "lef",
-      "name": "Langeland Energi & Forsyning (LEF)",
-      "city": "Langeland",
-      "portal_url": "https://www.lef.dk/selvbetjening/",
-      "status": "pending_test",
-      "tier": "candidate",
-      "auth_method": "MitID",
-      "backend": "kmd",
-      "latitude": 54.938,
-      "longitude": 10.71,
-      "notes": "Migrated to KMD Easy Energy / minForsyning."
-    },
-    {
-      "id": "provas",
-      "name": "Provas",
-      "city": "Haderslev",
-      "portal_url": "https://www.provas.dk/selvbetjening/",
-      "status": "pending_test",
-      "tier": "candidate",
-      "auth_method": "MitID",
-      "backend": "kmd",
-      "latitude": 55.253,
-      "longitude": 9.489,
-      "notes": "Uses MinForsyning portal."
-    },
-    {
-      "id": "skanderborg-forsyning",
-      "name": "Skanderborg Forsyning",
-      "city": "Skanderborg",
-      "portal_url": "https://www.skanderborgforsyning.dk/selvbetjening/",
-      "status": "pending_test",
-      "tier": "candidate",
-      "auth_method": "MitID",
-      "backend": "kmd",
-      "latitude": 56.035,
-      "longitude": 9.932,
-      "notes": "MinForsyning portal with KMD activation."
-    },
-    {
-      "id": "samn",
-      "name": "SAMN Forsyning",
-      "city": "Horsens / Odder",
-      "portal_url": "https://www.samn.dk/",
-      "status": "pending_test",
-      "tier": "candidate",
-      "auth_method": "MitID",
-      "backend": "kmd",
-      "latitude": 55.862,
-      "longitude": 9.85,
-      "notes": "MinForsyning portal with KMD activation."
-    },
-    {
-      "id": "go-energi",
-      "name": "go'energi",
-      "city": "Thy-Mors / Midtjylland",
-      "portal_url": "https://www.goenergi.dk/",
-      "status": "pending_test",
-      "tier": "candidate",
-      "auth_method": "MitID",
-      "backend": "kmd",
-      "latitude": 56.955,
-      "longitude": 8.694,
-      "notes": "Chose KMD Easy Energy in 2023 (primarily electricity)."
+      "notes": "Named in KMD press release as migrated to KMD Easy Energy.",
+      "tariffs": [
+        {
+          "year": 2026,
+          "effective_from": "2026-01-01",
+          "price_dkk_per_kwh": 0.56,
+          "price_dkk_per_m3": null,
+          "fixed_fee_dkk_per_m2_year": 40.0,
+          "source": "https://nsfv.dk/onewebmedia/NSFV%20takstblad%202026.pdf",
+          "source_note": "NSFV Takstblad 2026: Forbrug 448,00 kr./MWh ekskl. moms / 560,00 kr./MWh inkl. moms (0,56 kr./kWh). Fast effektbidrag (bolig): 32,00 ekskl. / 40,00 kr./m²/år inkl. moms. Målerbidrag: 825,00 ekskl. / 1.031,25 kr./år inkl. moms. Ingen motivationstarif i 2026."
+        },
+        {
+          "year": 2027,
+          "effective_from": "2027-03-01",
+          "price_dkk_per_kwh": 0.94,
+          "price_dkk_per_m3": null,
+          "fixed_fee_dkk_per_m2_year": 40.0,
+          "source": "https://www.nsfv.dk/varsling-af-prisstigning-2027/",
+          "source_note": "Varslet prisændring pr. 2027-03-01 (jan–feb 2027 uændret 0,56 kr./kWh): Variabel tarif 752,00 kr./MWh ekskl. moms / 940,00 kr./MWh inkl. moms (0,94 kr./kWh). Faste bidrag uændrede: 40,00 kr./m²/år og 1.031,25 kr./år målerbidrag inkl. moms. Ingen motivationstarif."
+        }
+      ]
     },
     {
       "id": "soroe-fjernvarme",
@@ -295,7 +342,24 @@
       "latitude": 57.464,
       "longitude": 9.982,
       "notes": "E|Forsyning (eksperimentel, ikke testet live). forsyningid aflæst fra den offentlige side https://eforsyning.dk/hjvarme og bekræftet med den offentlige GetVaerkSettings (AppServerUri https://apiapp.dff-edb.dk/hjorring/). Login med forbrugernummer + webpinkode fra regningen; data er daglige aflæsninger.",
-      "tariffs": []
+      "tariffs": [
+        {
+          "year": 2026,
+          "effective_from": "2026-01-01",
+          "price_dkk_per_kwh": 0.50625,
+          "price_dkk_per_m3": null,
+          "source": "https://hjvarme.dk/alt-om-varmeregningen/priser",
+          "source_note": "Priser 2026 (Hjørring Varmeforsyning): Forbrug 405,00 kr./MWh ekskl. moms / 506,25 kr./MWh inkl. moms (0,50625 kr./kWh). Fast effektbidrag (ikke m²): 223,40 ekskl. / 279,25 kr./Mcal/h/år inkl. moms. Afkølingsbidrag (kun straf på årsafkøling ΔT): +1,5 % pr. manglende grad under 25 °C afkøling."
+        },
+        {
+          "year": 2027,
+          "effective_from": "2027-01-01",
+          "price_dkk_per_kwh": 0.5275,
+          "price_dkk_per_m3": null,
+          "source": "https://hjvarme.dk/alt-om-varmeregningen/priser",
+          "source_note": "Priser 2027 (Hjørring Varmeforsyning): Forbrug 422,00 kr./MWh ekskl. moms / 527,50 kr./MWh inkl. moms (0,5275 kr./kWh). Fast effektbidrag: 232,83 ekskl. / 291,04 kr./Mcal/h/år inkl. moms. Afkølingsbidrag (årsafkøling ΔT): +1,5 % pr. manglende grad under 25 °C afkøling."
+        }
+      ]
     },
     {
       "id": "fjernvarme-horsens",
@@ -310,7 +374,21 @@
       "latitude": 55.861,
       "longitude": 9.85,
       "notes": "E|Forsyning (afventer 1. test). forsyningid og AppServerUri bekræftet offentligt via GetVaerkSettings. Login med forbrugernummer + webpinkode fra regningen; daglige aflæsninger.",
-      "tariffs": []
+      "tariffs": [
+        {
+          "year": 2026,
+          "effective_from": "2026-01-01",
+          "price_dkk_per_kwh": 0.685,
+          "price_dkk_per_m3": null,
+          "fixed_fee_dkk_per_m2_year": 30.625,
+          "motivation_pct_per_k": 1.0,
+          "motivation_max_pct": 35.0,
+          "bonus_temp": 37.0,
+          "penalty_temp": 37.0,
+          "source": "https://fjernvarmehorsens.dk/priser-oekonomi/takstblad",
+          "source_note": "Takstblad 2026 (Fjernvarme Horsens): Variabelt forbrugsbidrag 548,00 kr./MWh ekskl. moms / 685,00 kr./MWh inkl. moms (0,685 kr./kWh). Fast effektbidrag (<= 400 m² BBR): 24,50 ekskl. / 30,625 kr./m²/år inkl. moms. Abonnementsbidrag: 660,00 ekskl. / 825,00 kr./år inkl. moms. Motivationstarif: ±1 %/°C (maks. ±35 %) ift. fremløbsafhængig forventet returtemperatur (33–40 °C ved 75–50 °C fremløb; bruger automatisk Forv_Retur fra E|Forsyning)."
+        }
+      ]
     },
     {
       "id": "vestforbraending",
@@ -325,7 +403,16 @@
       "latitude": 55.694,
       "longitude": 12.433,
       "notes": "E|Forsyning (afventer 1. test). forsyningid og AppServerUri bekræftet offentligt via GetVaerkSettings. Login med forbrugernummer + webpinkode fra regningen; daglige aflæsninger.",
-      "tariffs": []
+      "tariffs": [
+        {
+          "year": 2026,
+          "effective_from": "2026-01-01",
+          "price_dkk_per_kwh": 0.52619,
+          "price_dkk_per_m3": null,
+          "source": "https://vestfor.dk/privat/har-fjernvarme/priser-og-gebyrer",
+          "source_note": "Priser 2026 (Vestforbrænding): Variabel varmepris inkl. affaldsvarmeafgift 420,95 kr./MWh ekskl. moms / 526,19 kr./MWh inkl. moms (0,52619 kr./kWh). Fast varmepris (3-års prognose, 0–799 MWh): 263,36 ekskl. / 329,20 kr./MWh inkl. moms (intet m²- eller målerbidrag). Ingen særskilt afkølingstarif."
+        }
+      ]
     },
     {
       "id": "egedal-fjernvarme",
@@ -340,7 +427,34 @@
       "latitude": 55.792,
       "longitude": 12.155,
       "notes": "E|Forsyning (afventer 1. test). forsyningid og AppServerUri bekræftet offentligt via GetVaerkSettings. Login med forbrugernummer + webpinkode fra regningen; daglige aflæsninger.",
-      "tariffs": []
+      "tariffs": [
+        {
+          "year": 2026,
+          "effective_from": "2026-08-01",
+          "price_dkk_per_kwh": 0.54625,
+          "price_dkk_per_m3": null,
+          "fixed_fee_dkk_per_m2_year": 26.25,
+          "motivation_dkk_per_kwh_per_k": 0.01025,
+          "motivation_bonus": false,
+          "bonus_temp": 0.0,
+          "penalty_temp": 37.0,
+          "source": "https://www.egedalfjernvarme.dk/media/rdvj1dvv/takstblad-2026-pr-1-august.pdf",
+          "source_note": "Takstblad 2026 pr. 1. august (jan–jul 2026: 480,00 kr./MWh = 0,48 kr./kWh inkl. moms): Variabel varmepris 437,00 kr./MWh ekskl. moms / 546,25 kr./MWh inkl. moms (0,54625 kr./kWh). Fast arealafgift: 21,00 ekskl. / 26,25 kr./m²/år inkl. moms. Fast varmepris: 140,00 ekskl. / 175,00 kr./MWh inkl. moms. Måler-/administrationsbidrag: 500,00 ekskl. / 625,00 kr./år inkl. moms. Incitamentspris (kun tillæg): +8,20 kr./MWh/°C ekskl. moms / +0,01025 kr./kWh/°C inkl. moms over 37 °C retur."
+        },
+        {
+          "year": 2027,
+          "effective_from": "2027-01-01",
+          "price_dkk_per_kwh": 0.54625,
+          "price_dkk_per_m3": null,
+          "fixed_fee_dkk_per_m2_year": 33.125,
+          "motivation_dkk_per_kwh_per_k": 0.01025,
+          "motivation_bonus": false,
+          "bonus_temp": 0.0,
+          "penalty_temp": 37.0,
+          "source": "https://www.egedalfjernvarme.dk/media/qt1gfmk1/takstblad-2027.pdf",
+          "source_note": "Takstblad 2027 (gældende fra 2027-01-01): Variabel varmepris uændret 437,00 ekskl. / 546,25 kr./MWh inkl. moms (0,54625 kr./kWh). Fast arealafgift: 26,50 ekskl. / 33,125 kr./m²/år inkl. moms. Fast varmepris: 145,50 ekskl. / 181,88 kr./MWh inkl. moms. Målerbidrag: 500,00 ekskl. / 625,00 kr./år inkl. moms. Incitamentspris (kun tillæg): +0,01025 kr./kWh/°C inkl. moms over 37 °C retur."
+        }
+      ]
     },
     {
       "id": "fredericia-fjernvarme",
@@ -355,7 +469,26 @@
       "latitude": 55.566,
       "longitude": 9.752,
       "notes": "E|Forsyning (afventer 1. test). forsyningid og AppServerUri bekræftet offentligt via GetVaerkSettings. Login med forbrugernummer + webpinkode fra regningen; daglige aflæsninger.",
-      "tariffs": []
+      "tariffs": [
+        {
+          "year": 2026,
+          "effective_from": "2026-07-01",
+          "price_dkk_per_kwh": 0.4185,
+          "price_dkk_per_m3": 3.0,
+          "fixed_fee_dkk_per_m2_year": 34.5,
+          "source": "https://fredericiafjernvarme.dk/oekonomi-miljoe/prisudvikling-gennem-tiderne",
+          "source_note": "Takster 2026 2. halvår (pr. 2026-07-01; 1. halvår var 112,00 kr./GJ = 0,4032 kr./kWh inkl. moms): Målt energimængde 93,00 kr./GJ ekskl. moms / 116,25 kr./GJ inkl. moms (0,4185 kr./kWh). Målt vandmængde: 2,40 ekskl. / 3,00 kr./m³ inkl. moms. Fast effektbidrag: 27,60 ekskl. / 34,50 kr./m²/år inkl. moms. Abonnementsbidrag (måler): 520,00 ekskl. / 650,00 kr./år inkl. moms. Afkøling afregnes via vandmængdebidraget."
+        },
+        {
+          "year": 2027,
+          "effective_from": "2027-01-01",
+          "price_dkk_per_kwh": 0.4473,
+          "price_dkk_per_m3": 3.0,
+          "fixed_fee_dkk_per_m2_year": 38.0,
+          "source": "https://fredericiafjernvarme.dk/p/Fredericia%20Fjernvarme/Filer/Priser/Tarifblad-2027.pdf",
+          "source_note": "Tarifblad 2027 (gældende fra 2027-01-01): Målt energimængde 99,40 kr./GJ ekskl. moms / 124,25 kr./GJ inkl. moms (0,4473 kr./kWh). Målt vandmængde: 2,40 ekskl. / 3,00 kr./m³ inkl. moms. Fast effektbidrag: 30,40 ekskl. / 38,00 kr./m²/år inkl. moms. Abonnementsbidrag (måler): 540,00 ekskl. / 675,00 kr./år inkl. moms."
+        }
+      ]
     },
     {
       "id": "vejle-fjernvarme",
@@ -370,7 +503,19 @@
       "latitude": 55.709,
       "longitude": 9.536,
       "notes": "E|Forsyning (afventer 1. test). forsyningid og AppServerUri bekræftet offentligt via GetVaerkSettings. Login med forbrugernummer + webpinkode fra regningen; daglige aflæsninger.",
-      "tariffs": []
+      "tariffs": [
+        {
+          "year": 2026,
+          "effective_from": "2026-01-01",
+          "price_dkk_per_kwh": 0.61875,
+          "price_dkk_per_m3": null,
+          "fixed_fee_dkk_per_m2_year": 23.75,
+          "motivation_pct_per_k": 1.0,
+          "motivation_max_pct": 25.0,
+          "source": "https://vejlefjernvarme.dk/p/Vejle%20Fjernvarme/Filer/Takster%20og%20regler%20for%20tilslutning%20pr.%201.%20januar%202026.pdf/Takster-og-regler-for-tilslutning-pr.-1.-januar-2026.pdf",
+          "source_note": "Takster pr. 1. januar 2026 (Vejle Fjernvarme): Variabelt forbrugsbidrag 495,00 kr./MWh ekskl. moms / 618,75 kr./MWh inkl. moms (0,61875 kr./kWh). Fast effektbidrag (BBR): 19,00 ekskl. / 23,75 kr./m²/år inkl. moms. Målerleje: 500,00 ekskl. / 625,00 kr./år inkl. moms. Motivationstarif: ±1 %/°C (maks. ±25 %) ift. fremløbsafhængigt returtemperaturkrav (skala 36–44 °C; bruger automatisk Forv_Retur fra E|Forsyning)."
+        }
+      ]
     },
     {
       "id": "sonderborg-varme",
@@ -385,7 +530,28 @@
       "latitude": 54.909,
       "longitude": 9.792,
       "notes": "E|Forsyning (afventer 1. test). forsyningid og AppServerUri bekræftet offentligt via GetVaerkSettings. Login med forbrugernummer + webpinkode fra regningen; daglige aflæsninger.",
-      "tariffs": []
+      "tariffs": [
+        {
+          "year": 2026,
+          "effective_from": "2026-01-01",
+          "price_dkk_per_kwh": 0.58,
+          "price_dkk_per_m3": null,
+          "fixed_fee_dkk_per_m2_year": 27.5,
+          "motivation_pct_per_k": 1.0,
+          "source": "https://sonderborg-varme.dk/p/S%C3%B8nderborg%20Varme/Takstblad/TAKSTBLAD_01102026.pdf",
+          "source_note": "Takstblad 2026 (Sønderborg Varme): Variabelt bidrag 464,00 kr./MWh ekskl. moms / 580,00 kr./MWh inkl. moms (0,58 kr./kWh). Fast bidrag (BBR): 22,00 ekskl. / 27,50 kr./m²/år inkl. moms. Abonnementsbidrag (måler med el til fjernaflæsning): 550,00 ekskl. / 687,50 kr./år inkl. moms. Motivationstarif (asymmetrisk, fremløbsafhængig med 5 °C neutralzone): -1,0 %/°C bonus under nedre grænse og +0,5 %/°C tillæg over øvre grænse ved fremløb >= 60 °C."
+        },
+        {
+          "year": 2027,
+          "effective_from": "2027-01-01",
+          "price_dkk_per_kwh": 0.6615,
+          "price_dkk_per_m3": null,
+          "fixed_fee_dkk_per_m2_year": 27.5,
+          "motivation_pct_per_k": 1.0,
+          "source": "https://sonderborg-varme.dk/om-os/varmeprisen",
+          "source_note": "Offentliggjorte 2027-takster (gældende fra 2027-01-01): Variabelt bidrag 529,20 kr./MWh ekskl. moms / 661,50 kr./MWh inkl. moms (0,6615 kr./kWh). Fast bidrag uændret 27,50 kr./m²/år og målerabonnement 687,50 kr./år inkl. moms. Motivationstarif uændret (-1,0 %/°C bonus / +0,5 %/°C tillæg)."
+        }
+      ]
     },
     {
       "id": "sonfor-varme",
@@ -445,7 +611,16 @@
       "latitude": 55.63,
       "longitude": 12.454,
       "notes": "E|Forsyning (afventer 1. test). forsyningid og AppServerUri bekræftet offentligt via GetVaerkSettings. Login med forbrugernummer + webpinkode fra regningen; daglige aflæsninger.",
-      "tariffs": []
+      "tariffs": [
+        {
+          "year": 2026,
+          "effective_from": "2026-01-01",
+          "price_dkk_per_kwh": 0.47078,
+          "price_dkk_per_m3": null,
+          "source": "https://www.hvidovrefjernvarme.dk/wp-content/uploads/2026/04/Takstblad-Avedoere-Fjernvarme-2026-2.pdf",
+          "source_note": "Takstblad 2026 (Avedøre Fjernvarme): Variabel afgift 376,62 kr./MWh ekskl. moms / 470,78 kr./MWh inkl. moms (0,47078 kr./kWh). Fastafgift (pr. MWh normalårsforbrug, ikke m²): 482,22 ekskl. / 602,78 kr./MWh inkl. moms. Abonnement/målerbidrag (0–42 MWh/år): 600,00 ekskl. / 750,00 kr./år inkl. moms. Ingen særskilt afkølingstarif."
+        }
+      ]
     },
     {
       "id": "middelfart-fjernvarme",
@@ -582,7 +757,17 @@
       "latitude": 55.533,
       "longitude": 12.222,
       "notes": "E|Forsyning (afventer 1. test). forsyningid og AppServerUri bekræftet offentligt via GetVaerkSettings. Login med forbrugernummer + webpinkode fra regningen; daglige aflæsninger.",
-      "tariffs": []
+      "tariffs": [
+        {
+          "year": 2026,
+          "effective_from": "2026-01-01",
+          "price_dkk_per_kwh": 0.78641,
+          "price_dkk_per_m3": null,
+          "fixed_fee_dkk_per_m2_year": 41.7125,
+          "source": "https://solrodforsyning.dk/p/Solr%C3%B8d%20Forsyning/Filer/Takstblade/Takstblad-2026-.pdf",
+          "source_note": "Takstblad 2026 (Solrød Fjernvarme): Variabelt bidrag 629,13 kr./MWh ekskl. moms / 786,41 kr./MWh inkl. moms (0,78641 kr./kWh). Fast bidrag: 14,20 ekskl. / 17,75 kr./m³/år inkl. moms × 2,35 m loftshøjde = 33,37 ekskl. / 41,7125 kr./m²/år inkl. moms. Målerbidrag (< 30 kW): 229,98 kr./år inkl. moms. Afkølingstarif (kun straf på årsafkøling ΔT): +8,35 kr./MWh/°C inkl. moms ved årsafkøling under 20 °C."
+        }
+      ]
     },
     {
       "id": "thisted-varmeforsyning",
@@ -597,7 +782,21 @@
       "latitude": 56.955,
       "longitude": 8.695,
       "notes": "E|Forsyning (afventer 1. test). forsyningid og AppServerUri bekræftet offentligt via GetVaerkSettings. Login med forbrugernummer + webpinkode fra regningen; daglige aflæsninger.",
-      "tariffs": []
+      "tariffs": [
+        {
+          "year": 2026,
+          "effective_from": "2026-01-01",
+          "price_dkk_per_kwh": 0.65625,
+          "price_dkk_per_m3": null,
+          "fixed_fee_dkk_per_m2_year": 20.0,
+          "motivation_pct_per_k": 1.0,
+          "motivation_bonus": false,
+          "bonus_temp": 0.0,
+          "penalty_temp": 40.0,
+          "source": "https://thisted-varmeforsyning.dk/nyheder/varsling-af-prisstigning-2026",
+          "source_note": "Priser 2026 (Thisted Varmeforsyning): Forbrugspris 525,00 kr./MWh ekskl. moms / 656,25 kr./MWh inkl. moms (0,65625 kr./kWh). Fast effektbidrag: 16,00 ekskl. / 20,00 kr./m²/år inkl. moms. Abonnement (målerbidrag): 600,00 ekskl. / 750,00 kr./år inkl. moms. Motivationsbidrag (kun tillæg): +1 %/°C ved årsgennemsnitlig returtemperatur over forventet (fremløbsafhængig tabel; bruger automatisk Forv_Retur fra E|Forsyning)."
+        }
+      ]
     },
     {
       "id": "assens-fjernvarme",
@@ -612,7 +811,17 @@
       "latitude": 55.27,
       "longitude": 9.9,
       "notes": "E|Forsyning (afventer 1. test). forsyningid og AppServerUri bekræftet offentligt via GetVaerkSettings. Login med forbrugernummer + webpinkode fra regningen; daglige aflæsninger.",
-      "tariffs": []
+      "tariffs": [
+        {
+          "year": 2026,
+          "effective_from": "2026-01-01",
+          "price_dkk_per_kwh": 0.64906,
+          "price_dkk_per_m3": null,
+          "fixed_fee_dkk_per_m2_year": 24.6,
+          "source": "https://assensfjernvarme.dk/priser-og-tilmelding/takstblad-2",
+          "source_note": "Takstblad 2026 (Assens Fjernvarme): Forbrugsbidrag 519,25 kr./MWh ekskl. moms / 649,06 kr./MWh inkl. moms (0,64906 kr./kWh). Fast effektbidrag (BBR): 19,68 ekskl. / 24,60 kr./m²/år inkl. moms (særskilt områdetillæg 29,00 kr./m²/år i Aarup og landsbyer). Målerabonnement: 540,23 ekskl. / 675,29 kr./år inkl. moms. Ingen afkølings- eller motivationstarif."
+        }
+      ]
     },
     {
       "id": "ringkobing-fjernvarme",
@@ -627,7 +836,18 @@
       "latitude": 56.09,
       "longitude": 8.244,
       "notes": "E|Forsyning (afventer 1. test). forsyningid og AppServerUri bekræftet offentligt via GetVaerkSettings. Login med forbrugernummer + webpinkode fra regningen; daglige aflæsninger.",
-      "tariffs": []
+      "tariffs": [
+        {
+          "year": 2026,
+          "effective_from": "2026-01-01",
+          "price_dkk_per_kwh": 0.5625,
+          "price_dkk_per_m3": null,
+          "motivation_pct_per_k": 1.5,
+          "motivation_max_pct": 25.0,
+          "source": "https://rfv.dk/p/Ringk%C3%B8bing%20Fjernvarmev%C3%A6rk/Priser/takstblad-gaeldende-pr-1-januar-2026.pdf",
+          "source_note": "Takstblad pr. 1. januar 2026 (Ringkøbing Fjernvarme): Variabelt forbrugsbidrag 450,00 kr./MWh ekskl. moms / 562,50 kr./MWh inkl. moms (0,5625 kr./kWh). Fast bidrag (rumfangsbaseret, ikke m²): 9,50 ekskl. / 11,88 kr./m³/år inkl. moms. Målerbidrag: 300,00 ekskl. / 375,00 kr./år inkl. moms. Motivationstarif: ±1,5 %/°C (maks. ±25 %) ift. fremløbsafhængigt neutralområde (fx 33,3–41,3 °C ved 64 °C fremløb)."
+        }
+      ]
     },
     {
       "id": "hvide-sande-fjernvarme",
@@ -642,7 +862,17 @@
       "latitude": 56.004,
       "longitude": 8.129,
       "notes": "E|Forsyning (afventer 1. test). forsyningid og AppServerUri bekræftet offentligt via GetVaerkSettings. Login med forbrugernummer + webpinkode fra regningen; daglige aflæsninger.",
-      "tariffs": []
+      "tariffs": [
+        {
+          "year": 2026,
+          "effective_from": "2026-04-01",
+          "price_dkk_per_kwh": 0.0125,
+          "price_dkk_per_m3": null,
+          "motivation_pct_per_k": 3.0,
+          "source": "https://hsfv.dk/p/Hvide%20Sande%20Fjernvarme/PDF-filer/Priser/Takstblad-pr-01-04-2026(1).pdf",
+          "source_note": "Takstblad pr. 1. april 2026 (ekstraordinær prisnedsættelse; jan–mar 2026 var 56,25 kr./MWh = 0,05625 kr./kWh og 16,00 kr./m²/år over 70 m²): Variabel forbrugspris 10,00 kr./MWh ekskl. moms / 12,50 kr./MWh inkl. moms (0,0125 kr./kWh). Fast arealafgift nedsat til 0,00 kr./m²/år. Abonnement: 300,00 ekskl. / 375,00 kr./år inkl. moms. Motivationstarif (asymmetrisk, fremløbsafhængig): -3 %/°C bonus under nedre grænse og +12 %/°C tillæg over øvre grænse."
+        }
+      ]
     },
     {
       "id": "kibaek-varmevaerk",
@@ -657,7 +887,20 @@
       "latitude": 56.032,
       "longitude": 8.857,
       "notes": "E|Forsyning (afventer 1. test). forsyningid og AppServerUri bekræftet offentligt via GetVaerkSettings. Login med forbrugernummer + webpinkode fra regningen; daglige aflæsninger.",
-      "tariffs": []
+      "tariffs": [
+        {
+          "year": 2026,
+          "effective_from": "2026-01-01",
+          "price_dkk_per_kwh": 0.36875,
+          "price_dkk_per_m3": null,
+          "motivation_pct_per_k": 1.0,
+          "motivation_bonus": false,
+          "bonus_temp": 0.0,
+          "penalty_temp": 33.0,
+          "source": "https://xn--kibk-varmevrk-5fbi.dk/wp-content/uploads/2026/01/Takstblad-2026.pdf",
+          "source_note": "Takstblad 2026 (Kibæk Varmeværk): Forbrug 295,00 kr./MWh ekskl. moms / 368,75 kr./MWh inkl. moms (0,36875 kr./kWh). Fast afgift (rumfangsbaseret, ikke m²): 13,50 ekskl. / 16,875 kr./m³/år inkl. moms. Grundafgift (måler): 750,00 ekskl. / 937,50 kr./år inkl. moms. Afkøling (kun tillæg): +1 %/°C ved årsgennemsnitlig returtemperatur over 33 °C."
+        }
+      ]
     },
     {
       "id": "kjellerup-fjernvarme",
@@ -672,7 +915,24 @@
       "latitude": 56.286,
       "longitude": 9.433,
       "notes": "E|Forsyning (afventer 1. test). forsyningid og AppServerUri bekræftet offentligt via GetVaerkSettings. Login med forbrugernummer + webpinkode fra regningen; daglige aflæsninger.",
-      "tariffs": []
+      "tariffs": [
+        {
+          "year": 2026,
+          "effective_from": "2026-01-01",
+          "price_dkk_per_kwh": 0.67625,
+          "price_dkk_per_m3": null,
+          "source": "https://kjellerupfjernvarme.dk/nyheder/prisregulering",
+          "source_note": "Priser 2026 (Kjellerup Fjernvarme): Variabel varmepris 541,00 kr./MWh ekskl. moms / 676,25 kr./MWh inkl. moms (0,67625 kr./kWh). Samlede faste bidrag for standardhus udgør ca. 4.380 kr./år inkl. moms."
+        },
+        {
+          "year": 2027,
+          "effective_from": "2027-01-01",
+          "price_dkk_per_kwh": 0.71006,
+          "price_dkk_per_m3": null,
+          "source": "https://kjellerupfjernvarme.dk/nyheder/prisregulering",
+          "source_note": "Varslet prisregulering pr. 2027-01-01 (+5 % på variabel varmepris): 568,05 kr./MWh ekskl. moms / 710,06 kr./MWh inkl. moms (0,71006 kr./kWh). Faste bidrag uændrede."
+        }
+      ]
     },
     {
       "id": "ansager-varmevaerk",
@@ -687,7 +947,16 @@
       "latitude": 55.706,
       "longitude": 8.751,
       "notes": "E|Forsyning (afventer 1. test). forsyningid og AppServerUri bekræftet offentligt via GetVaerkSettings. Login med forbrugernummer + webpinkode fra regningen; daglige aflæsninger.",
-      "tariffs": []
+      "tariffs": [
+        {
+          "year": 2026,
+          "effective_from": "2026-06-01",
+          "price_dkk_per_kwh": 0.375,
+          "price_dkk_per_m3": null,
+          "source": "https://www.ansager-fjernvarme.dk/priser.php",
+          "source_note": "Priser pr. 1. juni 2026 (Ansager Varmeværk): Variabel afgift 300,00 kr./MWh ekskl. moms / 375,00 kr./MWh inkl. moms (0,375 kr./kWh). Fast afgift (rumfangsbaseret, ikke m²): 20,00 ekskl. / 25,00 kr./m³/år inkl. moms (<= 300 m³). Målerleje: 300,00 ekskl. / 375,00 kr./år inkl. moms. Afkølingstillæg (kun straf, ΔT): +2 %/°C (+7,50 kr./MWh/K inkl. moms; opfølgning under 25 °C årsafkøling)."
+        }
+      ]
     },
     {
       "id": "dianalund-fjernvarme",
@@ -702,7 +971,31 @@
       "latitude": 55.529,
       "longitude": 11.493,
       "notes": "E|Forsyning (afventer 1. test). forsyningid og AppServerUri bekræftet offentligt via GetVaerkSettings. Login med forbrugernummer + webpinkode fra regningen; daglige aflæsninger.",
-      "tariffs": []
+      "tariffs": [
+        {
+          "year": 2026,
+          "effective_from": "2026-01-01",
+          "price_dkk_per_kwh": 0.85414,
+          "price_dkk_per_m3": null,
+          "motivation_pct_per_k": 1.0,
+          "bonus_temp": 35.0,
+          "penalty_temp": 45.0,
+          "source": "https://affaldplus.dk/dianalund-fjernvarme/fjernvarmepriser",
+          "source_note": "Priser 2026 (AffaldPlus / Dianalund Fjernvarme): Variabel varmebetaling 683,32 kr./MWh ekskl. moms / 854,14 kr./MWh inkl. moms (0,85414 kr./kWh). Fast arealbidrag 0,00 kr./m²/år i 2026 (indføres i 2027). Afkølings-/motivationstarif: ±1 %/°C under 35 °C / over 45 °C (neutralzone 35–45 °C)."
+        },
+        {
+          "year": 2027,
+          "effective_from": "2027-01-01",
+          "price_dkk_per_kwh": 0.81332,
+          "price_dkk_per_m3": null,
+          "fixed_fee_dkk_per_m2_year": 19.81,
+          "motivation_pct_per_k": 1.0,
+          "bonus_temp": 35.0,
+          "penalty_temp": 45.0,
+          "source": "https://affaldplus.dk/dianalund-fjernvarme/fjernvarmepriser",
+          "source_note": "Priser 2027 (AffaldPlus / Dianalund Fjernvarme): Variabelt bidrag 650,66 kr./MWh ekskl. moms / 813,32 kr./MWh inkl. moms (0,81332 kr./kWh). Fast bidrag: 15,85 ekskl. / 19,81 kr./m²/år inkl. moms. Afkølings-/motivationstarif uændret: ±1 %/°C under 35 °C / over 45 °C."
+        }
+      ]
     },
     {
       "id": "aalborg-forsyning",
@@ -716,7 +1009,18 @@
       "latitude": 57.048,
       "longitude": 9.921,
       "notes": "Watts On. Verificeret live i v0.3.2 (PR #9): heating/api/v1/devices/{device_id}/consumption/recent?newerThan=, felter En (kWh), Vol (m³) og TI/TO. Login med Watts On-konto; par først varmemåleren i appen (kundenummer + selvvalgt måleradgangskode fra Mit Aalborg Forsyning).",
-      "tariffs": []
+      "tariffs": [
+        {
+          "year": 2026,
+          "effective_from": "2026-01-01",
+          "price_dkk_per_kwh": 0.95625,
+          "price_dkk_per_m3": null,
+          "fixed_fee_dkk_per_m2_year": 14.0,
+          "motivation_pct_per_k": 2.0,
+          "source": "https://aalborgforsyning.dk/media/ehpkujbv/takster_varme_erhverv_052026.pdf",
+          "source_note": "Gældende fra 2026-01-01 (Aalborg Varme A/S, takstblad opdateret 28-05-2026). Energi: 0,765 kr./kWh ekskl. moms / 0,95625 kr./kWh inkl. moms. Fast effektbidrag: 11,20 kr./m²/år ekskl. moms / 14,00 kr./m²/år inkl. moms (0,1 kW = 1 m²; særskilt kraftvarmetillæg i bl.a. Sulsted og Ellidshøj/Ferslev). Målerabonnement: 488,00 ekskl. / 610,00 kr./år inkl. moms (<= 50 m²) og 976,00 ekskl. / 1.220,00 kr./år inkl. moms (> 50 m²). Varmeudnyttelsestakst: ±2 %/°C ved afvigelse fra fremløbsafhængig forventet returtemperatur."
+        }
+      ]
     },
     {
       "id": "forsyning-helsingor",
@@ -730,7 +1034,17 @@
       "latitude": 56.036,
       "longitude": 12.613,
       "notes": "Watts On (eksperimentel, ikke testet live i denne integration). Officielt listet under 'Følg forbrug af fjernvarme' på watts.zendesk.com og fh.dk/watts (timeforbrug i kWh/m³). Gælder ikke kunder hos Hornbæk Fjernvarme. Par først varmemåleren i Watts On-appen med kundenummer + målernummer fra Mit FH. Stod tidligere som KMD-kandidat; skiftet fordi værket officielt bruger Watts On til fjernvarme.",
-      "tariffs": []
+      "tariffs": [
+        {
+          "year": 2026,
+          "effective_from": "2026-01-01",
+          "price_dkk_per_kwh": 0.56739,
+          "price_dkk_per_m3": 4.39,
+          "fixed_fee_dkk_per_m2_year": 27.88,
+          "source": "https://www.fh.dk/files/media/document/2026%20-%20Varme.pdf",
+          "source_note": "Takster 2026 (Forsyning Helsingør Varme A/S): Variabelt varmebidrag 453,91 kr./MWh ekskl. moms / 567,39 kr./MWh inkl. moms (0,56739 kr./kWh). Variabelt transportbidrag: 3,51 ekskl. / 4,39 kr./m³ inkl. moms (fremløbskorrigeret afkølingsafregning). Fast arealbidrag (BBR): 22,30 ekskl. / 27,88 kr./m²/år inkl. moms. Målerabonnement (lille måler inkl. vekslerleje): 963,00 ekskl. / 1.203,75 kr./år inkl. moms (-250,00 kr./år ved egen veksler)."
+        }
+      ]
     },
     {
       "id": "fjernvarme-fyn",
@@ -780,8 +1094,14 @@
           "bonus_temp": 0.0,
           "penalty_temp": 40.0,
           "expected_return_by_forward_temp": [
-            [58.0, 47.0],
-            [68.0, 37.0]
+            [
+              58.0,
+              47.0
+            ],
+            [
+              68.0,
+              37.0
+            ]
           ],
           "source": "https://hfors.dk/selvbetjening/priser-takster-2026",
           "source_note": "Takstblad 2026 (https://hfors.dk/files/media/document/Hiller%C3%B8d%20varme%20-%20takstblad%202026.pdf): Forbrugsbidrag 670,00 kr./MWh inkl. moms (536,00 ekskl.) = 0,67 kr./kWh. Afkølingstarif: +1 % pr. °C manglende afkøling (kun tillæg, ingen bonus) ift. dynamisk krav efter fremløbstemperatur: 47 °C ved <=58 °C fremløb, faldende med 1 °C/°C til 37 °C ved >=68 °C fremløb (40 °C ved 65 °C som fallback)."
@@ -796,8 +1116,14 @@
           "bonus_temp": 0.0,
           "penalty_temp": 40.0,
           "expected_return_by_forward_temp": [
-            [58.0, 47.0],
-            [68.0, 37.0]
+            [
+              58.0,
+              47.0
+            ],
+            [
+              68.0,
+              37.0
+            ]
           ],
           "source": "https://hfors.dk/selvbetjening/priser-takster-2026",
           "source_note": "Anmeldt 2027-varmepris: 750,00 kr./MWh inkl. moms (600,00 ekskl.) = 0,75 kr./kWh og 1 %/°C dynamisk afkølingstarif (kun tillæg, ingen bonus)."

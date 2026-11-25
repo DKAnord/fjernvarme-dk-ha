@@ -2,6 +2,14 @@
 
 Alle væsentlige ændringer i **Dansk Fjernvarme** (tidligere *Fjernvarme (KMD Easy Energy)*) dokumenteres her.
 
+## [1.2.7] - 2026-11-25
+
+### Tilføjet
+- **Valgfrit fast arealbidrag / abonnement & forventet årsudgift ([issue #37](https://github.com/DKAnord/fjernvarme-dk-ha/issues/37)):**
+  - Tilføjet valgfrie indstillinger for **fast arealbidrag inkl. moms (`fixed_fee_dkk_per_m2_year`, kr./m²/år)**, **boligareal / opvarmet areal (`heated_area_m2`, m²)** og **fast årsabonnement / målerbidrag inkl. moms (`fixed_fee_dkk_per_year`, kr./år)** under integrationens indstillinger (`⚙️`), dashboard-kortets indstillingspanel og tjenesten `kmd_easy_energy.configure_utility` (`0 = deaktiveret / standard`).
+  - **Hedensted Fjernvarme** har nu indbygget officiel 2026/2027-takst for fast arealbidrag (**`33,75 kr./m²/år` inkl. moms** pr. 1. nov. 2026), som aktiveres automatisk, så snart du indtaster dit boligareal (`m²`).
+  - Når et fast bidrag er konfigureret, indregnes det forholdsmæssigt i døgn-, måneds-, års- og prognosetallene (`cost_estimate` og `degree_day.forecast_annual_dkk`), og dashboard-kortet viser KPI-feltet **Forventet årsudgift** (`forecast_annual_dkk`) sammen med `/local/js/kmd-easy-energy-card.js?v=1.2.7`. Standardværdier er `0`, så eksisterende opsætninger uden areal/abonnement er uændrede.
+
 ## [1.2.6] - 2026-11-25
 
 ### Tilføjet

@@ -1297,20 +1297,6 @@ class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             allow_bonus=tariff.motivation_bonus,
         )
 
-        state["cost_estimate"] = estimate_variable_costs(
-            price_dkk_per_kwh=tariff.price_dkk_per_kwh,
-            bonus_temp=tariff.bonus_temp,
-            penalty_temp=tariff.penalty_temp,
-            motivation_rate=tariff.motivation_dkk_per_kwh_per_k,
-            current_return_temp=return_temp,
-            daily=state.get("daily"),
-            monthly_cur_year=(state.get("monthly") or {}).get(str(today.year)),
-            return_temp_monthly=(state.get("return_temp") or {}).get(f"monthly_{today.year}"),
-            today=today,
-            max_pct=tariff.motivation_max_pct,
-            expected_return_monthly=exp_monthly,
-            allow_bonus=tariff.motivation_bonus,
-        )
         daily_kwh = daily_kwh_from_history(
             state.get("daily_kwh_history"),
             (state.get("daily") or {}).get("days"),
@@ -1336,9 +1322,38 @@ class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             ytd = round(ytd_sum, 2) if ytd_sum else None
         forecast = forecast_annual(ytd, kph, tariff.normal_hdd_year, today)
         state["degree_day"] = forecast
-        if forecast.get("forecast_annual_kwh") is not None and tariff.price_dkk_per_kwh:
+
+        forecast_kwh = forecast.get("forecast_annual_kwh")
+        if forecast_kwh is None:
+            raw_expected = (state.get("forecast") or {}).get("expected_kwh")
+            if isinstance(raw_expected, (int, float)) and not isinstance(raw_expected, bool) and raw_expected > 0:
+                forecast_kwh = float(raw_expected)
+
+        state["cost_estimate"] = estimate_variable_costs(
+            price_dkk_per_kwh=tariff.price_dkk_per_kwh,
+            bonus_temp=tariff.bonus_temp,
+            penalty_temp=tariff.penalty_temp,
+            motivation_rate=tariff.motivation_dkk_per_kwh_per_k,
+            current_return_temp=return_temp,
+            daily=state.get("daily"),
+            monthly_cur_year=(state.get("monthly") or {}).get(str(today.year)),
+            return_temp_monthly=(state.get("return_temp") or {}).get(f"monthly_{today.year}"),
+            today=today,
+            max_pct=tariff.motivation_max_pct,
+            expected_return_monthly=exp_monthly,
+            allow_bonus=tariff.motivation_bonus,
+            annual_fixed_fee_dkk=tariff.annual_fixed_fee_dkk,
+            forecast_annual_kwh=forecast_kwh,
+        )
+        if state["cost_estimate"].get("forecast_annual_dkk") is not None:
+            state["degree_day"]["forecast_annual_dkk"] = float(
+                state["cost_estimate"]["forecast_annual_dkk"]
+            )
+        elif forecast.get("forecast_annual_kwh") is not None and tariff.price_dkk_per_kwh:
             state["degree_day"]["forecast_annual_dkk"] = round(
-                float(forecast["forecast_annual_kwh"]) * tariff.price_dkk_per_kwh, 0
+                float(forecast["forecast_annual_kwh"]) * tariff.price_dkk_per_kwh
+                + tariff.annual_fixed_fee_dkk,
+                0,
             )
 
         # Leak/abnormal: last complete day (yesterday, or latest complete daily).

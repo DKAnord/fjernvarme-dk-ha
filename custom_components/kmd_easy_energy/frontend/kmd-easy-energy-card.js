@@ -3,7 +3,7 @@
  * Zero external dependencies, Shadow DOM, responsive, interactive tooltips, DA/EN i18n.
  */
 (() => {
-  const VER = "1.2.6";
+  const VER = "1.2.7";
   const MONTHS = ["Jan", "Feb", "Mar", "Apr", "Maj", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Dec"];
   const DAYS_IN_MONTH = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
   const isLeapYear = (y) => (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0;
@@ -683,6 +683,9 @@
       const fwdSrc = a.forward_temp_source || tariffObj.forward_temp_source || null;
       const curPrice = a.energy_price_dkk_per_kwh ?? tariffObj.price_dkk_per_kwh ?? "";
       const curMotivPct = tariffObj.motivation_pct_per_k ?? "";
+      const curFixedM2 = tariffObj.fixed_fee_dkk_per_m2_year ?? "";
+      const curAreaM2 = tariffObj.heated_area_m2 ?? "";
+      const curFixedYear = tariffObj.fixed_fee_dkk_per_year ?? "";
       const efExpectedRt = typeof a.expected_return_temp === "number" ? a.expected_return_temp : null;
       const singleReturnTarget = !allowBonus || Math.abs(bonusT - penaltyT) < 0.05;
 
@@ -840,11 +843,17 @@
       const wizPenalty = this._wizPenalty ?? penaltyT;
       const wizPrice = this._wizPrice ?? (curPrice !== "" && curPrice !== null ? curPrice : "");
       const wizMotivPct = this._wizMotivPct ?? (curMotivPct !== "" && curMotivPct !== null ? curMotivPct : "");
+      const wizFixedM2 = this._wizFixedM2 ?? (curFixedM2 !== "" && curFixedM2 !== null ? curFixedM2 : "");
+      const wizAreaM2 = this._wizAreaM2 ?? (curAreaM2 !== "" && curAreaM2 !== null ? curAreaM2 : "");
+      const wizFixedYear = this._wizFixedYear ?? (curFixedYear !== "" && curFixedYear !== null ? curFixedYear : "");
       const wizEfPrice = this._wizEfPrice ?? wizPrice;
       const wizEfBonus = this._wizEfBonus ?? (allowBonus ? (efExpectedRt !== null ? efExpectedRt : bonusT) : "");
       const wizEfPenalty = this._wizEfPenalty ?? (allowBonus && singleReturnTarget ? "" : penaltyT);
       const wizEfMotivPct = this._wizEfMotivPct ?? wizMotivPct;
       const wizEfForward = this._wizEfForward ?? (fwdSrc === "manual" && fwdTemp !== null ? fwdTemp : "");
+      const wizEfFixedM2 = this._wizEfFixedM2 ?? wizFixedM2;
+      const wizEfAreaM2 = this._wizEfAreaM2 ?? wizAreaM2;
+      const wizEfFixedYear = this._wizEfFixedYear ?? wizFixedYear;
       const mitidLiveBox = !hasMitid ? "" : otpCode
         ? `<div class="mitid-box otp" role="region" aria-live="polite"><div>🔑 Indtast denne 4-cifrede engangskode i MitID-appen:</div><div class="otp-digits">${esc(otpCode.split("").join(" "))}</div></div>`
         : (qrSvg ? `<div class="mitid-box qr" role="region" aria-live="polite"><div>📲 Scan QR-koden med MitID-appen på din telefon:</div><div class="qr-wrap"><img id="mitidQrImg" src="${esc(this._qrDataUrl((this._mitidQrFrames || [])[this._mitidQrIdx || 0] || qrSvg))}" alt="MitID QR-kode" /></div><div class="qr-hint">Koden skifter hvert sekund — hold telefonen roligt foran skærmen. Står kortet på samme telefon som MitID-appen, kan QR-koden ikke scannes — slå i stedet engangskoder til i MitID-appen (Menu → Godkend med QR- eller engangskoder → Engangskoder).</div></div>` : "");
@@ -931,6 +940,15 @@
                   ${(hasDynamicCurve || fwdTemp !== null) ? `<label class="ob-field">Fremløbstemperatur (°C, 0 = auto)
                     <input id="efForwardInput" type="number" step="0.5" value="${esc(wizEfForward)}" placeholder="${fwdTemp !== null && fwdSrc === "meter" ? `Auto (${fmtDec(fwdTemp)} °C fra måler)` : "f.eks. 65 (0 = auto)"}" />
                   </label>` : ""}
+                  <label class="ob-field">Abonnement inkl. moms (kr./m²/år)
+                    <input id="efFixedM2Input" type="number" step="0.01" value="${esc(wizEfFixedM2)}" placeholder="f.eks. 33.75 (0 = standard)" />
+                  </label>
+                  <label class="ob-field">Boligareal (m²)
+                    <input id="efAreaM2Input" type="number" step="1" value="${esc(wizEfAreaM2)}" placeholder="f.eks. 162" />
+                  </label>
+                  <label class="ob-field">Fast årsabonnement / målerbidrag (kr./år)
+                    <input id="efFixedYearInput" type="number" step="1" value="${esc(wizEfFixedYear)}" placeholder="f.eks. 787.5 (0 = ingen)" />
+                  </label>
                 </div>
                 <div class="tb-actions">
                   <button class="btn" id="saveTariffBtn">💾 Gem pris &amp; returkrav</button>
@@ -1209,6 +1227,15 @@
                     <input id="motivPctInput" type="number" step="0.1" value="${esc(wizMotivPct)}" placeholder="%/°C" aria-label="Motivation (%/°C)" />
                   </div>
                 </div>
+                <div class="ob-field"><span>Abonnement (kr./m²/år) &amp; Boligareal (m²)</span>
+                  <div class="ob-pair">
+                    <input id="fixedM2Input" type="number" step="0.01" value="${esc(wizFixedM2)}" placeholder="kr./m²/år" aria-label="Abonnement (kr./m²/år)" />
+                    <input id="areaM2Input" type="number" step="1" value="${esc(wizAreaM2)}" placeholder="m²" aria-label="Boligareal (m²)" />
+                  </div>
+                </div>
+                <label class="ob-field">Fast årsabonnement / målerbidrag (kr./år)
+                  <input id="fixedYearInput" type="number" step="1" value="${esc(wizFixedYear)}" placeholder="kr./år (valgfri)" />
+                </label>
               </div>
             </details>
             <div class="ob-step">2. Forbind med 1-klik MitID-synkronisering (Anbefalet — 100% i Home Assistant)</div>
@@ -1318,8 +1345,12 @@
             typeof costEst.latest_day_dkk === "number"
             || typeof costEst.current_month_dkk === "number"
             || typeof costEst.ytd_dkk === "number"
+            || typeof costEst.forecast_annual_dkk === "number"
             || typeof costEst.effective_price_dkk_per_kwh === "number"
           )) ? (() => {
+            const hasFixedFee = costEst.excludes_fixed_fees === false
+              && typeof costEst.annual_fixed_fee_dkk === "number"
+              && costEst.annual_fixed_fee_dkk > 0;
             const hasBase = typeof costEst.base_price_dkk_per_kwh === "number";
             const baseTxt = hasBase ? `${fmtDec(costEst.base_price_dkk_per_kwh, 3)} kr/kWh` : "";
             const adj = costEst.adjustment_pct;
@@ -1331,10 +1362,24 @@
             } else if (hasBase) {
               effSub = `${lang === "en" ? "Base price" : "Grundpris"} ${baseTxt}`;
             }
+            const panelTitle = hasFixedFee
+              ? (lang === "en" ? `💰 Estimated cost (${curYr})` : `💰 Estimeret udgift (${curYr})`)
+              : (lang === "en" ? `💰 Estimated variable cost (${curYr})` : `💰 Estimeret forbrug i kr. (${curYr})`);
+            const panelLegend = hasFixedFee
+              ? (lang === "en"
+                ? `Incl. fixed fee (${fmtInt(costEst.annual_fixed_fee_dkk)} DKK/yr) · estimate, not invoice`
+                : `Inkl. fast bidrag (${fmtInt(costEst.annual_fixed_fee_dkk)} kr./år) · estimat, ikke regningen`)
+              : (lang === "en" ? "Excl. fixed fees · estimate, not invoice" : "Ekskl. faste afgifter · estimat, ikke regningen");
+            const monthFixedTxt = (hasFixedFee && typeof costEst.current_month_fixed_dkk === "number" && costEst.current_month_fixed_dkk > 0)
+              ? ` · ${lang === "en" ? "incl." : "inkl."} ${fmtInt(costEst.current_month_fixed_dkk)} kr. ${lang === "en" ? "fixed" : "fast"}`
+              : "";
+            const ytdFixedTxt = (hasFixedFee && typeof costEst.ytd_fixed_dkk === "number" && costEst.ytd_fixed_dkk > 0)
+              ? ` · ${lang === "en" ? "incl." : "inkl."} ${fmtInt(costEst.ytd_fixed_dkk)} kr. ${lang === "en" ? "fixed" : "fast"}`
+              : "";
             return `<div class="panel" data-section="cost-estimate">
               <div class="p-head">
-                <div class="p-title">${lang === "en" ? `💰 Estimated variable cost (${curYr})` : `💰 Estimeret forbrug i kr. (${curYr})`}</div>
-                <div class="p-leg"><span>${lang === "en" ? "Excl. fixed fees · estimate, not invoice" : "Ekskl. faste afgifter · estimat, ikke regningen"}</span></div>
+                <div class="p-title">${panelTitle}</div>
+                <div class="p-leg"><span>${panelLegend}</span></div>
               </div>
               <div class="kpis">
                 ${typeof costEst.latest_day_dkk === "number" ? `<div class="kpi">
@@ -1345,12 +1390,17 @@
                 ${typeof costEst.current_month_dkk === "number" ? `<div class="kpi">
                   <div class="k-lbl">${lang === "en" ? "This month" : "Denne måned"}</div>
                   <div class="k-val">~${fmtInt(costEst.current_month_dkk)} kr.</div>
-                  <div class="k-sub">${typeof costEst.current_month_kwh === "number" ? `${fmtInt(costEst.current_month_kwh)} kWh` : ""}</div>
+                  <div class="k-sub">${typeof costEst.current_month_kwh === "number" ? `${fmtInt(costEst.current_month_kwh)} kWh` : ""}${monthFixedTxt}</div>
                 </div>` : ""}
                 ${typeof costEst.ytd_dkk === "number" ? `<div class="kpi">
                   <div class="k-lbl">${lang === "en" ? `Year to date (${curYr})` : `I år (${curYr})`}</div>
                   <div class="k-val">~${fmtInt(costEst.ytd_dkk)} kr.</div>
-                  <div class="k-sub">${yCur > 0 ? `${fmtInt(yCur)} kWh` : ""}</div>
+                  <div class="k-sub">${yCur > 0 ? `${fmtInt(yCur)} kWh` : ""}${ytdFixedTxt}</div>
+                </div>` : ""}
+                ${typeof costEst.forecast_annual_dkk === "number" ? `<div class="kpi">
+                  <div class="k-lbl">${lang === "en" ? "Expected annual cost" : "Forventet årsudgift"}</div>
+                  <div class="k-val">~${fmtInt(costEst.forecast_annual_dkk)} kr.</div>
+                  <div class="k-sub">${typeof costEst.forecast_annual_kwh === "number" ? `${fmtInt(costEst.forecast_annual_kwh)} kWh` : ""}${hasFixedFee ? `${typeof costEst.forecast_annual_kwh === "number" ? " · " : ""}${lang === "en" ? "incl." : "inkl."} ${fmtInt(costEst.annual_fixed_fee_dkk)} kr. ${lang === "en" ? "fixed" : "fast"}` : ""}</div>
                 </div>` : ""}
                 ${typeof costEst.effective_price_dkk_per_kwh === "number" ? `<div class="kpi">
                   <div class="k-lbl">${lang === "en" ? "Effective price" : "Effektiv pris"}</div>
@@ -1534,6 +1584,12 @@
         if (priceVal !== null) p.price_dkk_per_kwh = priceVal;
         const motivVal = numOrNull("motivPctInput");
         if (motivVal !== null) p.motivation_pct_per_k = motivVal;
+        const fixedM2Val = numOrNull("fixedM2Input");
+        if (fixedM2Val !== null) p.fixed_fee_dkk_per_m2_year = fixedM2Val;
+        const areaM2Val = numOrNull("areaM2Input");
+        if (areaM2Val !== null) p.heated_area_m2 = areaM2Val;
+        const fixedYearVal = numOrNull("fixedYearInput");
+        if (fixedYearVal !== null) p.fixed_fee_dkk_per_year = fixedYearVal;
         const mu = this.shadowRoot.getElementById("mitidUserInput")?.value?.trim();
         if (mu) p.mitid_username = mu;
         return p;
@@ -1558,11 +1614,17 @@
         ["penaltyInput", "_wizPenalty"],
         ["priceInput", "_wizPrice"],
         ["motivPctInput", "_wizMotivPct"],
+        ["fixedM2Input", "_wizFixedM2"],
+        ["areaM2Input", "_wizAreaM2"],
+        ["fixedYearInput", "_wizFixedYear"],
         ["efPriceInput", "_wizEfPrice"],
         ["efBonusInput", "_wizEfBonus"],
         ["efPenaltyInput", "_wizEfPenalty"],
         ["efMotivPctInput", "_wizEfMotivPct"],
         ["efForwardInput", "_wizEfForward"],
+        ["efFixedM2Input", "_wizEfFixedM2"],
+        ["efAreaM2Input", "_wizEfAreaM2"],
+        ["efFixedYearInput", "_wizEfFixedYear"],
         ["notifyInput", "_wizNotify"],
       ].forEach(([id, prop]) => {
         const el = this.shadowRoot.getElementById(id);
@@ -1588,6 +1650,12 @@
           }
           const fwdVal = numOrNull("efForwardInput");
           if (fwdVal !== null) payload.forward_temp = fwdVal;
+          const fixedM2Val = numOrNull("efFixedM2Input");
+          if (fixedM2Val !== null) payload.fixed_fee_dkk_per_m2_year = fixedM2Val;
+          const areaM2Val = numOrNull("efAreaM2Input");
+          if (areaM2Val !== null) payload.heated_area_m2 = areaM2Val;
+          const fixedYearVal = numOrNull("efFixedYearInput");
+          if (fixedYearVal !== null) payload.fixed_fee_dkk_per_year = fixedYearVal;
           this._setupOpen = false;
           this._hass.callService("kmd_easy_energy", "configure_utility", payload);
           this._render();

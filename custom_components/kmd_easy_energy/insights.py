@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import calendar
 from datetime import date, datetime, timedelta
 from statistics import mean, pstdev
 from typing import Any, Iterable
@@ -426,8 +427,10 @@ def estimate_variable_costs(
     max_pct: float | None = None,
     expected_return_monthly: dict[str, Any] | None = None,
     allow_bonus: bool = True,
+    annual_fixed_fee_dkk: float = 0.0,
+    forecast_annual_kwh: float | None = None,
 ) -> dict[str, Any]:
-    """Estimate variable heating cost in DKK (excl. fixed fees) across all backends."""
+    """Estimate heating cost in DKK (variable + optional prorated fixed fees)."""
     if price_dkk_per_kwh is None or price_dkk_per_kwh <= 0:
         return {}
     today = today or copenhagen_today()
@@ -447,10 +450,56 @@ def estimate_variable_costs(
     effective_price = round(max(0.0, base_price + adj), 4)
     adjustment_pct = round((adj / base_price) * 100.0, 1)
 
+    annual_fixed = round(max(0.0, float(annual_fixed_fee_dkk or 0.0)), 2)
+    has_fixed = annual_fixed > 0.0
+    days_in_year = 366 if calendar.isleap(today.year) else 365
+    daily_fixed = (annual_fixed / days_in_year) if has_fixed else 0.0
+
+    cur_label = MONTH_LABELS_DA[today.month - 1]
+    daily_obj = daily or {}
+    days_map = daily_obj.get("days") or {}
+    numeric_days: list[tuple[int, float]] = []
+    for k, v in days_map.items():
+        if not isinstance(v, (int, float)) or isinstance(v, bool):
+            continue
+        try:
+            numeric_days.append((int(k), float(v)))
+        except (TypeError, ValueError):
+            continue
+
+    latest_day_dkk: int | None = None
+    latest_day_kwh: float | None = None
+    latest_day_label: str | None = None
+    latest_day_num: int | None = None
+    if numeric_days:
+        numeric_days.sort(key=lambda pair: pair[0])
+        if daily_obj.get("latest_complete") is False and len(numeric_days) > 1:
+            day_num, day_kwh = numeric_days[-2]
+        else:
+            day_num, day_kwh = numeric_days[-1]
+        latest_day_num = day_num
+        latest_day_kwh = round(day_kwh, 1)
+        latest_day_dkk = int(round(day_kwh * effective_price + daily_fixed))
+        month_name = str(daily_obj.get("month") or cur_label).strip()
+        latest_day_label = f"{day_num}. {month_name}"
+
+    cur_dim = calendar.monthrange(today.year, today.month)[1]
+    daily_matches_cur_month = (
+        str(daily_obj.get("latest_date") or "").startswith(f"{today.year:04d}-{today.month:02d}-")
+        or str(daily_obj.get("month") or "").strip().lower().startswith(cur_label.lower())
+    )
+    if daily_matches_cur_month and latest_day_num is not None:
+        cur_month_elapsed_days = min(cur_dim, max(1, latest_day_num))
+    else:
+        cur_month_elapsed_days = today.day
+
     rt_map = return_temp_monthly or {}
     monthly_map = monthly_cur_year or {}
     monthly_dkk: dict[str, int] = {}
-    for label in MONTH_LABELS_DA:
+    monthly_variable_dkk: dict[str, int] = {}
+    monthly_fixed_total = 0.0
+    current_month_fixed = 0.0
+    for month_idx, label in enumerate(MONTH_LABELS_DA, start=1):
         raw_kwh = monthly_map.get(label)
         if not isinstance(raw_kwh, (int, float)) or isinstance(raw_kwh, bool):
             continue
@@ -479,10 +528,16 @@ def estimate_variable_costs(
             or 0.0
         )
         m_price = max(0.0, base_price + m_adj)
-        monthly_dkk[label] = int(round(float(raw_kwh) * m_price))
+        var_m = float(raw_kwh) * m_price
+        dim = calendar.monthrange(today.year, month_idx)[1]
+        m_days = cur_month_elapsed_days if month_idx == today.month else dim
+        fix_m = (annual_fixed * (m_days / days_in_year)) if has_fixed else 0.0
+        monthly_variable_dkk[label] = int(round(var_m))
+        monthly_dkk[label] = int(round(var_m + fix_m))
+        monthly_fixed_total += fix_m
+        if label == cur_label:
+            current_month_fixed = fix_m
 
-    cur_label = MONTH_LABELS_DA[today.month - 1]
-    daily_obj = daily or {}
     current_month_dkk: int | None = monthly_dkk.get(cur_label)
     current_month_kwh: float | None = (
         float(monthly_map[cur_label])
@@ -491,32 +546,25 @@ def estimate_variable_costs(
     )
     if current_month_dkk is None and isinstance(daily_obj.get("total"), (int, float)):
         current_month_kwh = float(daily_obj["total"])
-        current_month_dkk = int(round(current_month_kwh * effective_price))
+        current_month_fixed = (annual_fixed * (cur_month_elapsed_days / days_in_year)) if has_fixed else 0.0
+        current_month_dkk = int(round(current_month_kwh * effective_price + current_month_fixed))
 
     ytd_dkk = int(sum(monthly_dkk.values())) if monthly_dkk else None
+    ytd_variable_dkk = int(sum(monthly_variable_dkk.values())) if monthly_dkk else None
+    ytd_fixed_dkk = int(round(monthly_fixed_total)) if (has_fixed and monthly_dkk) else 0
 
-    latest_day_dkk: int | None = None
-    latest_day_kwh: float | None = None
-    latest_day_label: str | None = None
-    days_map = daily_obj.get("days") or {}
-    numeric_days: list[tuple[int, float]] = []
-    for k, v in days_map.items():
-        if not isinstance(v, (int, float)) or isinstance(v, bool):
-            continue
-        try:
-            numeric_days.append((int(k), float(v)))
-        except (TypeError, ValueError):
-            continue
-    if numeric_days:
-        numeric_days.sort(key=lambda pair: pair[0])
-        if daily_obj.get("latest_complete") is False and len(numeric_days) > 1:
-            day_num, day_kwh = numeric_days[-2]
-        else:
-            day_num, day_kwh = numeric_days[-1]
-        latest_day_kwh = round(day_kwh, 1)
-        latest_day_dkk = int(round(day_kwh * effective_price))
-        month_name = str(daily_obj.get("month") or cur_label).strip()
-        latest_day_label = f"{day_num}. {month_name}"
+    if (
+        isinstance(forecast_annual_kwh, (int, float))
+        and not isinstance(forecast_annual_kwh, bool)
+        and float(forecast_annual_kwh) > 0
+    ):
+        fc_kwh: float | None = round(float(forecast_annual_kwh), 1)
+        fc_var_dkk: int | None = int(round(fc_kwh * effective_price))
+        fc_total_dkk: int | None = int(round(fc_kwh * effective_price + annual_fixed))
+    else:
+        fc_kwh = None
+        fc_var_dkk = None
+        fc_total_dkk = None
 
     return {
         "year": today.year,
@@ -536,5 +584,15 @@ def estimate_variable_costs(
         else None,
         "ytd_dkk": ytd_dkk,
         "monthly_dkk": monthly_dkk,
-        "excludes_fixed_fees": True,
+        "excludes_fixed_fees": not has_fixed,
+        "annual_fixed_fee_dkk": annual_fixed,
+        "daily_fixed_fee_dkk": round(daily_fixed, 2),
+        "current_month_fixed_dkk": int(round(current_month_fixed))
+        if (has_fixed and current_month_dkk is not None)
+        else 0,
+        "ytd_fixed_dkk": ytd_fixed_dkk,
+        "ytd_variable_dkk": ytd_variable_dkk,
+        "forecast_annual_kwh": fc_kwh,
+        "forecast_annual_variable_dkk": fc_var_dkk,
+        "forecast_annual_dkk": fc_total_dkk,
     }

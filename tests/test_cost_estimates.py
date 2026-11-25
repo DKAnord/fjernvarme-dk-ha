@@ -232,3 +232,60 @@ def test_estimate_variable_costs_penalty_only_dynamic_months() -> None:
     assert est["effective_price_dkk_per_kwh"] == 1.0
     # Jan: 42° vs 37° (+5% = 1050); Jul: 35° vs 47° (below req, no bonus = 1000)
     assert est["monthly_dkk"] == {"Jan": 1050, "Jul": 1000}
+
+
+def test_estimate_costs_with_fixed_fee_and_annual_forecast() -> None:
+    from kmd_easy_energy.sensor import KMDEnergyPriceSensor
+
+    est = estimate_variable_costs(
+        price_dkk_per_kwh=0.93125,
+        bonus_temp=40.0,
+        penalty_temp=40.0,
+        motivation_rate=0.018625,
+        current_return_temp=40.0,
+        daily={"days": {"24": 40.0}, "latest_complete": True, "month": "Nov", "latest_date": "2026-11-24"},
+        monthly_cur_year={"Okt": 1000.0, "Nov": 800.0},
+        return_temp_monthly={"Okt": 40.0, "Nov": 40.0},
+        today=date(2026, 11, 25),
+        annual_fixed_fee_dkk=6733.12,
+        forecast_annual_kwh=12000.0,
+    )
+    assert est["excludes_fixed_fees"] is False
+    assert est["annual_fixed_fee_dkk"] == 6733.12
+    assert est["daily_fixed_fee_dkk"] == round(6733.12 / 365, 2)
+    assert est["latest_day_dkk"] == int(round(40.0 * 0.93125 + 6733.12 / 365))
+    okt_fixed = 6733.12 * (31 / 365)
+    nov_fixed = 6733.12 * (24 / 365)
+    assert est["monthly_dkk"]["Okt"] == int(round(1000.0 * 0.93125 + okt_fixed))
+    assert est["monthly_dkk"]["Nov"] == int(round(800.0 * 0.93125 + nov_fixed))
+    assert est["current_month_fixed_dkk"] == int(round(nov_fixed))
+    assert est["ytd_fixed_dkk"] == int(round(okt_fixed + nov_fixed))
+    assert est["forecast_annual_kwh"] == 12000.0
+    assert est["forecast_annual_variable_dkk"] == int(round(12000.0 * est["effective_price_dkk_per_kwh"]))
+    assert est["forecast_annual_dkk"] == int(round(12000.0 * est["effective_price_dkk_per_kwh"] + 6733.12))
+
+    coord = MagicMock()
+    coord.data = {
+        "energy_price_dkk_per_kwh": 0.93125,
+        "tariff": {
+            "tariff_year": 2026,
+            "fixed_fee_dkk_per_m2_year": 41.5625,
+            "heated_area_m2": 162.0,
+            "fixed_fee_dkk_per_year": None,
+            "annual_fixed_fee_dkk": 6733.12,
+        },
+        "cost_estimate": est,
+    }
+    entry = SimpleNamespace(entry_id="e1", title="Hedensted")
+    price_s = KMDEnergyPriceSensor(coord, entry)
+    day_s = KMDLatestDayCostSensor(coord, entry)
+    mon_s = KMDMonthCostSensor(coord, entry)
+    yr_s = KMDYearCostSensor(coord, entry)
+
+    assert price_s.extra_state_attributes["annual_fixed_fee_dkk"] == 6733.12
+    assert price_s.extra_state_attributes["heated_area_m2"] == 162.0
+    assert day_s.extra_state_attributes["excludes_fixed_fees"] is False
+    assert day_s.extra_state_attributes["daily_fixed_fee_dkk"] == round(6733.12 / 365, 2)
+    assert mon_s.extra_state_attributes["fixed_fee_dkk"] == int(round(nov_fixed))
+    assert yr_s.extra_state_attributes["annual_fixed_fee_dkk"] == 6733.12
+    assert yr_s.extra_state_attributes["forecast_annual_dkk"] == est["forecast_annual_dkk"]

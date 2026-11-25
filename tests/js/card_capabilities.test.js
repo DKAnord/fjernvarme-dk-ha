@@ -374,4 +374,66 @@ assert.deepStrictEqual(calls.pop(), [
   },
 ]);
 
+// 16) Optional subscription / fixed fee fields and Expected annual cost KPI.
+calls = [];
+const feeCard = render({
+  backend: "eforsyning",
+  data_source: "E|Forsyning",
+  utility: "Hedensted Fjernvarme",
+  utility_id: "hedensted-fjernvarme",
+  utility_status: "confirmed",
+  tariff: {
+    price_dkk_per_kwh: 0.93125,
+    motivation_pct_per_k: 2.0,
+    bonus_temp: 40,
+    penalty_temp: 40,
+    fixed_fee_dkk_per_m2_year: 41.5625,
+    heated_area_m2: 162,
+    fixed_fee_dkk_per_year: 787.5,
+    annual_fixed_fee_dkk: 7520.62,
+  },
+  capabilities: ["auto_sync", "cost", "daily", "monthly", "temperatures", "volume"],
+  cost_estimate: {
+    base_price_dkk_per_kwh: 0.93125,
+    effective_price_dkk_per_kwh: 0.93125,
+    adjustment_pct: 0,
+    latest_day_dkk: 58,
+    latest_day_kwh: 40,
+    latest_day_label: "24. Nov",
+    current_month_dkk: 1239,
+    current_month_kwh: 800,
+    current_month_fixed_dkk: 494,
+    ytd_dkk: 10500,
+    ytd_fixed_dkk: 6700,
+    annual_fixed_fee_dkk: 7520.62,
+    forecast_annual_kwh: 12000,
+    forecast_annual_dkk: 18696,
+    excludes_fixed_fees: false,
+  },
+}, calls);
+const feeHtml = feeCard.shadowRoot.innerHTML;
+assert.ok(feeHtml.includes("💰 Estimeret udgift (2026)"), "title switches to Estimeret udgift when fixed fee is active");
+assert.ok(feeHtml.includes("Inkl. fast bidrag (7.521 kr./år)"), "legend shows annual fixed fee");
+assert.ok(feeHtml.includes("Forventet årsudgift"), "renders Expected annual cost KPI");
+assert.ok(feeHtml.includes("~18.696 kr."), "renders expected annual cost value");
+assert.ok(feeHtml.includes("12.000 kWh · inkl. 7.521 kr. fast"), "renders expected annual cost subtitle");
+feeCard.shadowRoot.getElementById("openSetupBtn").listeners.click();
+const feeSetupHtml = feeCard.shadowRoot.innerHTML;
+assert.ok(feeSetupHtml.includes('id="efFixedM2Input"') && feeSetupHtml.includes('id="efAreaM2Input"') && feeSetupHtml.includes('id="efFixedYearInput"'), "renders fixed fee inputs in settings");
+feeCard.shadowRoot.getElementById("efFixedM2Input").value = "33.75";
+feeCard.shadowRoot.getElementById("efAreaM2Input").value = "162";
+feeCard.shadowRoot.getElementById("efFixedYearInput").value = "787.5";
+feeCard.shadowRoot.getElementById("saveTariffBtn").listeners.click();
+assert.deepStrictEqual(calls.pop(), [
+  "kmd_easy_energy",
+  "configure_utility",
+  {
+    complete_setup: true,
+    entry_id: "e1",
+    fixed_fee_dkk_per_m2_year: 33.75,
+    heated_area_m2: 162,
+    fixed_fee_dkk_per_year: 787.5,
+  },
+]);
+
 console.log("card_capabilities.test.js: OK");

@@ -400,6 +400,10 @@ class KMDEnergyPriceSensor(KMDBaseSensor):
             "source_note": tariff.get("source_note"),
             "volume_price_dkk_per_m3": tariff.get("price_dkk_per_m3"),
             "motivation_pct_per_k": tariff.get("motivation_pct_per_k"),
+            "fixed_fee_dkk_per_m2_year": tariff.get("fixed_fee_dkk_per_m2_year"),
+            "heated_area_m2": tariff.get("heated_area_m2"),
+            "fixed_fee_dkk_per_year": tariff.get("fixed_fee_dkk_per_year"),
+            "annual_fixed_fee_dkk": tariff.get("annual_fixed_fee_dkk", 0.0),
         }
 
 
@@ -459,6 +463,7 @@ class KMDLatestDayCostSensor(KMDBaseSensor):
             "kwh": est.get("latest_day_kwh"),
             "day": est.get("latest_day_label"),
             "effective_price_dkk_per_kwh": est.get("effective_price_dkk_per_kwh"),
+            "daily_fixed_fee_dkk": est.get("daily_fixed_fee_dkk", 0.0),
             "excludes_fixed_fees": est.get("excludes_fixed_fees", True),
         }
 
@@ -488,6 +493,7 @@ class KMDMonthCostSensor(KMDBaseSensor):
         return {
             "kwh": est.get("current_month_kwh"),
             "effective_price_dkk_per_kwh": est.get("effective_price_dkk_per_kwh"),
+            "fixed_fee_dkk": est.get("current_month_fixed_dkk", 0),
             "excludes_fixed_fees": est.get("excludes_fixed_fees", True),
         }
 
@@ -518,6 +524,11 @@ class KMDYearCostSensor(KMDBaseSensor):
         return {
             "year": est.get("year"),
             "monthly_dkk": est.get("monthly_dkk") or {},
+            "ytd_variable_dkk": est.get("ytd_variable_dkk"),
+            "ytd_fixed_dkk": est.get("ytd_fixed_dkk", 0),
+            "annual_fixed_fee_dkk": est.get("annual_fixed_fee_dkk", 0.0),
+            "forecast_annual_dkk": est.get("forecast_annual_dkk"),
+            "forecast_annual_kwh": est.get("forecast_annual_kwh"),
             "excludes_fixed_fees": est.get("excludes_fixed_fees", True),
         }
 

@@ -861,3 +861,58 @@ async def test_hillerod_coordinator_dynamic_forward_temp_from_cache_and_manual_o
     assert state_manual["penalty_temp"] == 37.0
     assert state_manual["motivation_status"] == "penalty"  # 38.0 > 37.0
     assert "expected_monthly_2026" not in state_manual["return_temp"]
+
+
+@pytest.mark.asyncio
+async def test_hedensted_coordinator_fixed_fee_and_annual_forecast_cost(
+    tmp_path: Path,
+) -> None:
+    store = FakeStore(
+        {
+            "annual": {"2026": 8000.0},
+            "monthly": {"2026": {"Okt": 1200.0, "Nov": 900.0}},
+            "daily": {
+                "month": "November 2026",
+                "days": {"24": 40.0},
+                "total": 900.0,
+                "latest_complete": True,
+                "latest_date": "2026-11-24",
+            },
+            "daily_kwh_history": {
+                f"2026-11-{d:02d}": 40.0 for d in range(1, 25)
+            },
+            "weather": {
+                "daily_temp": {
+                    f"2026-11-{d:02d}": 7.0 for d in range(1, 25)
+                }
+            },
+            "return_temp": {"annual": {"2026": 40.0}, "monthly_2026": {"Okt": 40.0, "Nov": 40.0}},
+            "latest_reading": {"date": "2026-11-24", "temp_return": 40.0},
+            "eforsyning": {"detected": ["daily", "monthly", "temperatures", "volume"]},
+        }
+    )
+    coord, _, _, _ = make_coordinator(
+        tmp_path,
+        store=store,
+        backend="eforsyning",
+        utility="Hedensted Fjernvarme",
+        utility_id="hedensted-fjernvarme",
+        portal_url="https://eforsyning.dk/hedenstedfjernvarme/",
+    )
+    coord.entry.options = {"heated_area_m2": 162.0}
+    state = await coord._async_update_data()
+
+    assert state["tariff"]["fixed_fee_dkk_per_m2_year"] == 33.75
+    assert state["tariff"]["annual_fixed_fee_dkk"] == 5467.5
+    assert state["cost_estimate"]["excludes_fixed_fees"] is False
+    assert state["cost_estimate"]["annual_fixed_fee_dkk"] == 5467.5
+    assert state["cost_estimate"]["forecast_annual_kwh"] == state["degree_day"]["forecast_annual_kwh"]
+    expected_total = int(
+        round(
+            state["cost_estimate"]["forecast_annual_kwh"]
+            * state["cost_estimate"]["effective_price_dkk_per_kwh"]
+            + 5467.5
+        )
+    )
+    assert state["cost_estimate"]["forecast_annual_dkk"] == expected_total
+    assert state["degree_day"]["forecast_annual_dkk"] == float(expected_total)

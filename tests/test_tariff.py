@@ -421,3 +421,68 @@ def test_hillerod_dynamic_forward_temp_curve_and_overrides() -> None:
     assert explicit_bonus.motivation_bonus is True
     assert explicit_bonus.bonus_temp == 32.0
     assert explicit_bonus.penalty_temp == 40.0
+
+
+def test_fixed_subscription_fee_area_and_flat_resolution() -> None:
+    from kmd_easy_energy.const import (
+        CONF_FIXED_FEE_DKK_PER_M2_YEAR,
+        CONF_FIXED_FEE_DKK_PER_YEAR,
+        CONF_HEATED_AREA_M2,
+    )
+    from kmd_easy_energy.tariff import load_utilities
+
+    utilities = load_utilities()
+    hed_2026 = published_tariff("hedensted-fjernvarme", 2026, utilities)
+    assert hed_2026 is not None
+    assert hed_2026["fixed_fee_dkk_per_m2_year"] == 33.75
+
+    # Without heated_area_m2, annual_fixed_fee_dkk stays 0.0 (no change for existing users).
+    no_area = resolve_tariff(
+        _entry(data={"utility_id": "hedensted-fjernvarme"}),
+        today=date(2026, 11, 25),
+        utilities=utilities,
+    )
+    assert no_area.fixed_fee_dkk_per_m2_year == 33.75
+    assert no_area.heated_area_m2 is None
+    assert no_area.annual_fixed_fee_dkk == 0.0
+
+    # With heated_area_m2=162, uses Hedensted's bundled 33.75 DKK/m²/year -> 5467.50 DKK/year.
+    with_area = resolve_tariff(
+        _entry(
+            options={CONF_HEATED_AREA_M2: 162.0},
+            data={"utility_id": "hedensted-fjernvarme"},
+        ),
+        today=date(2026, 11, 25),
+        utilities=utilities,
+    )
+    assert with_area.heated_area_m2 == 162.0
+    assert with_area.annual_fixed_fee_dkk == 5467.5
+
+    # Custom area fee override (e.g. 33.25 excl. VAT + 25% = 41.5625) + optional flat meter fee.
+    custom_override = resolve_tariff(
+        _entry(
+            options={
+                CONF_FIXED_FEE_DKK_PER_M2_YEAR: 41.5625,
+                CONF_HEATED_AREA_M2: 162.0,
+            },
+            data={"utility_id": "hedensted-fjernvarme"},
+        ),
+        today=date(2026, 11, 25),
+        utilities=utilities,
+    )
+    assert custom_override.annual_fixed_fee_dkk == round(41.5625 * 162.0, 2)
+
+    with_flat = resolve_tariff(
+        _entry(
+            options={
+                CONF_FIXED_FEE_DKK_PER_M2_YEAR: 41.5625,
+                CONF_HEATED_AREA_M2: 162.0,
+                CONF_FIXED_FEE_DKK_PER_YEAR: 787.5,
+            },
+            data={"utility_id": "hedensted-fjernvarme"},
+        ),
+        today=date(2026, 11, 25),
+        utilities=utilities,
+    )
+    assert with_flat.fixed_fee_dkk_per_year == 787.5
+    assert with_flat.annual_fixed_fee_dkk == round(41.5625 * 162.0 + 787.5, 2)

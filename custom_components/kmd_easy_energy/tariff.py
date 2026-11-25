@@ -15,7 +15,10 @@ from homeassistant.config_entries import ConfigEntry
 from .const import (
     CONF_BONUS_TEMP,
     CONF_EF_SUPPLIER_ID,
+    CONF_FIXED_FEE_DKK_PER_M2_YEAR,
+    CONF_FIXED_FEE_DKK_PER_YEAR,
     CONF_FORWARD_TEMP,
+    CONF_HEATED_AREA_M2,
     CONF_MOTIVATION_DKK_PER_KWH_PER_K,
     CONF_MOTIVATION_PCT_PER_K,
     CONF_NORMAL_HDD_YEAR,
@@ -53,6 +56,10 @@ class ResolvedTariff:
     expected_return_by_forward_temp: list[list[float]] | None = None
     forward_temp: float | None = None
     forward_temp_source: str | None = None
+    fixed_fee_dkk_per_m2_year: float | None = None
+    heated_area_m2: float | None = None
+    fixed_fee_dkk_per_year: float | None = None
+    annual_fixed_fee_dkk: float = 0.0
 
 
 def _parse_forward_curve(raw: Any) -> list[list[float]] | None:
@@ -322,6 +329,18 @@ def resolve_tariff(
 
     motivation_max_pct = _published_pos("motivation_max_pct")
 
+    fixed_fee_per_m2 = _pick(CONF_FIXED_FEE_DKK_PER_M2_YEAR, "fixed_fee_dkk_per_m2_year")
+    opt_area = _opt_float(entry, CONF_HEATED_AREA_M2, None)
+    heated_area = opt_area if (opt_area is not None and opt_area > 0) else None
+    opt_flat_fixed = _opt_float(entry, CONF_FIXED_FEE_DKK_PER_YEAR, None)
+    fixed_fee_year = opt_flat_fixed if (opt_flat_fixed is not None and opt_flat_fixed > 0) else None
+    annual_area_fee = (
+        round(fixed_fee_per_m2 * heated_area, 2)
+        if (fixed_fee_per_m2 is not None and heated_area is not None)
+        else 0.0
+    )
+    annual_fixed_fee = round(annual_area_fee + (fixed_fee_year or 0.0), 2)
+
     return ResolvedTariff(
         price_dkk_per_kwh=price,
         price_dkk_per_m3=_pick(CONF_PRICE_DKK_PER_M3, "price_dkk_per_m3"),
@@ -339,4 +358,8 @@ def resolve_tariff(
         expected_return_by_forward_temp=curve,
         forward_temp=eff_forward,
         forward_temp_source=forward_source,
+        fixed_fee_dkk_per_m2_year=fixed_fee_per_m2,
+        heated_area_m2=heated_area,
+        fixed_fee_dkk_per_year=fixed_fee_year,
+        annual_fixed_fee_dkk=annual_fixed_fee,
     )

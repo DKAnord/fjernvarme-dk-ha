@@ -520,22 +520,24 @@
           "effective_from": "2026-11-01",
           "price_dkk_per_kwh": 0.93125,
           "price_dkk_per_m3": null,
+          "fixed_fee_dkk_per_m2_year": 33.75,
           "motivation_pct_per_k": 2.0,
           "bonus_temp": 40.0,
           "penalty_temp": 40.0,
           "source": "https://hedensted-fjernvarme.dk/oekonomi/priser",
-          "source_note": "Prisliste 2026 (https://hedensted-fjernvarme.dk/p/Hedensted%20Fjernvarme/Priser/Prisliste-2026.pdf): Forbrugsbidrag 931,25 kr./MWh inkl. moms (745,00 ekskl.) pr. 1. nov. 2026 (0,93125 kr./kWh; 850,00 kr./MWh = 0,85 kr./kWh inkl. moms i jan–okt 2026). Motivationstarif: 2 %/°C ved højere årsgennemsnitlig returtemperatur end tilladt (40 °C ved >= 60 °C fremløb; bruger automatisk Forv_Retur fra E|Forsyning)."
+          "source_note": "Prisliste 2026 (https://hedensted-fjernvarme.dk/p/Hedensted%20Fjernvarme/Priser/Prisliste-2026.pdf): Forbrugsbidrag 931,25 kr./MWh inkl. moms (745,00 ekskl.) pr. 1. nov. 2026 (0,93125 kr./kWh; 850,00 kr./MWh = 0,85 kr./kWh inkl. moms i jan–okt 2026). Fast bidrag 33,75 kr./m²/år inkl. moms pr. 1. nov. 2026 (32,50 kr./m²/år jan–okt 2026) samt årligt målerbidrag 787,50 kr./år inkl. moms. Motivationstarif: 2 %/°C ved højere årsgennemsnitlig returtemperatur end tilladt (40 °C ved >= 60 °C fremløb; bruger automatisk Forv_Retur fra E|Forsyning)."
         },
         {
           "year": 2027,
           "effective_from": "2027-01-01",
           "price_dkk_per_kwh": 0.93125,
           "price_dkk_per_m3": null,
+          "fixed_fee_dkk_per_m2_year": 33.75,
           "motivation_pct_per_k": 2.0,
           "bonus_temp": 40.0,
           "penalty_temp": 40.0,
           "source": "https://hedensted-fjernvarme.dk/oekonomi/priser",
-          "source_note": "Videreført fra 1. nov. 2026-takst: 931,25 kr./MWh inkl. moms = 0,93125 kr./kWh og 2 %/°C motivationstarif."
+          "source_note": "Videreført fra 1. nov. 2026-takst: 931,25 kr./MWh inkl. moms = 0,93125 kr./kWh, fast bidrag 33,75 kr./m²/år inkl. moms (samt årligt målerbidrag 787,50 kr./år inkl. moms) og 2 %/°C motivationstarif."
         }
       ]
     },

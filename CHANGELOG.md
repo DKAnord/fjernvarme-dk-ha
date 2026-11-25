@@ -2,6 +2,14 @@
 
 Alle væsentlige ændringer i **Dansk Fjernvarme** (tidligere *Fjernvarme (KMD Easy Energy)*) dokumenteres her.
 
+## [1.2.5] - 2026-11-25
+
+### Tilføjet
+- **Frederikshavn Forsyning 2026-takst ([issue #24](https://github.com/DKAnord/fjernvarme-dk-ha/issues/24)):** Indbygget officiel 2026-takst fra [forsyningen.dk/varme/priser](https://www.forsyningen.dk/varme/priser) (`873,75 kr./MWh` inkl. moms pr. 1. nov. 2026 = `0,87375 kr./kWh`; `798,75 kr./MWh` jan–okt 2026 samt `1 %/°C` motivationstarif).
+
+### Rettet
+- **Forbedret migrering af eksisterende KMD `MWh`/`GJ`-caches til `kWh` ([issue #24](https://github.com/DKAnord/fjernvarme-dk-ha/issues/24)):** Ved opgradering fra ældre versioner (før `v1.2.3`) genberegnes `Timeprofil` (`hourly.kwh`), `Døgnforbrug` (`total`, `gennemsnit`, `minimum`, `maksimum` ekskl. ufuldstændig slutdag), `Prognose` (ud fra rå `overview`-værdier når de findes) og Home Assistant Energy-statistik nu direkte ud fra de uafrundede cachede punkter ved opstart, så `0,00 kWh/t` og `0,0 kWh/d` ikke bliver hængende frem til næste MitID-synkronisering.
+
 ## [1.2.4] - 2026-11-25
 
 ### Tilføjet & Bekræftet

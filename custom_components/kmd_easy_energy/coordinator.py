@@ -110,11 +110,13 @@ from .insights import (
     detect_abnormal_consumption,
     estimate_variable_costs,
     forecast_annual,
+    hour_start_local,
     kwh_per_hdd,
     last_local_day,
     merge_hourly_points,
     motivation_dkk_per_kwh,
     motivation_status,
+    parse_iso_dt,
 )
 from .statistics import import_hourly_statistics
 from .sync_reminder import compute_sync_reminder, parse_last_sync
@@ -349,6 +351,69 @@ def _is_num(val: Any) -> bool:
     return isinstance(val, (int, float)) and not isinstance(val, bool)
 
 
+def _rebuild_hourly_mtd_from_points(
+    hourly_kwh: list[dict[str, Any]],
+    daily: dict[str, Any] | None,
+) -> dict[str, Any] | None:
+    """Rebuild the 24-hour MTD profile from scaled hourly points (excluding partial days)."""
+    if not hourly_kwh:
+        return None
+    by_month: dict[tuple[int, int], dict[str, dict[int, list[float]]]] = {}
+    for pt in hourly_kwh:
+        if not isinstance(pt, dict) or not _is_num(pt.get("Value")):
+            continue
+        parsed = parse_iso_dt(str(pt.get("DateFrom") or ""))
+        if not parsed:
+            continue
+        loc = hour_start_local(parsed)
+        ym = (loc.year, loc.month)
+        by_month.setdefault(ym, {}).setdefault(loc.date().isoformat(), {}).setdefault(
+            loc.hour, []
+        ).append(float(pt["Value"]))
+    if not by_month:
+        return None
+
+    target_ym: tuple[int, int] | None = None
+    partial_day_iso: str | None = None
+    if isinstance(daily, dict) and daily.get("latest_date"):
+        latest_s = str(daily["latest_date"])[:10]
+        if daily.get("latest_complete") is False:
+            partial_day_iso = latest_s
+        try:
+            latest_d = dt_mod.date.fromisoformat(latest_s)
+            cand = (latest_d.year, latest_d.month)
+            if cand in by_month:
+                target_ym = cand
+        except ValueError:
+            pass
+    if target_ym is None:
+        target_ym = max(by_month)
+
+    buckets: list[list[float]] = [[] for _ in range(24)]
+    n_days = 0
+    for day_iso, day_hrs in by_month[target_ym].items():
+        if partial_day_iso and day_iso == partial_day_iso:
+            continue
+        if len(day_hrs) < 23:
+            continue
+        hr_avgs = {hr_idx: sum(vs) / len(vs) for hr_idx, vs in day_hrs.items()}
+        if sum(1 for v in hr_avgs.values() if v > 0) < 12:
+            continue
+        n_days += 1
+        for hr_idx, val in hr_avgs.items():
+            if 0 <= hr_idx < 24:
+                buckets[hr_idx].append(val)
+
+    if n_days >= 1 and all(buckets):
+        target_yr, target_mo = target_ym
+        return {
+            "period": f"{M_KEYS[target_mo - 1].lower()}-{target_yr} MTD ({n_days} dage)",
+            "days_averaged": n_days,
+            "kwh": [round(sum(b) / len(b), 2) for b in buckets],
+        }
+    return None
+
+
 def _migrate_unscaled_kmd_cache(state: dict[str, Any]) -> bool:
     """Scale legacy unscaled MWh/GJ KMD cache values into kWh once."""
     if (
@@ -386,17 +451,36 @@ def _migrate_unscaled_kmd_cache(state: dict[str, Any]) -> bool:
     daily = state.get("daily")
     if isinstance(daily, dict):
         days = daily.get("days")
+        numeric_days: list[tuple[int, int | float]] = []
         if isinstance(days, dict):
             for d_key, val in list(days.items()):
                 if _is_num(val):
-                    days[d_key] = _scale_num(val, factor)
-        if _is_num(daily.get("total")):
-            daily["total"] = round(float(daily["total"]) * factor, 2)
-        if _is_num(daily.get("gennemsnit")):
-            daily["gennemsnit"] = round(float(daily["gennemsnit"]) * factor, 1)
-        for key in ("minimum", "maksimum"):
-            if _is_num(daily.get(key)):
-                daily[key] = _scale_num(daily[key], factor)
+                    scaled_v = _scale_num(val, factor)
+                    days[d_key] = scaled_v
+                    try:
+                        numeric_days.append((int(d_key), scaled_v))
+                    except (TypeError, ValueError):
+                        pass
+        if numeric_days:
+            numeric_days.sort(key=lambda pair: pair[0])
+            vals = [v for _, v in numeric_days]
+            stat_vals = (
+                vals[:-1]
+                if (daily.get("latest_complete") is False and len(vals) > 1)
+                else vals
+            )
+            daily["total"] = round(sum(vals), 2)
+            daily["gennemsnit"] = round(sum(stat_vals) / len(stat_vals), 1)
+            daily["minimum"] = min(stat_vals)
+            daily["maksimum"] = max(stat_vals)
+        else:
+            if _is_num(daily.get("total")):
+                daily["total"] = round(float(daily["total"]) * factor, 2)
+            if _is_num(daily.get("gennemsnit")):
+                daily["gennemsnit"] = round(float(daily["gennemsnit"]) * factor, 1)
+            for key in ("minimum", "maksimum"):
+                if _is_num(daily.get(key)):
+                    daily[key] = _scale_num(daily[key], factor)
 
     history = state.get("daily_kwh_history")
     if isinstance(history, dict):
@@ -411,15 +495,26 @@ def _migrate_unscaled_kmd_cache(state: dict[str, Any]) -> bool:
                 pt["Value"] = round(float(pt["Value"]) * factor, 4)
 
     hourly = state.get("hourly")
-    if isinstance(hourly, dict) and isinstance(hourly.get("kwh"), list):
+    rebuilt_hourly = _rebuild_hourly_mtd_from_points(
+        hourly_kwh if isinstance(hourly_kwh, list) else [],
+        daily if isinstance(daily, dict) else None,
+    )
+    if rebuilt_hourly is not None:
+        state.setdefault("hourly", {}).update(rebuilt_hourly)
+    elif isinstance(hourly, dict) and isinstance(hourly.get("kwh"), list):
         hourly["kwh"] = [
             round(float(v) * factor, 2) if _is_num(v) else v for v in hourly["kwh"]
         ]
 
     forecast = state.get("forecast")
+    ov = state.get("overview") if isinstance(state.get("overview"), dict) else {}
+    raw_act = ov["Actual"].get("Value") if isinstance(ov.get("Actual"), dict) else None
+    raw_exp = ov["Expected"].get("Value") if isinstance(ov.get("Expected"), dict) else None
     if isinstance(forecast, dict):
-        for key in ("expected_kwh", "budget_kwh"):
-            if _is_num(forecast.get(key)):
+        for key, raw_v in (("expected_kwh", raw_act), ("budget_kwh", raw_exp)):
+            if _is_num(raw_v):
+                forecast[key] = round(float(raw_v) * factor)
+            elif _is_num(forecast.get(key)):
                 forecast[key] = round(float(forecast[key]) * factor)
 
     state["kmd_unscaled_migrated"] = factor
@@ -696,6 +791,13 @@ class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._load_last_sync(state)
         state.update(self._base_meta())
         if _migrate_unscaled_kmd_cache(state):
+            try:
+                imported = import_hourly_statistics(self.hass, self.entry, state)
+                if imported["energy"] or imported["volume"]:
+                    state["statistics_imported_on"] = copenhagen_today().isoformat()
+                    state["statistics_imported"] = imported
+            except Exception as err:  # noqa: BLE001
+                _LOGGER.warning("Optional post-migration Energy statistics import failed: %s", err)
             await self._store.async_save(sanitize_cache(state))
         if self._initial_setup_complete is None:
             self._initial_setup_complete = bool(

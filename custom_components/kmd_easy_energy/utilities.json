@@ -98,7 +98,20 @@
       "backend": "kmd",
       "latitude": 57.441,
       "longitude": 10.536,
-      "notes": "Uses minForsyning (KMD) with MitID login. Confirmed live in issue #24 by @tirolel (MWh, M3)."
+      "notes": "Uses minForsyning (KMD) with MitID login. Confirmed live in issue #24 by @tirolel (MWh converted to kWh, M3). 2026 tariff: 873,75 kr./MWh inkl. moms pr. 1. nov. 2026 (0,87375 kr./kWh; 798,75 kr./MWh jan–okt 2026) and 1 %/°C motivationstarif.",
+      "tariffs": [
+        {
+          "year": 2026,
+          "effective_from": "2026-11-01",
+          "price_dkk_per_kwh": 0.87375,
+          "price_dkk_per_m3": null,
+          "motivation_pct_per_k": 1.0,
+          "bonus_temp": 30.0,
+          "penalty_temp": 40.0,
+          "source": "https://www.forsyningen.dk/varme/priser",
+          "source_note": "Priser på fjernvarme 2026 (Frederikshavn Varme A/S): Variabel pris 873,75 kr./MWh inkl. moms (699,00 ekskl.) pr. 1. nov. 2026 = 0,87375 kr./kWh (798,75 kr./MWh = 0,79875 kr./kWh i jan–okt 2026). Motivationstarif (forsyningen.dk/varme/priser/motivationstarif): regulering ud fra årlig afkøling (ca. 1 % af den variable pris)."
+        }
+      ]
     },
     {
       "id": "vestforsyning",

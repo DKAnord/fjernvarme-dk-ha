@@ -324,5 +324,29 @@ def test_bundled_utilities_json_has_hedensted_and_hillerod_2026_tariffs() -> Non
     assert hil_resolved.motivation_pct_per_k == 1.0
     assert hil_resolved.motivation_dkk_per_kwh_per_k == round(0.67 * 0.01, 6)
 
+
+def test_bundled_utilities_json_has_frederikshavn_2026_tariff() -> None:
+    from kmd_easy_energy.tariff import load_utilities
+
+    utilities = load_utilities()
+    by_id = {u["id"]: u for u in utilities}
+    assert by_id["frederikshavn-forsyning"]["status"] == "confirmed"
+    assert by_id["frederikshavn-forsyning"]["tier"] == "confirmed"
+
+    bundled = published_tariff("frederikshavn-forsyning", 2026, utilities)
+    assert bundled is not None
+    assert bundled["price_dkk_per_kwh"] == 0.87375
+    assert bundled["motivation_pct_per_k"] == 1.0
+    assert bundled["source"] == "https://www.forsyningen.dk/varme/priser"
+
+    resolved = resolve_tariff(
+        _entry(data={"utility_id": "frederikshavn-forsyning"}),
+        today=date(2026, 11, 25),
+        utilities=utilities,
+    )
+    assert resolved.price_dkk_per_kwh == 0.87375
+    assert resolved.motivation_pct_per_k == 1.0
+    assert resolved.motivation_dkk_per_kwh_per_k == round(0.87375 * 0.01, 6)
+
     hil_2027 = published_tariff("hillerod-forsyning", 2027, utilities)
     assert hil_2027 is not None and hil_2027["price_dkk_per_kwh"] == 0.75

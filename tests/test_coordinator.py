@@ -739,3 +739,72 @@ async def test_enrich_derived_backfills_available_units_for_cached_wattson_state
 
     state = await coord._async_update_data()
     assert state["available_units"] == [{"Name": "kWh"}, {"Name": "m3"}, {"Name": "°C"}]
+
+
+@pytest.mark.asyncio
+async def test_initialize_cache_migrates_rounded_mwh_cache_recovers_hourly_daily_forecast_and_stats(
+    tmp_path: Path,
+) -> None:
+    hourly_pts = (
+        [
+            {"DateFrom": f"2026-11-21T{h:02d}:00:00+01:00", "Value": 0.0018, "IsComplete": True}
+            for h in range(24)
+        ]
+        + [
+            {"DateFrom": f"2026-11-22T{h:02d}:00:00+01:00", "Value": 0.0016, "IsComplete": True}
+            for h in range(24)
+        ]
+        + [
+            {"DateFrom": f"2026-11-23T{h:02d}:00:00+01:00", "Value": 0.0005, "IsComplete": False}
+            for h in range(10)
+        ]
+    )
+    store = FakeStore(
+        {
+            "available_units": [{"Id": "u1", "Name": "MWh"}, {"Id": "u2", "Name": "m3"}],
+            "monthly": {"2026": {"Jan": 1.85, "Nov": 0.875}},
+            "annual": {"2026": 3},
+            "daily": {
+                "month": "November 2026",
+                "days": {"21": 0.042, "22": 0.038, "23": 0.005},
+                "total": 0.085,
+                "gennemsnit": 0.0,
+                "minimum": 0.0,
+                "maksimum": 0.042,
+                "latest_date": "2026-11-23",
+                "latest_complete": False,
+            },
+            "daily_kwh_history": {"2026-11-21": 0.042, "2026-11-22": 0.038, "2026-11-23": 0.005},
+            "hourly_kwh": hourly_pts,
+            "hourly": {"period": "nov-2026 MTD (2 dage)", "days_averaged": 2, "kwh": [0.0] * 24},
+            "forecast": {"period": "01.11.2026 - 30.11.2026", "expected_kwh": 1, "budget_kwh": 1},
+            "overview": {"Actual": {"Value": 0.875}, "Expected": {"Value": 1.425}},
+        }
+    )
+    coord, _, _, store = make_coordinator(
+        tmp_path,
+        store=store,
+        utility="Frederikshavn Forsyning",
+        utility_id="frederikshavn-forsyning",
+        portal_url="https://www.forsyningen.dk/selvbetjening",
+    )
+
+    with patch(
+        "kmd_easy_energy.coordinator.import_hourly_statistics",
+        return_value={"energy": 48, "volume": 0},
+    ) as mock_import:
+        state = await coord.async_initialize_cache()
+
+    mock_import.assert_called_once()
+    assert state["kmd_unscaled_migrated"] == 1000.0
+    assert state["statistics_imported"] == {"energy": 48, "volume": 0}
+    assert state["daily"]["days"] == {"21": 42, "22": 38, "23": 5}
+    assert state["daily"]["total"] == 85
+    assert state["daily"]["gennemsnit"] == 40.0
+    assert state["daily"]["minimum"] == 38
+    assert state["daily"]["maksimum"] == 42
+    assert state["hourly"]["days_averaged"] == 2
+    assert state["hourly"]["period"] == "nov-2026 MTD (2 dage)"
+    assert state["hourly"]["kwh"] == [1.7] * 24
+    assert state["forecast"]["expected_kwh"] == 875
+    assert state["forecast"]["budget_kwh"] == 1425

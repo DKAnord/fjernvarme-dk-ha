@@ -212,3 +212,23 @@ def test_estimate_variable_costs_uses_per_month_expected_return_when_present() -
     # Jan: 35° vs 33° (+2° penalty -> +2% = 1020), Jul: 35° vs 39° (-4° bonus -> -4% = 960),
     # Aug: 35° vs fallback 36° (-1° bonus -> -1% = 990)
     assert est["monthly_dkk"] == {"Jan": 1020, "Jul": 960, "Aug": 990}
+
+
+def test_estimate_variable_costs_penalty_only_dynamic_months() -> None:
+    est = estimate_variable_costs(
+        price_dkk_per_kwh=1.0,
+        bonus_temp=0.0,
+        penalty_temp=40.0,
+        motivation_rate=0.01,
+        current_return_temp=35.0,
+        daily={"days": {"21": 100.0}, "latest_complete": True, "month": "Nov"},
+        monthly_cur_year={"Jan": 1000.0, "Jul": 1000.0},
+        return_temp_monthly={"Jan": 42.0, "Jul": 35.0},
+        expected_return_monthly={"Jan": 37.0, "Jul": 47.0},
+        today=date(2026, 11, 25),
+        allow_bonus=False,
+    )
+    assert est["adjustment_pct"] == 0.0
+    assert est["effective_price_dkk_per_kwh"] == 1.0
+    # Jan: 42° vs 37° (+5% = 1050); Jul: 35° vs 47° (below req, no bonus = 1000)
+    assert est["monthly_dkk"] == {"Jan": 1050, "Jul": 1000}

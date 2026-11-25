@@ -67,6 +67,13 @@ def test_motivation_status_and_rate() -> None:
     assert motivation_dkk_per_kwh(35.0, 30.0, 40.0, 0.01) == 0.0
     assert motivation_dkk_per_kwh(42.0, 30.0, 40.0, 0.01) == 0.02
 
+    # Penalty-only mode (allow_bonus=False, e.g. Hillerød Forsyning): no bonus below threshold.
+    assert motivation_status(32.0, 0.0, 47.0, allow_bonus=False) == STATUS_NEUTRAL
+    assert motivation_status(47.0, 0.0, 47.0, allow_bonus=False) == STATUS_NEUTRAL
+    assert motivation_status(49.0, 0.0, 47.0, allow_bonus=False) == STATUS_PENALTY
+    assert motivation_dkk_per_kwh(32.0, 0.0, 47.0, 0.0067, allow_bonus=False) == 0.0
+    assert motivation_dkk_per_kwh(49.0, 0.0, 47.0, 0.0067, allow_bonus=False) == round(2.0 * 0.0067, 5)
+
 
 def test_kwh_per_hdd_and_forecast() -> None:
     end = date(2026, 11, 21)

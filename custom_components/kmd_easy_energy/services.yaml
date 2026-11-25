@@ -73,6 +73,14 @@ configure_utility:
           min: 0
           max: 60
           step: 0.5
+    forward_temp:
+      name: Forward/supply temp override (°C, 0 = auto from meter)
+      required: false
+      selector:
+        number:
+          min: 0
+          max: 110
+          step: 0.5
     price_dkk_per_kwh:
       name: Heat price incl. VAT (DKK/kWh, 0 = default)
       required: false

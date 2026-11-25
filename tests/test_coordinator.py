@@ -808,3 +808,56 @@ async def test_initialize_cache_migrates_rounded_mwh_cache_recovers_hourly_daily
     assert state["hourly"]["kwh"] == [1.7] * 24
     assert state["forecast"]["expected_kwh"] == 875
     assert state["forecast"]["budget_kwh"] == 1425
+
+
+@pytest.mark.asyncio
+async def test_hillerod_coordinator_dynamic_forward_temp_from_cache_and_manual_override(
+    tmp_path: Path,
+) -> None:
+    store = FakeStore(
+        {
+            "monthly": {"2026": {"Jan": 1000.0, "Jul": 200.0}},
+            "daily": {"month": "November 2026", "days": {"24": 30.0}, "total": 30.0, "latest_complete": True, "latest_date": "2026-11-24"},
+            "daily_kwh_history": {"2026-01-15": 1000.0, "2026-07-15": 200.0, "2026-11-24": 30.0},
+            "daily_m3_history": {"2026-01-15": 20.0, "2026-07-15": 10.0, "2026-11-24": 1.0},
+            "daily_forward_temp": {"2026-01-15": 70.0, "2026-07-15": 55.0},
+            "return_temp": {
+                "annual": {"2026": 38.0},
+                "monthly_2026": {"Jan": 40.0, "Jul": 42.0},
+            },
+            "latest_reading": {"date": "2026-11-24", "temp_return": 38.0, "temp_forward": 65.0},
+            "wattson": {"detected": ["daily", "monthly", "temperatures", "volume"]},
+        }
+    )
+    coord, _, _, _ = make_coordinator(
+        tmp_path,
+        store=store,
+        backend="wattson",
+        utility="Hillerød Forsyning",
+        utility_id="hillerod-forsyning",
+        portal_url="https://hfors.dk/selvbetjening/se-forbrug-regninger/watts-on-din-forbrugsapp-til-vand-varme",
+    )
+
+    state = await coord._async_update_data()
+    # Weighted annual forward temp: (70*20 + 55*10) / 30 = 65.0 °C -> expected 40.0 °C
+    assert state["forward_temp"] == 65.0
+    assert state["forward_temp_source"] == "meter"
+    assert state["expected_return_temp"] == 40.0
+    assert state["expected_return_auto"] is True
+    assert state["bonus_temp"] == 0.0
+    assert state["penalty_temp"] == 40.0
+    assert state["motivation_status"] == "neutral"  # 38.0 <= 40.0, no bonus
+    assert state["motivation_dkk_per_kwh"] == 0.0
+    assert state["return_temp"]["forward_monthly_2026"] == {"Jan": 70.0, "Jul": 55.0}
+    assert state["return_temp"]["expected_monthly_2026"] == {"Jan": 37.0, "Jul": 47.0}
+
+    # Manual forward_temp override (80 °C -> 37.0 °C) clears auto monthly curve.
+    coord.entry.options = {"forward_temp": 80.0}
+    state_manual = await coord._async_update_data()
+    assert state_manual["forward_temp"] == 80.0
+    assert state_manual["forward_temp_source"] == "manual"
+    assert state_manual["expected_return_temp"] == 37.0
+    assert state_manual["expected_return_auto"] is False
+    assert state_manual["penalty_temp"] == 37.0
+    assert state_manual["motivation_status"] == "penalty"  # 38.0 > 37.0
+    assert "expected_monthly_2026" not in state_manual["return_temp"]

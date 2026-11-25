@@ -2,6 +2,17 @@
 
 Alle væsentlige ændringer i **Dansk Fjernvarme** (tidligere *Fjernvarme (KMD Easy Energy)*) dokumenteres her.
 
+## [1.2.6] - 2026-11-25
+
+### Tilføjet
+- **Dynamisk fremløbsafhængig afkølingstarif for Hillerød Forsyning ([issue #36](https://github.com/DKAnord/fjernvarme-dk-ha/issues/36)):**
+  - Understøtter nu Hillerød Forsynings officielle 2026/2027-skema (`47 °C` ved `<= 58 °C` fremløb, faldende med `1 °C/°C` til `37 °C` ved `>= 68 °C` fremløb) automatisk ud fra målerens fremløbstemperatur (`TI` fra Watts On, m³-vægtet pr. måned og år).
+  - Afkølingstariffen er nu **kun tillæg (ingen bonus)** som standard (`motivation_bonus: false`, `bonus_temp: 0.0`, `+1 %/°C` ved overskridelse af kravet).
+  - Tilføjet valgfri manuel overstyring af **fremløbstemperatur (`forward_temp`)** i integrationsindstillinger (`⚙️`), dashboard-kortets indstillingspanel og tjenesten `kmd_easy_energy.configure_utility` (`0 = automatisk fra måler`).
+
+### Rettet
+- **Dashboard-kortet for værker uden bonus (`bonus_temp = 0`):** Returtemperatur-grafen og timeprofilen tegner ikke længere en `0 °C`-linje eller kollapser Y-aksen, søjler farves grønne/røde (`OK` / `Gebyr`), og nye kort via `getStubConfig()` bruger automatisk værkets egne grænser.
+
 ## [1.2.5] - 2026-11-25
 
 ### Tilføjet

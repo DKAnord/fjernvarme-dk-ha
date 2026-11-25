@@ -43,6 +43,7 @@ from .const import (
     CONF_AUTO_SYNC_HOUR,
     CONF_BACKEND,
     CONF_BONUS_TEMP,
+    CONF_FORWARD_TEMP,
     CONF_EF_INSTALLATION_ID,
     CONF_EF_PASSWORD,
     CONF_EF_SUPPLIER_ID,
@@ -120,7 +121,13 @@ from .insights import (
 )
 from .statistics import import_hourly_statistics
 from .sync_reminder import compute_sync_reminder, parse_last_sync
-from .tariff import cached_utilities, load_utilities, match_utility_for_entry, resolve_tariff
+from .tariff import (
+    cached_utilities,
+    expected_return_from_forward_temp,
+    load_utilities,
+    match_utility_for_entry,
+    resolve_tariff,
+)
 from .util import (
     cache_has_sensor_data,
     delete_legacy_www_cache,
@@ -323,9 +330,12 @@ _CONSUMPTION_CACHE_KEYS = (
     "billing",
     "balance",
     "return_temp",
+    "daily_forward_temp",
     "daily_expected_return_temp",
     "expected_return_temp",
     "expected_return_auto",
+    "forward_temp",
+    "forward_temp_source",
     "latest_reading",
     "statistics_imported_on",
     "statistics_imported",
@@ -1072,19 +1082,117 @@ class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             return round(float(latest_exp), 1)
         return None
 
+    @staticmethod
+    def _forward_temp_series_from_state(
+        state: dict[str, Any], year: int
+    ) -> tuple[float | None, dict[str, float]]:
+        """Annual and monthly weighted supply temperatures from cache or Watts On intervals."""
+        from .insights import MONTH_LABELS_DA
+
+        yr_s = str(year)
+        rt = state.get("return_temp") or {}
+        ann_val = (rt.get("forward_annual") or {}).get(yr_s)
+        mon_val = rt.get(f"forward_monthly_{yr_s}")
+        if (
+            isinstance(ann_val, (int, float))
+            and not isinstance(ann_val, bool)
+            and ann_val > 0
+            and isinstance(mon_val, dict)
+            and mon_val
+        ):
+            return round(float(ann_val), 1), {
+                str(k): float(v)
+                for k, v in mon_val.items()
+                if isinstance(v, (int, float)) and not isinstance(v, bool) and v > 0
+            }
+
+        daily_fwd = state.get("daily_forward_temp") or {}
+        if not daily_fwd and isinstance(state.get("wattson_hours"), dict):
+            # Fallback for older Watts On caches before daily_forward_temp was populated.
+            by_day: dict[str, list[tuple[float, float | None]]] = {}
+            for iso_k, vals in state["wattson_hours"].items():
+                if not isinstance(vals, list) or len(vals) < 3 or vals[2] is None:
+                    continue
+                try:
+                    tf = float(vals[2])
+                except (TypeError, ValueError):
+                    continue
+                if tf <= 0:
+                    continue
+                w = float(vals[1]) if (len(vals) > 1 and isinstance(vals[1], (int, float)) and vals[1] > 0) else None
+                by_day.setdefault(str(iso_k)[:10], []).append((tf, w))
+            daily_fwd = {}
+            for day_s, pairs in by_day.items():
+                num = sum(t * w for t, w in pairs if w)
+                den = sum(w for _, w in pairs if w)
+                daily_fwd[day_s] = round(num / den, 2) if den > 0 else round(sum(t for t, _ in pairs) / len(pairs), 2)
+
+        daily_m3 = state.get("daily_m3_history") or {}
+        daily_kwh = state.get("daily_kwh_history") or {}
+        weights = daily_m3 if daily_m3 else daily_kwh
+
+        def _wavg(days: list[str]) -> float | None:
+            num = den = 0.0
+            plain: list[float] = []
+            for d in days:
+                raw_t = daily_fwd.get(d)
+                if not isinstance(raw_t, (int, float)) or isinstance(raw_t, bool) or raw_t <= 0:
+                    continue
+                t = float(raw_t)
+                plain.append(t)
+                w = weights.get(d)
+                if isinstance(w, (int, float)) and not isinstance(w, bool) and w > 0:
+                    num += t * float(w)
+                    den += float(w)
+            if den > 0:
+                return round(num / den, 1)
+            return round(sum(plain) / len(plain), 1) if plain else None
+
+        ydays = [d for d in sorted(daily_fwd) if str(d).startswith(f"{yr_s}-")]
+        computed_ann = _wavg(ydays)
+        computed_mon: dict[str, float] = {}
+        for m in range(1, 13):
+            mdays = [d for d in ydays if int(str(d)[5:7]) == m]
+            mavg = _wavg(mdays)
+            if mavg is not None:
+                computed_mon[MONTH_LABELS_DA[m - 1]] = mavg
+
+        if computed_ann is None and isinstance(ann_val, (int, float)) and ann_val > 0:
+            computed_ann = round(float(ann_val), 1)
+        if computed_ann is None:
+            latest_fwd = (state.get("latest_reading") or {}).get("temp_forward")
+            if isinstance(latest_fwd, (int, float)) and not isinstance(latest_fwd, bool) and latest_fwd > 0:
+                computed_ann = round(float(latest_fwd), 1)
+        return computed_ann, computed_mon
+
     def _enrich_derived(self, state: dict[str, Any]) -> None:
         """Attach tariff, motivation, forecast and leak flags to coordinator data."""
         from dataclasses import asdict
 
         today = copenhagen_today()
         ef_expected_rt = self._expected_return_temp_from_state(state, today.year)
+        meter_fwd_annual, meter_fwd_monthly = self._forward_temp_series_from_state(state, today.year)
+        if meter_fwd_annual is not None or meter_fwd_monthly:
+            rt_dict = dict(state.get("return_temp") or {})
+            if meter_fwd_annual is not None:
+                fwd_ann = dict(rt_dict.get("forward_annual") or {})
+                fwd_ann[str(today.year)] = meter_fwd_annual
+                rt_dict["forward_annual"] = fwd_ann
+            if meter_fwd_monthly:
+                rt_dict[f"forward_monthly_{today.year}"] = meter_fwd_monthly
+            state["return_temp"] = rt_dict
+
         tariff = resolve_tariff(
-            self.entry, today=today, expected_return_temp=ef_expected_rt
+            self.entry,
+            today=today,
+            expected_return_temp=ef_expected_rt,
+            forward_temp=meter_fwd_annual,
         )
         state["tariff"] = asdict(tariff)
         state["bonus_temp"] = tariff.bonus_temp
         state["penalty_temp"] = tariff.penalty_temp
-        state["expected_return_temp"] = ef_expected_rt
+        state["forward_temp"] = tariff.forward_temp
+        state["forward_temp_source"] = tariff.forward_temp_source
         raw_b = self.entry.options.get(CONF_BONUS_TEMP)
         if raw_b is None:
             raw_b = self.entry.data.get(CONF_BONUS_TEMP)
@@ -1098,8 +1206,53 @@ class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     user_overrode_rt = True
             except (TypeError, ValueError):
                 pass
-        expected_return_auto = bool(ef_expected_rt is not None and not user_overrode_rt)
+
+        dyn_expected_rt: float | None = None
+        if tariff.expected_return_by_forward_temp and tariff.forward_temp is not None:
+            dyn_expected_rt = expected_return_from_forward_temp(
+                tariff.forward_temp, tariff.expected_return_by_forward_temp
+            )
+        expected_rt = (
+            dyn_expected_rt
+            if (tariff.forward_temp_source == "manual" and dyn_expected_rt is not None)
+            else (ef_expected_rt if ef_expected_rt is not None else dyn_expected_rt)
+        )
+        state["expected_return_temp"] = expected_rt
+        expected_return_auto = bool(
+            expected_rt is not None
+            and not user_overrode_rt
+            and tariff.forward_temp_source != "manual"
+        )
         state["expected_return_auto"] = expected_return_auto
+
+        if (
+            ef_expected_rt is None
+            and tariff.expected_return_by_forward_temp
+            and tariff.forward_temp_source == "meter"
+            and meter_fwd_monthly
+            and not user_overrode_rt
+        ):
+            dyn_monthly: dict[str, float] = {}
+            for m_lbl, m_fwd in meter_fwd_monthly.items():
+                val = expected_return_from_forward_temp(
+                    m_fwd, tariff.expected_return_by_forward_temp
+                )
+                if val is not None:
+                    dyn_monthly[m_lbl] = val
+            if dyn_monthly:
+                rt_dict = dict(state.get("return_temp") or {})
+                rt_dict[f"expected_monthly_{today.year}"] = dyn_monthly
+                state["return_temp"] = rt_dict
+        elif (
+            ef_expected_rt is None
+            and not state.get("daily_expected_return_temp")
+            and isinstance(state.get("return_temp"), dict)
+            and (tariff.forward_temp_source == "manual" or user_overrode_rt)
+        ):
+            rt_dict = dict(state.get("return_temp") or {})
+            rt_dict.pop(f"expected_monthly_{today.year}", None)
+            state["return_temp"] = rt_dict
+
         exp_monthly = (
             (state.get("return_temp") or {}).get(f"expected_monthly_{today.year}")
             if expected_return_auto
@@ -1130,7 +1283,10 @@ class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             else None
         )
         state["motivation_status"] = motivation_status(
-            return_temp, tariff.bonus_temp, tariff.penalty_temp
+            return_temp,
+            tariff.bonus_temp,
+            tariff.penalty_temp,
+            allow_bonus=tariff.motivation_bonus,
         )
         state["motivation_dkk_per_kwh"] = motivation_dkk_per_kwh(
             return_temp,
@@ -1138,6 +1294,7 @@ class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             tariff.penalty_temp,
             tariff.motivation_dkk_per_kwh_per_k,
             max_dkk_per_kwh=max_adj,
+            allow_bonus=tariff.motivation_bonus,
         )
 
         state["cost_estimate"] = estimate_variable_costs(
@@ -1152,6 +1309,7 @@ class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             today=today,
             max_pct=tariff.motivation_max_pct,
             expected_return_monthly=exp_monthly,
+            allow_bonus=tariff.motivation_bonus,
         )
         daily_kwh = daily_kwh_from_history(
             state.get("daily_kwh_history"),

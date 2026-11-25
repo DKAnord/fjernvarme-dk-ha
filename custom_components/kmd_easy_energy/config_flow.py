@@ -56,6 +56,7 @@ from .const import (
     CONF_AUTO_SYNC_HOUR,
     CONF_BACKEND,
     CONF_BONUS_TEMP,
+    CONF_FORWARD_TEMP,
     CONF_EF_INSTALLATION_ID,
     CONF_EF_PASSWORD,
     CONF_EF_SUPPLIER_ID,
@@ -1158,6 +1159,10 @@ class KMDEasyEnergyOptionsFlow(config_entries.OptionsFlow):
                 vol.Optional(
                     CONF_PENALTY_TEMP,
                     default=float(opts.get(CONF_PENALTY_TEMP) or 0.0),
+                ): vol.Coerce(float),
+                vol.Optional(
+                    CONF_FORWARD_TEMP,
+                    default=float(opts.get(CONF_FORWARD_TEMP) or 0.0),
                 ): vol.Coerce(float),
                 vol.Optional(
                     CONF_OUTDOOR_TEMP_ENTITY,

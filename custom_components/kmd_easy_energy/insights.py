@@ -162,13 +162,15 @@ def motivation_status(
     return_temp: float | None,
     bonus_temp: float,
     penalty_temp: float,
+    *,
+    allow_bonus: bool = True,
 ) -> str | None:
     """Return bonus / neutral / penalty, or None when temperature is unknown."""
     if return_temp is None:
         return None
-    if return_temp < bonus_temp:
+    if allow_bonus and bonus_temp > 0 and return_temp < bonus_temp:
         return STATUS_BONUS
-    if return_temp > penalty_temp:
+    if penalty_temp > 0 and return_temp > penalty_temp:
         return STATUS_PENALTY
     return STATUS_NEUTRAL
 
@@ -180,11 +182,14 @@ def motivation_dkk_per_kwh(
     rate: float | None,
     *,
     max_dkk_per_kwh: float | None = None,
+    allow_bonus: bool = True,
 ) -> float | None:
     """Variable motivation adjustment in DKK/kWh (negative is a bonus)."""
     if return_temp is None or rate is None or rate < 0:
         return None
-    status = motivation_status(return_temp, bonus_temp, penalty_temp)
+    status = motivation_status(
+        return_temp, bonus_temp, penalty_temp, allow_bonus=allow_bonus
+    )
     if status is None:
         return None
     if status == STATUS_BONUS:
@@ -420,6 +425,7 @@ def estimate_variable_costs(
     today: date | None = None,
     max_pct: float | None = None,
     expected_return_monthly: dict[str, Any] | None = None,
+    allow_bonus: bool = True,
 ) -> dict[str, Any]:
     """Estimate variable heating cost in DKK (excl. fixed fees) across all backends."""
     if price_dkk_per_kwh is None or price_dkk_per_kwh <= 0:
@@ -434,6 +440,7 @@ def estimate_variable_costs(
             penalty_temp,
             motivation_rate,
             max_dkk_per_kwh=max_adj,
+            allow_bonus=allow_bonus,
         )
         or 0.0
     )
@@ -455,10 +462,10 @@ def estimate_variable_costs(
             and not isinstance(raw_exp, bool)
             and float(raw_exp) > 0
         ):
-            m_bonus = float(raw_exp)
+            m_bonus = float(raw_exp) if allow_bonus else 0.0
             m_penalty = float(raw_exp)
         else:
-            m_bonus = bonus_temp
+            m_bonus = bonus_temp if allow_bonus else 0.0
             m_penalty = penalty_temp
         m_adj = (
             motivation_dkk_per_kwh(
@@ -467,6 +474,7 @@ def estimate_variable_costs(
                 m_penalty,
                 motivation_rate,
                 max_dkk_per_kwh=max_adj,
+                allow_bonus=allow_bonus,
             )
             or 0.0
         )

@@ -738,7 +738,7 @@
       "backend": "wattson",
       "latitude": 55.927,
       "longitude": 12.3,
-      "notes": "Watts On. Bekræftet live i issue #34 af @MichaelDepner. Par først varmemåleren i Watts On-appen med kundenummer + målernummer. Takstblad 2026: 670,00 kr./MWh inkl. moms (0,67 kr./kWh; 2027: 750,00 kr./MWh = 0,75 kr./kWh) og 1 %/°C afkølingstarif.",
+      "notes": "Watts On. Bekræftet live i issue #34 af @MichaelDepner. Par først varmemåleren i Watts On-appen med kundenummer + målernummer. Takstblad 2026: 670,00 kr./MWh inkl. moms (0,67 kr./kWh; 2027: 750,00 kr./MWh = 0,75 kr./kWh) og 1 %/°C dynamisk afkølingstarif (kun tillæg, ingen bonus) afhængig af fremløbstemperatur (47 °C ved <=58 °C fremløb til 37 °C ved >=68 °C fremløb).",
       "tariffs": [
         {
           "year": 2026,
@@ -746,10 +746,15 @@
           "price_dkk_per_kwh": 0.67,
           "price_dkk_per_m3": null,
           "motivation_pct_per_k": 1.0,
-          "bonus_temp": 35.0,
+          "motivation_bonus": false,
+          "bonus_temp": 0.0,
           "penalty_temp": 40.0,
+          "expected_return_by_forward_temp": [
+            [58.0, 47.0],
+            [68.0, 37.0]
+          ],
           "source": "https://hfors.dk/selvbetjening/priser-takster-2026",
-          "source_note": "Takstblad 2026 (https://hfors.dk/files/media/document/Hiller%C3%B8d%20varme%20-%20takstblad%202026.pdf): Forbrugsbidrag 670,00 kr./MWh inkl. moms (536,00 ekskl.) = 0,67 kr./kWh. Afkølingstarif: 1 % pr. °C manglende afkøling ift. husstandens afkølingskrav (afhænger af fremløbstemperatur; 40 °C ved 65 °C fremløb, 37 °C ved 70–79 °C)."
+          "source_note": "Takstblad 2026 (https://hfors.dk/files/media/document/Hiller%C3%B8d%20varme%20-%20takstblad%202026.pdf): Forbrugsbidrag 670,00 kr./MWh inkl. moms (536,00 ekskl.) = 0,67 kr./kWh. Afkølingstarif: +1 % pr. °C manglende afkøling (kun tillæg, ingen bonus) ift. dynamisk krav efter fremløbstemperatur: 47 °C ved <=58 °C fremløb, faldende med 1 °C/°C til 37 °C ved >=68 °C fremløb (40 °C ved 65 °C som fallback)."
         },
         {
           "year": 2027,
@@ -757,10 +762,15 @@
           "price_dkk_per_kwh": 0.75,
           "price_dkk_per_m3": null,
           "motivation_pct_per_k": 1.0,
-          "bonus_temp": 35.0,
+          "motivation_bonus": false,
+          "bonus_temp": 0.0,
           "penalty_temp": 40.0,
+          "expected_return_by_forward_temp": [
+            [58.0, 47.0],
+            [68.0, 37.0]
+          ],
           "source": "https://hfors.dk/selvbetjening/priser-takster-2026",
-          "source_note": "Anmeldt 2027-varmepris: 750,00 kr./MWh inkl. moms (600,00 ekskl.) = 0,75 kr./kWh og 1 %/°C afkølingstarif."
+          "source_note": "Anmeldt 2027-varmepris: 750,00 kr./MWh inkl. moms (600,00 ekskl.) = 0,75 kr./kWh og 1 %/°C dynamisk afkølingstarif (kun tillæg, ingen bonus)."
         }
       ]
     }

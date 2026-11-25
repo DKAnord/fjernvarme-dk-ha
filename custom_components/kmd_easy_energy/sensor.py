@@ -114,6 +114,8 @@ class KMDBaseSensor(CoordinatorEntity[KMDEasyEnergyCoordinator], SensorEntity):
             "daily_expected_return_temp",
             "expected_return_temp",
             "expected_return_auto",
+            "forward_temp",
+            "forward_temp_source",
             "integration_version",
             "energy_price_dkk_per_kwh",
             "daily_stat_kwh",
@@ -209,6 +211,8 @@ class KMDOverviewSensor(KMDBaseSensor):
             "penalty_temp": data.get("penalty_temp", 40.0),
             "expected_return_temp": data.get("expected_return_temp"),
             "expected_return_auto": bool(data.get("expected_return_auto", False)),
+            "forward_temp": data.get("forward_temp"),
+            "forward_temp_source": data.get("forward_temp_source"),
             "energy_price_dkk_per_kwh": data.get("energy_price_dkk_per_kwh"),
             "tariff": data.get("tariff") or {},
             "has_mitid_username": bool(data.get("has_mitid_username", False)),
@@ -540,6 +544,9 @@ class KMDMotivationStatusSensor(KMDBaseSensor):
         return {
             "bonus_temp": tariff.get("bonus_temp", data.get("bonus_temp")),
             "penalty_temp": tariff.get("penalty_temp", data.get("penalty_temp")),
+            "motivation_bonus": tariff.get("motivation_bonus", True),
+            "expected_return_temp": data.get("expected_return_temp"),
+            "forward_temp": data.get("forward_temp"),
             "adjustment_dkk_per_kwh": data.get("motivation_dkk_per_kwh"),
         }
 

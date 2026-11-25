@@ -315,4 +315,63 @@ const decodedIssue = decodeURIComponent(openedIssueUrl);
 assert.ok(decodedIssue.includes("Utility ID:** `hadsund-fjernvarme`"), "feedback report upgrades eforsyning-custom ID to hadsund-fjernvarme");
 assert.ok(decodedIssue.includes("Discovered Units:** kWh, m3, °C"), "feedback report infers units when available_units is empty");
 
+// 15) Hillerød Forsyning dynamic supply-temp penalty-only tariff: no 0° line/axis, no bonus text, and manual forward_temp input.
+calls = [];
+const hillerodCard = render({
+  backend: "wattson",
+  data_source: "Watts On",
+  utility: "Hillerød Forsyning",
+  utility_id: "hillerod-forsyning",
+  utility_status: "confirmed",
+  bonus_temp: 0,
+  penalty_temp: 45,
+  expected_return_temp: 45,
+  expected_return_auto: true,
+  forward_temp: 60.0,
+  forward_temp_source: "meter",
+  tariff: {
+    price_dkk_per_kwh: 0.67,
+    motivation_pct_per_k: 1.0,
+    motivation_bonus: false,
+    bonus_temp: 0,
+    penalty_temp: 45,
+    expected_return_by_forward_temp: [[58, 47], [68, 37]],
+    forward_temp: 60.0,
+    forward_temp_source: "meter",
+  },
+  capabilities: ["auto_sync", "cost", "daily", "hourly", "monthly", "temperatures", "volume"],
+  annual: { "2026": 8000 },
+  monthly: { "2026": { Jan: 1200, Jul: 200 } },
+  daily: { month: "Nov 2026", days: { "24": 30 }, gennemsnit: 30, latest_complete: true, latest_date: "2026-11-24" },
+  hourly: { period: "nov-2026 MTD", kwh: Array(24).fill(1.2), ret_temp: Array(24).fill(39.0) },
+  return_temp: {
+    annual: { "2026": 39.5 },
+    monthly_2026: { Jan: 39.0, Jul: 41.0 },
+    expected_monthly_2026: { Jan: 37.0, Jul: 47.0 },
+  },
+  cost_estimate: { effective_price_dkk_per_kwh: 0.67, base_price_dkk_per_kwh: 0.67, adjustment_pct: 0, current_month_dkk: 500, ytd_dkk: 5360 },
+}, calls);
+const hilHtml = hillerodCard.shadowRoot.innerHTML;
+assert.ok(hilHtml.includes("Afkølingskrav (37–47°) · Dynamisk (fremløb)"), "shows dynamic cooling requirement range");
+assert.ok(hilHtml.includes("OK (≤ krav)") && !hilHtml.includes("Under krav (bonus)"), "uses penalty-only legend");
+assert.ok(hilHtml.includes("frem 60,0 °C"), "KPI shows current supply temperature");
+assert.ok(!hilHtml.includes('class="ax-bonus">0°'), "does not render 0° bonus reference line when bonus_temp is 0");
+const retSection = hilHtml.split('data-section="return-temp"')[1].split("</svg>")[0];
+assert.ok(!retSection.includes(">0°</text>"), "return-temp chart has no 0° axis tick");
+assert.ok(hilHtml.includes("krav ≤47,0 °C (OK — intet gebyr)"), "bar tooltip reflects penalty-only requirement");
+hillerodCard.shadowRoot.getElementById("openSetupBtn").listeners.click();
+const hilSetupHtml = hillerodCard.shadowRoot.innerHTML;
+assert.ok(hilSetupHtml.includes('id="efForwardInput"'), "settings panel renders manual forward_temp input");
+hillerodCard.shadowRoot.getElementById("efForwardInput").value = "70";
+hillerodCard.shadowRoot.getElementById("saveTariffBtn").listeners.click();
+assert.deepStrictEqual(calls.pop(), [
+  "kmd_easy_energy",
+  "configure_utility",
+  {
+    complete_setup: true,
+    entry_id: "e1",
+    forward_temp: 70,
+  },
+]);
+
 console.log("card_capabilities.test.js: OK");

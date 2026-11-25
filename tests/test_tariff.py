@@ -5,7 +5,11 @@ from __future__ import annotations
 from datetime import date
 from types import SimpleNamespace
 
-from kmd_easy_energy.tariff import published_tariff, resolve_tariff
+from kmd_easy_energy.tariff import (
+    expected_return_from_forward_temp,
+    published_tariff,
+    resolve_tariff,
+)
 
 
 KREDSLOB = [
@@ -313,6 +317,10 @@ def test_bundled_utilities_json_has_hedensted_and_hillerod_2026_tariffs() -> Non
     assert hil_2026 is not None
     assert hil_2026["price_dkk_per_kwh"] == 0.67
     assert hil_2026["motivation_pct_per_k"] == 1.0
+    assert hil_2026["motivation_bonus"] is False
+    assert hil_2026["bonus_temp"] == 0.0
+    assert hil_2026["penalty_temp"] == 40.0
+    assert hil_2026["expected_return_by_forward_temp"] == [[58.0, 47.0], [68.0, 37.0]]
     assert hil_2026["source"].startswith("https://hfors.dk/")
 
     hil_resolved = resolve_tariff(
@@ -323,6 +331,11 @@ def test_bundled_utilities_json_has_hedensted_and_hillerod_2026_tariffs() -> Non
     assert hil_resolved.price_dkk_per_kwh == 0.67
     assert hil_resolved.motivation_pct_per_k == 1.0
     assert hil_resolved.motivation_dkk_per_kwh_per_k == round(0.67 * 0.01, 6)
+    assert hil_resolved.motivation_bonus is False
+    assert hil_resolved.bonus_temp == 0.0
+    assert hil_resolved.penalty_temp == 40.0
+    assert hil_resolved.forward_temp is None
+    assert hil_resolved.forward_temp_source is None
 
 
 def test_bundled_utilities_json_has_frederikshavn_2026_tariff() -> None:
@@ -350,3 +363,61 @@ def test_bundled_utilities_json_has_frederikshavn_2026_tariff() -> None:
 
     hil_2027 = published_tariff("hillerod-forsyning", 2027, utilities)
     assert hil_2027 is not None and hil_2027["price_dkk_per_kwh"] == 0.75
+
+
+def test_hillerod_dynamic_forward_temp_curve_and_overrides() -> None:
+    from kmd_easy_energy.const import CONF_BONUS_TEMP, CONF_FORWARD_TEMP
+    from kmd_easy_energy.tariff import load_utilities
+
+    utilities = load_utilities()
+    curve = [[58.0, 47.0], [68.0, 37.0]]
+    assert expected_return_from_forward_temp(55.0, curve) == 47.0
+    assert expected_return_from_forward_temp(58.0, curve) == 47.0
+    assert expected_return_from_forward_temp(60.0, curve) == 45.0
+    assert expected_return_from_forward_temp(65.0, curve) == 40.0
+    assert expected_return_from_forward_temp(68.0, curve) == 37.0
+    assert expected_return_from_forward_temp(80.0, curve) == 37.0
+    assert expected_return_from_forward_temp(None, curve) is None
+
+    # Meter forward temp 55 °C -> penalty_temp 47.0 °C, penalty-only (bonus_temp=0.0).
+    meter = resolve_tariff(
+        _entry(data={"utility_id": "hillerod-forsyning"}),
+        today=date(2026, 11, 25),
+        utilities=utilities,
+        forward_temp=55.0,
+    )
+    assert meter.motivation_bonus is False
+    assert meter.bonus_temp == 0.0
+    assert meter.penalty_temp == 47.0
+    assert meter.forward_temp == 55.0
+    assert meter.forward_temp_source == "meter"
+
+    # Manual forward_temp option overrides meter forward_temp.
+    manual_fwd = resolve_tariff(
+        _entry(
+            options={CONF_FORWARD_TEMP: 80.0},
+            data={"utility_id": "hillerod-forsyning"},
+        ),
+        today=date(2026, 11, 25),
+        utilities=utilities,
+        forward_temp=55.0,
+    )
+    assert manual_fwd.motivation_bonus is False
+    assert manual_fwd.bonus_temp == 0.0
+    assert manual_fwd.penalty_temp == 37.0
+    assert manual_fwd.forward_temp == 80.0
+    assert manual_fwd.forward_temp_source == "manual"
+
+    # Explicit bonus_temp > 0 re-enables bonus if a user explicitly configures it.
+    explicit_bonus = resolve_tariff(
+        _entry(
+            options={CONF_BONUS_TEMP: 32.0},
+            data={"utility_id": "hillerod-forsyning"},
+        ),
+        today=date(2026, 11, 25),
+        utilities=utilities,
+        forward_temp=65.0,
+    )
+    assert explicit_bonus.motivation_bonus is True
+    assert explicit_bonus.bonus_temp == 32.0
+    assert explicit_bonus.penalty_temp == 40.0

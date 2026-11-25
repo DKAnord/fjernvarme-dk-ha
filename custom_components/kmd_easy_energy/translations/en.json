@@ -136,6 +136,7 @@
           "notify_service": "Mobile push notify service (optional)",
           "bonus_temp": "Expected return / bonus threshold (°C, 0 = from E|Forsyning / default)",
           "penalty_temp": "Return temp penalty threshold (°C, 0 = same as expected / default)",
+          "forward_temp": "Supply/forward temperature override (°C, 0 = automatic from meter)",
           "outdoor_temp_entity": "Outdoor temperature sensor (optional)",
           "latitude": "Latitude override (optional, Open-Meteo)",
           "longitude": "Longitude override (optional, Open-Meteo)",

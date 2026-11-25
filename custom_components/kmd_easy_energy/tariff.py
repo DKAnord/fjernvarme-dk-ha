@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
@@ -15,6 +15,7 @@ from homeassistant.config_entries import ConfigEntry
 from .const import (
     CONF_BONUS_TEMP,
     CONF_EF_SUPPLIER_ID,
+    CONF_FORWARD_TEMP,
     CONF_MOTIVATION_DKK_PER_KWH_PER_K,
     CONF_MOTIVATION_PCT_PER_K,
     CONF_NORMAL_HDD_YEAR,
@@ -48,6 +49,62 @@ class ResolvedTariff:
     utility_id: str
     motivation_pct_per_k: float | None = None
     motivation_max_pct: float | None = None
+    motivation_bonus: bool = True
+    expected_return_by_forward_temp: list[list[float]] | None = None
+    forward_temp: float | None = None
+    forward_temp_source: str | None = None
+
+
+def _parse_forward_curve(raw: Any) -> list[list[float]] | None:
+    """Parse [[forward_c, expected_return_c], ...] sorted by forward temp."""
+    if not isinstance(raw, Sequence) or isinstance(raw, (str, bytes)):
+        return None
+    pts: list[list[float]] = []
+    for item in raw:
+        if not isinstance(item, Sequence) or isinstance(item, (str, bytes)) or len(item) < 2:
+            continue
+        try:
+            fwd = float(item[0])
+            ret = float(item[1])
+        except (TypeError, ValueError):
+            continue
+        if fwd > 0 and ret > 0:
+            pts.append([fwd, ret])
+    if not pts:
+        return None
+    pts.sort(key=lambda pair: pair[0])
+    return pts
+
+
+def expected_return_from_forward_temp(
+    forward_temp: float | None,
+    curve: Sequence[Sequence[float]] | None,
+) -> float | None:
+    """Interpolate expected return temperature from a supply-temperature schedule."""
+    if forward_temp is None:
+        return None
+    try:
+        fwd = float(forward_temp)
+    except (TypeError, ValueError):
+        return None
+    if fwd <= 0:
+        return None
+    pts = _parse_forward_curve(curve)
+    if not pts:
+        return None
+    if fwd <= pts[0][0]:
+        return round(pts[0][1], 1)
+    if fwd >= pts[-1][0]:
+        return round(pts[-1][1], 1)
+    for idx in range(len(pts) - 1):
+        x0, y0 = pts[idx]
+        x1, y1 = pts[idx + 1]
+        if x0 <= fwd <= x1:
+            if x1 == x0:
+                return round(y1, 1)
+            val = y0 + ((fwd - x0) / (x1 - x0)) * (y1 - y0)
+            return round(val, 1)
+    return round(pts[-1][1], 1)
 
 
 def load_utilities() -> list[dict[str, Any]]:
@@ -160,6 +217,7 @@ def resolve_tariff(
     today: date | None = None,
     utilities: list[dict[str, Any]] | None = None,
     expected_return_temp: float | None = None,
+    forward_temp: float | None = None,
 ) -> ResolvedTariff:
     """Options override published defaults; zero/empty option means "use default"."""
     today = today or copenhagen_today()
@@ -184,26 +242,61 @@ def resolve_tariff(
             return option
         return _published_pos(published_key)
 
+    curve = _parse_forward_curve((published or {}).get("expected_return_by_forward_temp"))
+    opt_forward = _opt_float(entry, CONF_FORWARD_TEMP, None)
+    if opt_forward is not None and opt_forward > 0:
+        eff_forward: float | None = round(opt_forward, 1)
+        forward_source: str | None = "manual"
+    elif forward_temp is not None:
+        try:
+            fwd_val = float(forward_temp)
+        except (TypeError, ValueError):
+            fwd_val = 0.0
+        if fwd_val > 0:
+            eff_forward = round(fwd_val, 1)
+            forward_source = "meter"
+        else:
+            eff_forward = None
+            forward_source = None
+    else:
+        eff_forward = None
+        forward_source = None
+
     opt_bonus = _opt_float(entry, CONF_BONUS_TEMP, None)
     opt_penalty = _opt_float(entry, CONF_PENALTY_TEMP, None)
-    exp_rt = (
-        round(float(expected_return_temp), 1)
-        if expected_return_temp is not None and float(expected_return_temp) > 0
-        else None
-    )
-    if opt_bonus is not None and opt_bonus > 0:
-        bonus = opt_bonus
-    elif exp_rt is not None:
-        bonus = exp_rt
+    if forward_source == "manual" and curve is not None:
+        exp_rt = expected_return_from_forward_temp(eff_forward, curve)
+    elif expected_return_temp is not None and float(expected_return_temp) > 0:
+        exp_rt = round(float(expected_return_temp), 1)
+    elif curve is not None and eff_forward is not None:
+        exp_rt = expected_return_from_forward_temp(eff_forward, curve)
     else:
-        bonus = float((published or {}).get("bonus_temp") or 30.0)
+        exp_rt = None
+
+    published_bonus = bool((published or {}).get("motivation_bonus", True))
+    if opt_bonus is not None and opt_bonus > 0:
+        motivation_bonus = True
+        bonus = opt_bonus
+    elif not published_bonus:
+        motivation_bonus = False
+        bonus = 0.0
+    else:
+        motivation_bonus = True
+        if exp_rt is not None:
+            bonus = exp_rt
+        elif published and published.get("bonus_temp") is not None:
+            bonus = float(published["bonus_temp"])
+        else:
+            bonus = 30.0
 
     if opt_penalty is not None and opt_penalty > 0:
         penalty = opt_penalty
     elif exp_rt is not None:
         penalty = exp_rt
+    elif published and published.get("penalty_temp") is not None:
+        penalty = float(published["penalty_temp"])
     else:
-        penalty = float((published or {}).get("penalty_temp") or 40.0)
+        penalty = 40.0
 
     normal = _opt_float(entry, CONF_NORMAL_HDD_YEAR, None)
     if normal is None or normal <= 0:
@@ -242,4 +335,8 @@ def resolve_tariff(
         utility_id=utility_id,
         motivation_pct_per_k=motivation_pct,
         motivation_max_pct=motivation_max_pct,
+        motivation_bonus=motivation_bonus,
+        expected_return_by_forward_temp=curve,
+        forward_temp=eff_forward,
+        forward_temp_source=forward_source,
     )

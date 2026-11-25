@@ -181,6 +181,8 @@ def apply_daily_readings(
     # Return temperature: m³-weighted averages per month and per year.
     rt: dict[str, Any] = {"annual": {}}
     exp_annual: dict[str, float] = {}
+    fwd_annual: dict[str, float] = {}
+    fwd_weights = m3 if m3 else kwh
     for y in (yr - 1, yr):
         ys = str(y)
         ydays = [d for d in temps if d.startswith(f"{ys}-")]
@@ -196,6 +198,19 @@ def apply_daily_readings(
         if months:
             rt[f"monthly_{ys}"] = months
 
+        fydays = [d for d in fwd if d.startswith(f"{ys}-")]
+        favg = _weighted_temp(fydays, fwd, fwd_weights)
+        if favg is not None:
+            fwd_annual[ys] = favg
+        fmonths: dict[str, float] = {}
+        for m in range(1, 13):
+            fmdays = [d for d in fydays if int(d[5:7]) == m]
+            fmavg = _weighted_temp(fmdays, fwd, fwd_weights)
+            if fmavg is not None:
+                fmonths[M_KEYS[m - 1]] = fmavg
+        if fmonths:
+            rt[f"forward_monthly_{ys}"] = fmonths
+
         eydays = [d for d in exp_ret if d.startswith(f"{ys}-")]
         eavg = _weighted_temp(eydays, exp_ret, m3)
         if eavg is not None:
@@ -208,6 +223,8 @@ def apply_daily_readings(
                 emonths[M_KEYS[m - 1]] = emavg
         if emonths:
             rt[f"expected_monthly_{ys}"] = emonths
+    if fwd_annual:
+        rt["forward_annual"] = fwd_annual
     if exp_annual:
         rt["expected_annual"] = exp_annual
     state["return_temp"] = rt

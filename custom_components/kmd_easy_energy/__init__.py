@@ -18,6 +18,7 @@ from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from .const import (
     CONF_ACCESS_TOKEN,
     CONF_BONUS_TEMP,
+    CONF_FORWARD_TEMP,
     CONF_LOCATION_NAME,
     CONF_MITID_USERNAME,
     CONF_MOTIVATION_DKK_PER_KWH_PER_K,
@@ -168,6 +169,7 @@ async def _async_setup_services(hass: HomeAssistant) -> None:
         tariff_updates: dict[str, Any] = {}
         for key in (
             CONF_BONUS_TEMP,
+    CONF_FORWARD_TEMP,
             CONF_PENALTY_TEMP,
             CONF_PRICE_DKK_PER_KWH,
             CONF_MOTIVATION_PCT_PER_K,

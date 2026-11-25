@@ -3,7 +3,7 @@
  * Zero external dependencies, Shadow DOM, responsive, interactive tooltips, DA/EN i18n.
  */
 (() => {
-  const VER = "1.2.5";
+  const VER = "1.2.6";
   const MONTHS = ["Jan", "Feb", "Mar", "Apr", "Maj", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Dec"];
   const DAYS_IN_MONTH = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
   const isLeapYear = (y) => (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0;
@@ -341,7 +341,7 @@
     getGridOptions() { return { columns: "full", rows: "auto", min_columns: 6 }; }
     static getConfigElement() { return document.createElement("kmd-easy-energy-card-editor"); }
     static getStubConfig() {
-      return { language: "da", bonus_temp: 30, penalty_temp: 40, show_sync_bar: true };
+      return { language: "da", show_sync_bar: true };
     }
 
     _renderMonthlySvg(mCur, mPrev, mTemp, curYr, prevYr, t, mCost = {}) {
@@ -404,14 +404,14 @@
       return `<svg viewBox="0 0 ${W} ${H}" class="svg"><defs><linearGradient id="gHeat" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#f97316"/><stop offset="100%" stop-color="#ef4444"/></linearGradient></defs>${grid}${bars}${line}</svg>`;
     }
 
-    _renderReturnTempSvg(rtMonthly, bonusT, penaltyT, curYr, expMonthly = {}) {
+    _renderReturnTempSvg(rtMonthly, bonusT, penaltyT, curYr, expMonthly = {}, allowBonus = true) {
       const W = 540, H = 225, pad = { l: 42, r: 14, t: 28, b: 32 };
       const cw = W - pad.l - pad.r, ch = H - pad.t - pad.b;
       const expVals = MONTHS.map((m) => expMonthly?.[m]).filter((v) => typeof v === "number" && Number.isFinite(v) && v > 0);
       const useExpCurve = expVals.length >= 2;
       const hasAnyExp = expVals.length >= 1;
       const barVals = MONTHS.map((m) => rtMonthly?.[m]).filter((v) => typeof v === "number" && Number.isFinite(v) && v > 0);
-      const allVals = [...barVals, ...expVals, bonusT, penaltyT].filter((v) => Number.isFinite(v) && v > 0);
+      const allVals = [...barVals, ...expVals, ...(allowBonus ? [bonusT] : []), penaltyT].filter((v) => Number.isFinite(v) && v > 0);
       const minY = Math.min(20, allVals.length ? Math.floor(Math.min(...allVals) - 2) : 20);
       const maxY = Math.max(44, allVals.length ? Math.ceil(Math.max(...allVals) + 3) : 44);
       const yPos = (v) => pad.t + ch - ((v - minY) / (maxY - minY)) * ch;
@@ -420,13 +420,15 @@
       let grid = "";
       const refLines = useExpCurve
         ? [25, 35]
-        : [25, bonusT, 35, penaltyT].filter((v, i, a) => a.indexOf(v) === i);
+        : [25, ...(allowBonus ? [bonusT] : []), 35, penaltyT].filter((v, i, a) => Number.isFinite(v) && v > 0 && a.indexOf(v) === i);
       refLines.forEach((tv) => {
         const y = yPos(tv);
-        const col = !useExpCurve && tv === bonusT ? "#22c55e" : (!useExpCurve && tv === penaltyT ? "#ef4444" : "rgba(148,163,184,0.22)");
-        const dash = !useExpCurve && (tv === bonusT || tv === penaltyT) ? "5,4" : "3,3";
-        const sw = !useExpCurve && (tv === bonusT || tv === penaltyT) ? "1.6" : "1";
-        const cls = !useExpCurve && tv === bonusT ? "ax-bonus" : (!useExpCurve && tv === penaltyT ? "ax-penalty" : "ax");
+        const isBonusLine = !useExpCurve && allowBonus && tv === bonusT;
+        const isPenaltyLine = !useExpCurve && tv === penaltyT;
+        const col = isBonusLine ? "#22c55e" : (isPenaltyLine ? "#ef4444" : "rgba(148,163,184,0.22)");
+        const dash = (isBonusLine || isPenaltyLine) ? "5,4" : "3,3";
+        const sw = (isBonusLine || isPenaltyLine) ? "1.6" : "1";
+        const cls = isBonusLine ? "ax-bonus" : (isPenaltyLine ? "ax-penalty" : "ax");
         grid += `<line x1="${pad.l}" y1="${y}" x2="${W - pad.r}" y2="${y}" stroke="${col}" stroke-width="${sw}" stroke-dasharray="${dash}"/>`;
         grid += `<text x="${pad.l - 6}" y="${y + 4}" text-anchor="end" class="${cls}">${tv}°</text>`;
       });
@@ -443,11 +445,17 @@
         const effP = mExp !== null ? mExp : penaltyT;
         if (typeof v === "number") {
           const y = yPos(Math.min(maxY, Math.max(minY, v)));
-          const col = v < effB ? "#22c55e" : (v <= effP ? "#f59e0b" : "#ef4444");
+          const col = !allowBonus
+            ? (v <= effP ? "#22c55e" : "#ef4444")
+            : (v < effB ? "#22c55e" : (v <= effP ? "#f59e0b" : "#ef4444"));
           const bw = Math.min(24, xStep * 0.58);
           const tip = mExp !== null
-            ? `${m} ${curYr}: ${fmtDec(v)} °C · krav ${fmtDec(mExp)} °C (${v < effB ? "Bonus!" : v <= effP ? "På krav" : "Gebyr!"})`
-            : `${m} ${curYr}: ${fmtDec(v)} °C (${v < bonusT ? "Bonus!" : v <= penaltyT ? "Neutral" : "Gebyr!"})`;
+            ? (!allowBonus
+              ? `${m} ${curYr}: ${fmtDec(v)} °C · krav ≤${fmtDec(mExp)} °C (${v <= effP ? "OK — intet gebyr" : "Gebyr!"})`
+              : `${m} ${curYr}: ${fmtDec(v)} °C · krav ${fmtDec(mExp)} °C (${v < effB ? "Bonus!" : v <= effP ? "På krav" : "Gebyr!"})`)
+            : (!allowBonus
+              ? `${m} ${curYr}: ${fmtDec(v)} °C · krav ≤${fmtDec(penaltyT)} °C (${v <= penaltyT ? "OK — intet gebyr" : "Gebyr!"})`
+              : `${m} ${curYr}: ${fmtDec(v)} °C (${v < bonusT ? "Bonus!" : v <= penaltyT ? "Neutral" : "Gebyr!"})`);
           bars += `<rect x="${cx - bw / 2}" y="${y}" width="${bw}" height="${Math.max(2, pad.t + ch - y)}" rx="5" fill="${col}" fill-opacity="0.88" tabindex="0" data-tip="${esc(tip)}"/>`;
           bars += `<text x="${cx}" y="${y - 7}" text-anchor="middle" class="val val-sm">${fmtDec(v)}</text>`;
         }
@@ -667,10 +675,16 @@
       const bonusT = Number(cfg.bonus_temp ?? a.bonus_temp ?? 30);
       const penaltyT = Number(cfg.penalty_temp ?? a.penalty_temp ?? 40);
       const tariffObj = a.tariff || {};
+      const allowBonus = (cfg.bonus_temp != null && Number(cfg.bonus_temp) > 0)
+        ? true
+        : (tariffObj.motivation_bonus !== false && bonusT > 0);
+      const hasDynamicCurve = Array.isArray(tariffObj.expected_return_by_forward_temp) && tariffObj.expected_return_by_forward_temp.length >= 2;
+      const fwdTemp = typeof a.forward_temp === "number" && a.forward_temp > 0 ? a.forward_temp : null;
+      const fwdSrc = a.forward_temp_source || tariffObj.forward_temp_source || null;
       const curPrice = a.energy_price_dkk_per_kwh ?? tariffObj.price_dkk_per_kwh ?? "";
       const curMotivPct = tariffObj.motivation_pct_per_k ?? "";
       const efExpectedRt = typeof a.expected_return_temp === "number" ? a.expected_return_temp : null;
-      const singleReturnTarget = Math.abs(bonusT - penaltyT) < 0.05;
+      const singleReturnTarget = !allowBonus || Math.abs(bonusT - penaltyT) < 0.05;
 
       const ann = a.annual || {};
       const mon = a.monthly || {};
@@ -690,7 +704,7 @@
       const expMax = hasExpMonthly ? Math.max(...expMList) : null;
       const expRangeTxt = hasExpMonthly && Math.abs(expMax - expMin) >= 0.5
         ? `${fmtDec(expMin, 0)}–${fmtDec(expMax, 0)}°`
-        : `${bonusT}°`;
+        : `${allowBonus ? bonusT : penaltyT}°`;
       const wx = a.weather || {};
       const ins = a.insights || {};
       const fc = a.forecast || {};
@@ -827,9 +841,10 @@
       const wizPrice = this._wizPrice ?? (curPrice !== "" && curPrice !== null ? curPrice : "");
       const wizMotivPct = this._wizMotivPct ?? (curMotivPct !== "" && curMotivPct !== null ? curMotivPct : "");
       const wizEfPrice = this._wizEfPrice ?? wizPrice;
-      const wizEfBonus = this._wizEfBonus ?? (efExpectedRt !== null ? efExpectedRt : bonusT);
-      const wizEfPenalty = this._wizEfPenalty ?? (singleReturnTarget ? "" : penaltyT);
+      const wizEfBonus = this._wizEfBonus ?? (allowBonus ? (efExpectedRt !== null ? efExpectedRt : bonusT) : "");
+      const wizEfPenalty = this._wizEfPenalty ?? (allowBonus && singleReturnTarget ? "" : penaltyT);
       const wizEfMotivPct = this._wizEfMotivPct ?? wizMotivPct;
+      const wizEfForward = this._wizEfForward ?? (fwdSrc === "manual" && fwdTemp !== null ? fwdTemp : "");
       const mitidLiveBox = !hasMitid ? "" : otpCode
         ? `<div class="mitid-box otp" role="region" aria-live="polite"><div>🔑 Indtast denne 4-cifrede engangskode i MitID-appen:</div><div class="otp-digits">${esc(otpCode.split("").join(" "))}</div></div>`
         : (qrSvg ? `<div class="mitid-box qr" role="region" aria-live="polite"><div>📲 Scan QR-koden med MitID-appen på din telefon:</div><div class="qr-wrap"><img id="mitidQrImg" src="${esc(this._qrDataUrl((this._mitidQrFrames || [])[this._mitidQrIdx || 0] || qrSvg))}" alt="MitID QR-kode" /></div><div class="qr-hint">Koden skifter hvert sekund — hold telefonen roligt foran skærmen. Står kortet på samme telefon som MitID-appen, kan QR-koden ikke scannes — slå i stedet engangskoder til i MitID-appen (Menu → Godkend med QR- eller engangskoder → Engangskoder).</div></div>` : "");
@@ -911,8 +926,11 @@
                     <input id="efBonusInput" type="number" step="0.5" value="${esc(wizEfBonus)}" placeholder="${backend === "eforsyning" ? "Auto fra E|Forsyning" : "f.eks. 37"}" />
                   </label>
                   <label class="ob-field">Gebyrgrænse (°C, tom = samme)
-                    <input id="efPenaltyInput" type="number" step="0.5" value="${esc(wizEfPenalty)}" placeholder="Samme som forventet retur" />
+                    <input id="efPenaltyInput" type="number" step="0.5" value="${esc(wizEfPenalty)}" placeholder="${allowBonus ? "Samme som forventet retur" : "Auto fra fremløb"}" />
                   </label>
+                  ${(hasDynamicCurve || fwdTemp !== null) ? `<label class="ob-field">Fremløbstemperatur (°C, 0 = auto)
+                    <input id="efForwardInput" type="number" step="0.5" value="${esc(wizEfForward)}" placeholder="${fwdTemp !== null && fwdSrc === "meter" ? `Auto (${fmtDec(fwdTemp)} °C fra måler)` : "f.eks. 65 (0 = auto)"}" />
+                  </label>` : ""}
                 </div>
                 <div class="tb-actions">
                   <button class="btn" id="saveTariffBtn">💾 Gem pris &amp; returkrav</button>
@@ -1281,8 +1299,8 @@
             </div>
             ${has("temperatures") ? `<div class="kpi">
               <div class="k-lbl">${esc(t.kpi_ret)} ${curYr}</div>
-              <div class="k-val ${rtCur > 0 ? (rtCur < bonusT ? "good" : (rtCur <= penaltyT ? "warn" : "bad")) : ""}">${rtCur > 0 ? `${fmtDec(rtCur)} °C` : "–"}</div>
-              <div class="k-sub">${singleReturnTarget ? (rtCur > 0 ? (rtCur < bonusT ? `🟢 Under krav (<${bonusT} °C)` : (rtCur > penaltyT ? `+${fmtDec(rtCur - penaltyT)} °C over krav (${penaltyT} °C)` : `På forventet retur (${bonusT} °C)`)) : `Forventet retur: ${bonusT} °C`) : (rtCur > 0 ? (rtCur < bonusT ? `🟢 Bonus-zone (<${bonusT} °C)` : `${fmtDec(rtCur - bonusT)} °C til bonus (<${bonusT} °C)`) : `Grænser: <${bonusT}° bonus / >${penaltyT}° gebyr`)}</div>
+              <div class="k-val ${rtCur > 0 ? (!allowBonus ? (rtCur <= penaltyT ? "good" : "bad") : (rtCur < bonusT ? "good" : (rtCur <= penaltyT ? "warn" : "bad"))) : ""}">${rtCur > 0 ? `${fmtDec(rtCur)} °C` : "–"}</div>
+              <div class="k-sub">${!allowBonus ? `${rtCur > 0 ? (rtCur <= penaltyT ? `🟢 OK (≤${penaltyT} °C)` : `+${fmtDec(rtCur - penaltyT)} °C over krav (${penaltyT} °C)`) : `Krav: ≤${penaltyT} °C`}${fwdTemp !== null ? ` · frem ${fmtDec(fwdTemp)} °C` : ""}` : (singleReturnTarget ? (rtCur > 0 ? (rtCur < bonusT ? `🟢 Under krav (<${bonusT} °C)` : (rtCur > penaltyT ? `+${fmtDec(rtCur - penaltyT)} °C over krav (${penaltyT} °C)` : `På forventet retur (${bonusT} °C)`)) : `Forventet retur: ${bonusT} °C`) : (rtCur > 0 ? (rtCur < bonusT ? `🟢 Bonus-zone (<${bonusT} °C)` : `${fmtDec(rtCur - bonusT)} °C til bonus (<${bonusT} °C)`) : `Grænser: <${bonusT}° bonus / >${penaltyT}° gebyr`))}</div>
             </div>` : ""}
             ${has("forecast") ? `<div class="kpi">
               <div class="k-lbl">${esc(t.kpi_fc)}</div>
@@ -1358,13 +1376,13 @@
 
             ${has("temperatures") ? `<div class="panel" data-section="return-temp">
               <div class="p-head">
-                <div class="p-title">${(singleReturnTarget || hasExpMonthly) ? `🎯 Returtemperatur ${curYr} (°C) vs. Forventet retur (${expRangeTxt})${(efExpectedRt !== null || hasExpMonthly) ? " · E|Forsyning" : ""}` : `🎯 Returtemperatur ${curYr} (°C) vs. Bonus (${bonusT}°) &amp; Gebyr (${penaltyT}°)`}</div>
+                <div class="p-title">${(singleReturnTarget || hasExpMonthly) ? `🎯 Returtemperatur ${curYr} (°C) vs. ${!allowBonus ? "Afkølingskrav" : "Forventet retur"} (${expRangeTxt})${hasDynamicCurve ? " · Dynamisk (fremløb)" : (fwdSrc === "manual" ? " · Manuel fremløb" : ((efExpectedRt !== null || hasExpMonthly) ? " · E|Forsyning" : ""))}` : `🎯 Returtemperatur ${curYr} (°C) vs. Bonus (${bonusT}°) &amp; Gebyr (${penaltyT}°)`}</div>
                 <div class="p-leg">
-                  ${(singleReturnTarget || hasExpMonthly) ? `<span><i class="dot" style="background:#22c55e"></i>Under krav (bonus)</span><span><i class="dot" style="background:#ef4444"></i>Over krav (gebyr)</span>` : `<span><i class="dot" style="background:#22c55e"></i>Bonus &lt;${bonusT}°</span><span><i class="dot" style="background:#f59e0b"></i>Neutral</span><span><i class="dot" style="background:#ef4444"></i>Gebyr &gt;${penaltyT}°</span>`}
-                  ${expMList.length >= 2 ? `<span><i class="dot" style="background:#38bdf8"></i>Forventet retur °C</span>` : ""}
+                  ${!allowBonus ? `<span><i class="dot" style="background:#22c55e"></i>OK (≤ krav)</span><span><i class="dot" style="background:#ef4444"></i>Gebyr (&gt; krav)</span>` : ((singleReturnTarget || hasExpMonthly) ? `<span><i class="dot" style="background:#22c55e"></i>Under krav (bonus)</span><span><i class="dot" style="background:#ef4444"></i>Over krav (gebyr)</span>` : `<span><i class="dot" style="background:#22c55e"></i>Bonus &lt;${bonusT}°</span><span><i class="dot" style="background:#f59e0b"></i>Neutral</span><span><i class="dot" style="background:#ef4444"></i>Gebyr &gt;${penaltyT}°</span>`)}
+                  ${expMList.length >= 2 ? `<span><i class="dot" style="background:#38bdf8"></i>${!allowBonus ? "Afkølingskrav °C" : "Forventet retur °C"}</span>` : ""}
                 </div>
               </div>
-              ${this._renderReturnTempSvg(rtM, bonusT, penaltyT, curYr, rtExpM)}
+              ${this._renderReturnTempSvg(rtM, bonusT, penaltyT, curYr, rtExpM, allowBonus)}
             </div>` : ""}
 
             ${has("hourly") ? `<div class="panel" data-section="hourly">
@@ -1375,7 +1393,7 @@
                   <span><i class="dot" style="background:#38bdf8"></i>Retur °C</span>
                 </div>
               </div>
-              ${this._renderHourlyAvgSvg(hr, bonusT, peakInfo)}
+              ${this._renderHourlyAvgSvg(hr, allowBonus ? bonusT : penaltyT, peakInfo)}
             </div>` : ""}
 
             ${has("daily") ? `<div class="panel" data-section="mtd-ytd">
@@ -1419,7 +1437,7 @@
               </div>` : ""}
               ${has("temperatures") ? `<div class="ins" data-section="ins-temp">
                 <div class="ins-title">⚡ Returtemperatur &amp; Afkøling</div>
-                Aktuelt års-snit er <b>${rtCur > 0 ? `${fmtDec(rtCur)} °C` : "–"}</b>${singleReturnTarget ? (rtCur > 0 ? (rtDist < 0 ? ` (🟢 under forventet retur <b>${bonusT} °C</b>)` : (rtCur > penaltyT ? ` (<b>+${fmtDec(rtCur - penaltyT, 1)} °C</b> over forventet retur <b>${penaltyT} °C</b>)` : ` (på forventet retur <b>${bonusT} °C</b>)`)) : ` (forventet retur: <b>${bonusT} °C</b>)`) : (rtCur > 0 ? (rtDist < 0 ? ` (🟢 i bonus-zone under <b>${bonusT} °C</b>)` : ` (<b>${fmtDec(rtDist, 1)} °C</b> fra bonus under <b>${bonusT} °C</b>, gebyr over <b>${penaltyT} °C</b>)`) : ` (bonus under <b>${bonusT} °C</b>, gebyr over <b>${penaltyT} °C</b>)`)}.
+                Aktuelt års-snit er <b>${rtCur > 0 ? `${fmtDec(rtCur)} °C` : "–"}</b>${!allowBonus ? `${rtCur > 0 ? (rtCur <= penaltyT ? ` (🟢 under krav ≤<b>${penaltyT} °C</b> — intet gebyr)` : ` (<b>+${fmtDec(rtCur - penaltyT, 1)} °C</b> over krav <b>${penaltyT} °C</b>)`) : ` (krav: ≤<b>${penaltyT} °C</b>)`}${fwdTemp !== null ? ` ved fremløb <b>${fmtDec(fwdTemp)} °C</b>` : ""}` : (singleReturnTarget ? (rtCur > 0 ? (rtDist < 0 ? ` (🟢 under forventet retur <b>${bonusT} °C</b>)` : (rtCur > penaltyT ? ` (<b>+${fmtDec(rtCur - penaltyT, 1)} °C</b> over forventet retur <b>${penaltyT} °C</b>)` : ` (på forventet retur <b>${bonusT} °C</b>)`)) : ` (forventet retur: <b>${bonusT} °C</b>)`) : (rtCur > 0 ? (rtDist < 0 ? ` (🟢 i bonus-zone under <b>${bonusT} °C</b>)` : ` (<b>${fmtDec(rtDist, 1)} °C</b> fra bonus under <b>${bonusT} °C</b>, gebyr over <b>${penaltyT} °C</b>)`) : ` (bonus under <b>${bonusT} °C</b>, gebyr over <b>${penaltyT} °C</b>)`))}.
               </div>` : ""}
               ${hddEntries.length ? `<div class="ins">
                 <div class="ins-title">📈 Effektivitet pr. graddag (kWh / HDD17)</div>
@@ -1544,6 +1562,7 @@
         ["efBonusInput", "_wizEfBonus"],
         ["efPenaltyInput", "_wizEfPenalty"],
         ["efMotivPctInput", "_wizEfMotivPct"],
+        ["efForwardInput", "_wizEfForward"],
         ["notifyInput", "_wizNotify"],
       ].forEach(([id, prop]) => {
         const el = this.shadowRoot.getElementById(id);
@@ -1562,11 +1581,13 @@
           const bonusVal = numOrNull("efBonusInput");
           if (bonusVal !== null) payload.bonus_temp = bonusVal;
           const penaltyVal = numOrNull("efPenaltyInput");
-          if (penaltyVal !== null && penaltyVal > 0) {
+          if (penaltyVal !== null && (penaltyVal > 0 || !allowBonus)) {
             payload.penalty_temp = penaltyVal;
-          } else if (bonusVal !== null) {
+          } else if (bonusVal !== null && bonusVal > 0) {
             payload.penalty_temp = bonusVal;
           }
+          const fwdVal = numOrNull("efForwardInput");
+          if (fwdVal !== null) payload.forward_temp = fwdVal;
           this._setupOpen = false;
           this._hass.callService("kmd_easy_energy", "configure_utility", payload);
           this._render();
@@ -1669,7 +1690,7 @@
           }
         });
       }
-      ["efPriceInput", "efMotivPctInput", "efBonusInput", "efPenaltyInput"].forEach((id) => {
+      ["efPriceInput", "efMotivPctInput", "efBonusInput", "efPenaltyInput", "efForwardInput"].forEach((id) => {
         const el = this.shadowRoot.getElementById(id);
         if (el && saveTariffBtn) {
           el.addEventListener("keydown", (ev) => {
@@ -1780,7 +1801,9 @@
       if (!this._rendered) this._render();
     }
     _emit(patch) {
-      this._config = { ...this._config, ...patch };
+      const next = { ...this._config, ...patch };
+      Object.keys(next).forEach((k) => { if (next[k] === undefined) delete next[k]; });
+      this._config = next;
       this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: this._config }, bubbles: true, composed: true }));
     }
     _render() {
@@ -1817,11 +1840,11 @@
             </label>
           </div>
           <div class="row">
-            <label>Return Bonus (°C)
-              <input id="bonus_temp" type="number" step="0.5" value="${esc(c.bonus_temp ?? 30)}" />
+            <label>Return Bonus (°C, empty = auto)
+              <input id="bonus_temp" type="number" step="0.5" value="${esc(c.bonus_temp ?? "")}" placeholder="Auto" />
             </label>
-            <label>Return Penalty (°C)
-              <input id="penalty_temp" type="number" step="0.5" value="${esc(c.penalty_temp ?? 40)}" />
+            <label>Return Penalty (°C, empty = auto)
+              <input id="penalty_temp" type="number" step="0.5" value="${esc(c.penalty_temp ?? "")}" placeholder="Auto" />
             </label>
           </div>
           <label class="chk">
@@ -1834,7 +1857,10 @@
         this.shadowRoot.getElementById(id).addEventListener("change", (e) => this._emit({ [id]: e.target.value }));
       });
       ["bonus_temp", "penalty_temp"].forEach((id) => {
-        this.shadowRoot.getElementById(id).addEventListener("change", (e) => this._emit({ [id]: Number(e.target.value) }));
+        this.shadowRoot.getElementById(id).addEventListener("change", (e) => {
+          const raw = e.target.value.trim();
+          this._emit({ [id]: raw === "" ? undefined : Number(raw) });
+        });
       });
       this.shadowRoot.getElementById("show_sync_bar").addEventListener("change", (e) => this._emit({ show_sync_bar: e.target.checked }));
     }

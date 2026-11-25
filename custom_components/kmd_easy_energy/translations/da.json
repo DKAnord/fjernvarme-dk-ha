@@ -136,6 +136,7 @@
           "notify_service": "Mobil push-service (valgfri, til MitID-kode)",
           "bonus_temp": "Forventet retur / bonusgrænse (°C, 0 = fra E|Forsyning / standard)",
           "penalty_temp": "Gebyrgrænse returtemperatur (°C, 0 = samme som forventet / standard)",
+          "forward_temp": "Fremløbstemperatur – manuel overstyring (°C, 0 = automatisk fra måler)",
           "outdoor_temp_entity": "Udetemperatursensor (valgfri)",
           "latitude": "Breddegrad – egen placering (valgfri, Open-Meteo)",
           "longitude": "Længdegrad – egen placering (valgfri, Open-Meteo)",

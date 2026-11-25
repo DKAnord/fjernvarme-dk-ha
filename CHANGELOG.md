@@ -2,6 +2,11 @@
 
 Alle væsentlige ændringer i **Dansk Fjernvarme** (tidligere *Fjernvarme (KMD Easy Energy)*) dokumenteres her.
 
+## [Unreleased]
+
+### Tilføjet & Bekræftet
+- **Dronninglund Fjernvarme tilføjet og bekræftet live + 2026-takst:** Tilføjet som dedikeret ✅ **Bekræftet** E|Forsyning-værk (`dronninglund-fjernvarme`, `forsyningId: 66D241DC-AE10-49F5-A176-81CC8C58BEF7`, `https://eforsyning.dk/dronninglundfjernvarme/`) efter live-verifikation, inkl. automatisk opgradering fra `eforsyning-custom` samt officiel 2026-takst fra [Tarifblad pr. 1. feb. 2026](https://dronninglundfjernvarme.dk/oekonomi-og-referater/tarifblade/aktuelt-tarifblad) (`0,81875 kr./kWh` inkl. moms, fast arealbidrag `25,00 kr./m²/år` inkl. moms, målerleje `750,00 kr./år` inkl. moms og `±1 %/°C` afkølingstarif under `30 °C` / over `40 °C`).
+
 ## [1.2.7] - 2026-11-25
 
 ### Tilføjet

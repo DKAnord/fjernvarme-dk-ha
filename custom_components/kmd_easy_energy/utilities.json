@@ -542,6 +542,34 @@
       ]
     },
     {
+      "id": "dronninglund-fjernvarme",
+      "name": "Dronninglund Fjernvarme",
+      "city": "Dronninglund",
+      "portal_url": "https://eforsyning.dk/dronninglundfjernvarme/",
+      "status": "confirmed",
+      "tier": "confirmed",
+      "auth_method": "Forbrugernummer + webpinkode",
+      "backend": "eforsyning",
+      "eforsyning_supplier_id": "66D241DC-AE10-49F5-A176-81CC8C58BEF7",
+      "latitude": 57.16,
+      "longitude": 10.296,
+      "notes": "E|Forsyning. forsyningid og AppServerUri (https://apiapp.dff-edb.dk/dronninglund/) bekræftet live. Login med forbrugernummer + webpinkode fra regningen; daglige aflæsninger. Tarifblad 2026 (pr. 1. feb. 2026): 818,75 kr./MWh inkl. moms (0,81875 kr./kWh), fast arealbidrag 25,00 kr./m²/år inkl. moms, målerleje 750,00 kr./år inkl. moms og ±1 %/°C afkølingstarif (<= 30 °C / > 40 °C).",
+      "tariffs": [
+        {
+          "year": 2026,
+          "effective_from": "2026-02-01",
+          "price_dkk_per_kwh": 0.81875,
+          "price_dkk_per_m3": null,
+          "fixed_fee_dkk_per_m2_year": 25.0,
+          "motivation_pct_per_k": 1.0,
+          "bonus_temp": 30.0,
+          "penalty_temp": 40.0,
+          "source": "https://dronninglundfjernvarme.dk/oekonomi-og-referater/tarifblade/aktuelt-tarifblad",
+          "source_note": "Tarifblad 01.02.2026–31.12.2026 (https://dronninglundfjernvarme.dk/p/Dronninglund%20Fjernvarmev%C3%A6rk/Filer/Priser/Tarifblad-01.02.2026-31.12.2026.pdf): Energiforbrug 818,75 kr./MWh inkl. moms (655,00 ekskl.) = 0,81875 kr./kWh. Fast arealbidrag 25,00 kr./m²/år inkl. moms (20,00 ekskl.) efter BBR samt årlig målerleje 750,00 kr./år inkl. moms (600,00 ekskl.). Afkølingstarif: -1 %/°C ved årsgennemsnitlig returtemperatur <= 30 °C og +1 %/°C ved > 40 °C (bruger automatisk Forv_Retur fra E|Forsyning hvis oplyst)."
+        }
+      ]
+    },
+    {
       "id": "solrod-fjernvarme",
       "name": "Solrød Fjernvarme",
       "city": "Solrød Strand",

@@ -486,3 +486,59 @@ def test_fixed_subscription_fee_area_and_flat_resolution() -> None:
     )
     assert with_flat.fixed_fee_dkk_per_year == 787.5
     assert with_flat.annual_fixed_fee_dkk == round(41.5625 * 162.0 + 787.5, 2)
+
+
+def test_bundled_utilities_json_has_dronninglund_2026_tariff_and_custom_matching() -> None:
+    from kmd_easy_energy.const import CONF_HEATED_AREA_M2
+    from kmd_easy_energy.tariff import load_utilities, match_utility_for_entry
+
+    utilities = load_utilities()
+    by_id = {u["id"]: u for u in utilities}
+    assert by_id["dronninglund-fjernvarme"]["status"] == "confirmed"
+    assert by_id["dronninglund-fjernvarme"]["tier"] == "confirmed"
+
+    dron_2026 = published_tariff("dronninglund-fjernvarme", 2026, utilities)
+    assert dron_2026 is not None
+    assert dron_2026["price_dkk_per_kwh"] == 0.81875
+    assert dron_2026["fixed_fee_dkk_per_m2_year"] == 25.0
+    assert dron_2026["motivation_pct_per_k"] == 1.0
+    assert dron_2026["bonus_temp"] == 30.0
+    assert dron_2026["penalty_temp"] == 40.0
+    assert dron_2026["source"].startswith("https://dronninglundfjernvarme.dk/")
+
+    by_supplier = match_utility_for_entry(
+        {
+            "utility_id": "eforsyning-custom",
+            "eforsyning_supplier_id": "66d241dc-ae10-49f5-a176-81cc8c58bef7",
+            "portal_url": "https://eforsyning.dk/",
+        },
+        utilities,
+    )
+    assert by_supplier is not None and by_supplier["id"] == "dronninglund-fjernvarme"
+
+    by_portal = match_utility_for_entry(
+        {
+            "utility_id": "eforsyning-custom",
+            "portal_url": "https://eforsyning.dk/dronninglundfjernvarme",
+        },
+        utilities,
+    )
+    assert by_portal is not None and by_portal["id"] == "dronninglund-fjernvarme"
+
+    resolved = resolve_tariff(
+        _entry(
+            options={CONF_HEATED_AREA_M2: 140.0},
+            data={
+                "utility_id": "eforsyning-custom",
+                "portal_url": "https://eforsyning.dk/dronninglundfjernvarme/",
+            },
+        ),
+        today=date(2026, 11, 25),
+        utilities=utilities,
+    )
+    assert resolved.utility_id == "dronninglund-fjernvarme"
+    assert resolved.price_dkk_per_kwh == 0.81875
+    assert resolved.fixed_fee_dkk_per_m2_year == 25.0
+    assert resolved.annual_fixed_fee_dkk == 3500.0
+    assert resolved.motivation_pct_per_k == 1.0
+    assert resolved.motivation_dkk_per_kwh_per_k == round(0.81875 * 0.01, 6)

@@ -2,6 +2,15 @@
 
 Alle væsentlige ændringer i **Dansk Fjernvarme** (tidligere *Fjernvarme (KMD Easy Energy)*) dokumenteres her.
 
+## [1.2.8] - 2026-11-25
+
+### Tilføjet & Bekræftet
+- **Dronninglund Fjernvarme tilføjet og bekræftet live + 2026-takst:** Tilføjet som dedikeret ✅ **Bekræftet** E|Forsyning-værk (`dronninglund-fjernvarme`, `forsyningId: 66D241DC-AE10-49F5-A176-81CC8C58BEF7`, `https://eforsyning.dk/dronninglundfjernvarme/`) efter live-verifikation, inkl. automatisk opgradering fra `eforsyning-custom` samt officiel 2026-takst fra [Tarifblad pr. 1. feb. 2026](https://dronninglundfjernvarme.dk/oekonomi-og-referater/tarifblade/aktuelt-tarifblad) (`0,81875 kr./kWh` inkl. moms, fast arealbidrag `25,00 kr./m²/år` inkl. moms, målerleje `750,00 kr./år` inkl. moms og `±1 %/°C` afkølingstarif under `30 °C` / over `40 °C`).
+- **Officielle 2026/2027-takster tilføjet til 25 yderligere værker (nu 35/40 værker med indbyggede takster):** Bl.a. det bekræftede værk **Aalborg Forsyning** (`0,95625 kr./kWh`, `14,00 kr./m²/år`, `±2 %/°C`), **Galten Varmeværk**, **Struer Energi**, **Vestforsyning**, **Kalundborg Forsyning**, **Albertslund Forsyning**, **Nykøbing Sjælland Varmeværk**, **Forsyning Helsingør**, **Hjørring Varmeforsyning**, **Fjernvarme Horsens**, **Vestforbrænding**, **Egedal Fjernvarme**, **Fredericia Fjernvarme**, **Vejle Fjernvarme**, **Sønderborg Varme**, **Avedøre Fjernvarme**, **Solrød Fjernvarme**, **Thisted Varmeforsyning**, **Assens Fjernvarme**, **Ringkøbing Fjernvarme**, **Hvide Sande Fjernvarme**, **Kibæk Varmeværk**, **Kjellerup Fjernvarme**, **Ansager Varmeværk** og **Dianalund Fjernvarme**.
+
+### Oprydning
+- **Fjernet 5 ikke-fjernvarmeværker fra værklisten:** `lef`, `provas`, `skanderborg-forsyning`, `samn` og `go-energi` (leverer kun vand/spildevand/affald/el — ikke fjernvarme).
+
 ## [1.2.7] - 2026-11-25
 
 ### Tilføjet

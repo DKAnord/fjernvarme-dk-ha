@@ -13,9 +13,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Upload kmd-easy-energy-card.js to Release
+      - name: Package custom_components/kmd_easy_energy into kmd_easy_energy.zip
+        run: git archive --format=zip -o kmd_easy_energy.zip HEAD:custom_components/kmd_easy_energy
+      - name: Upload kmd_easy_energy.zip and kmd-easy-energy-card.js to Release
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/kmd-easy-energy-card.js
+          files: |
+            kmd_easy_energy.zip
+            dist/kmd-easy-energy-card.js
           generate_release_notes: true
           prerelease: ${{ contains(github.ref_name, '-') }}

@@ -1099,6 +1099,21 @@ class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         state["temp_source"] = outdoor.get("source")
         state["backend_capabilities"] = sorted(self.backend_capabilities)
         state["capabilities"] = self.capabilities(state)
+        if not state.get("available_units") and self.backend in (BACKEND_WATTSON, BACKEND_EFORSYNING):
+            caps = set(state.get("capabilities") or ())
+            inferred_units: list[dict[str, str]] = []
+            if (
+                caps & {"hourly", "daily", "monthly"}
+                or state.get("hourly_kwh")
+                or state.get("daily_kwh_history")
+            ):
+                inferred_units.append({"Name": "kWh"})
+            if "volume" in caps:
+                inferred_units.append({"Name": "m3"})
+            if "temperatures" in caps:
+                inferred_units.append({"Name": "°C"})
+            if inferred_units:
+                state["available_units"] = inferred_units
 
     async def _async_update_data(self) -> dict[str, Any]:
         """Return cached data only. Never contacts KMD (no background polling).

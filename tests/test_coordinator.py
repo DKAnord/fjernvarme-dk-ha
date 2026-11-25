@@ -89,6 +89,7 @@ def make_coordinator(tmp_path: Path, store: FakeStore | None = None, **entry_dat
         coord.mitid_qr_svg = None
         coord.mitid_qr_frames = []
         coord._sync_task = None
+        coord.backend = str(entry.data.get("backend") or "kmd")
         coord.data = {}
         coord.logger = MagicMock()
         coord.name = "kmd_easy_energy"
@@ -711,3 +712,30 @@ async def test_initialize_cache_migrates_unscaled_mwh_kmd_cache(tmp_path: Path) 
     # Subsequent cache-only update must not double-scale
     state2 = await coord._async_update_data()
     assert state2["annual"]["2026"] == 12000
+
+
+@pytest.mark.asyncio
+async def test_enrich_derived_backfills_available_units_for_cached_wattson_state(tmp_path: Path) -> None:
+    store = FakeStore(
+        {
+            "monthly": {"2026": {"Nov": 420.0}},
+            "daily_kwh_history": {"2026-11-24": 18.5},
+            "hourly_kwh": [{"DateFrom": "2026-11-24T00:00:00+01:00", "Value": 0.8, "IsComplete": True}],
+            "hourly": {"period": "nov-2026 MTD (1 dage)", "days_averaged": 1, "kwh": [0.8] * 24},
+            "hourly_m3": [{"DateFrom": "2026-11-24T00:00:00+01:00", "Value": 0.05, "IsComplete": True}],
+            "hourly_temp": [{"DateFrom": "2026-11-24T00:00:00+01:00", "Value": 34.5, "IsComplete": True}],
+            "has_direct_temp": True,
+            "wattson": {"detected": ["daily", "hourly", "monthly", "temperatures", "volume"]},
+        }
+    )
+    coord, _, _, _ = make_coordinator(
+        tmp_path,
+        store=store,
+        backend="wattson",
+        utility="Hillerød Forsyning",
+        utility_id="hillerod-forsyning",
+        portal_url="https://hfors.dk/selvbetjening/se-forbrug-regninger/watts-on-din-forbrugsapp-til-vand-varme",
+    )
+
+    state = await coord._async_update_data()
+    assert state["available_units"] == [{"Name": "kWh"}, {"Name": "m3"}, {"Name": "°C"}]

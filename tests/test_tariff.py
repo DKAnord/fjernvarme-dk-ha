@@ -257,3 +257,72 @@ def test_bundled_utilities_json_has_beof_2026_tariff() -> None:
     assert resolved.price_dkk_per_kwh == 0.7275
     assert resolved.motivation_pct_per_k == 1.0
     assert resolved.motivation_dkk_per_kwh_per_k == round(0.7275 * 0.01, 6)
+
+
+def test_bundled_utilities_json_has_hedensted_and_hillerod_2026_tariffs() -> None:
+    from kmd_easy_energy.tariff import load_utilities, match_utility_for_entry
+
+    utilities = load_utilities()
+    by_id = {u["id"]: u for u in utilities}
+    assert by_id["hedensted-fjernvarme"]["status"] == "confirmed"
+    assert by_id["hillerod-forsyning"]["status"] == "confirmed"
+
+    hed_2026 = published_tariff("hedensted-fjernvarme", 2026, utilities)
+    assert hed_2026 is not None
+    assert hed_2026["price_dkk_per_kwh"] == 0.93125
+    assert hed_2026["motivation_pct_per_k"] == 2.0
+    assert hed_2026["bonus_temp"] == 40.0
+    assert hed_2026["penalty_temp"] == 40.0
+    assert hed_2026["source"].startswith("https://hedensted-fjernvarme.dk/")
+
+    by_supplier = match_utility_for_entry(
+        {
+            "utility_id": "eforsyning-custom",
+            "eforsyning_supplier_id": "4f2200af-8833-4237-81d9-e5cef34582a2",
+            "portal_url": "https://eforsyning.dk/",
+        },
+        utilities,
+    )
+    assert by_supplier is not None and by_supplier["id"] == "hedensted-fjernvarme"
+
+    by_portal = match_utility_for_entry(
+        {
+            "utility_id": "eforsyning-custom",
+            "portal_url": "https://eforsyning.dk/hedenstedfjernvarme",
+        },
+        utilities,
+    )
+    assert by_portal is not None and by_portal["id"] == "hedensted-fjernvarme"
+
+    hed_resolved = resolve_tariff(
+        _entry(
+            data={
+                "utility_id": "eforsyning-custom",
+                "portal_url": "https://eforsyning.dk/hedenstedfjernvarme/",
+            }
+        ),
+        today=date(2026, 11, 25),
+        utilities=utilities,
+    )
+    assert hed_resolved.utility_id == "hedensted-fjernvarme"
+    assert hed_resolved.price_dkk_per_kwh == 0.93125
+    assert hed_resolved.motivation_pct_per_k == 2.0
+    assert hed_resolved.motivation_dkk_per_kwh_per_k == round(0.93125 * 0.02, 6)
+
+    hil_2026 = published_tariff("hillerod-forsyning", 2026, utilities)
+    assert hil_2026 is not None
+    assert hil_2026["price_dkk_per_kwh"] == 0.67
+    assert hil_2026["motivation_pct_per_k"] == 1.0
+    assert hil_2026["source"].startswith("https://hfors.dk/")
+
+    hil_resolved = resolve_tariff(
+        _entry(data={"utility_id": "hillerod-forsyning"}),
+        today=date(2026, 11, 25),
+        utilities=utilities,
+    )
+    assert hil_resolved.price_dkk_per_kwh == 0.67
+    assert hil_resolved.motivation_pct_per_k == 1.0
+    assert hil_resolved.motivation_dkk_per_kwh_per_k == round(0.67 * 0.01, 6)
+
+    hil_2027 = published_tariff("hillerod-forsyning", 2027, utilities)
+    assert hil_2027 is not None and hil_2027["price_dkk_per_kwh"] == 0.75

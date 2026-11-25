@@ -401,10 +401,11 @@ def test_utilities_json_backend_field_and_hjorring() -> None:
     assert fh["tier"] == "confirmed"
 
     eforsyning = {u["id"] for u in data["utilities"] if u.get("backend") == "eforsyning"}
-    assert len(eforsyning) == 23
+    assert len(eforsyning) == 24
     assert eforsyning >= {
         "soroe-fjernvarme",
         "hadsund-fjernvarme",
+        "hedensted-fjernvarme",
         "hjorring-varmeforsyning",
         "fjernvarme-horsens",
         "vestforbraending",
@@ -417,6 +418,11 @@ def test_utilities_json_backend_field_and_hjorring() -> None:
     assert hadsund["tier"] == "confirmed"
     assert hadsund["eforsyning_supplier_id"] == "49C73776-76BE-4382-BA5C-2B4E7384CC34"
     assert hadsund["portal_url"] == "https://eforsyning.dk/hadsundfjernvarme/"
+    hedensted = by_id["hedensted-fjernvarme"]
+    assert hedensted["status"] == "confirmed"
+    assert hedensted["tier"] == "confirmed"
+    assert hedensted["eforsyning_supplier_id"] == "4F2200AF-8833-4237-81D9-E5CEF34582A2"
+    assert hedensted["portal_url"] == "https://eforsyning.dk/hedenstedfjernvarme/"
     for uid in eforsyning:
         u = by_id[uid]
         assert is_uuid(u["eforsyning_supplier_id"]), uid
@@ -426,6 +432,8 @@ def test_utilities_json_backend_field_and_hjorring() -> None:
     wattson = {u["id"] for u in data["utilities"] if u.get("backend") == "wattson"}
     others = eforsyning | wattson
     assert wattson >= {"aalborg-forsyning", "forsyning-helsingor", "fjernvarme-fyn", "hillerod-forsyning"}
+    assert by_id["hillerod-forsyning"]["status"] == "confirmed"
+    assert by_id["hillerod-forsyning"]["tier"] == "confirmed"
     assert all(u["backend"] == "kmd" for k, u in by_id.items() if k not in others)
 
 

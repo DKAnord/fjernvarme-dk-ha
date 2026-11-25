@@ -2,6 +2,15 @@
 
 Alle væsentlige ændringer i **Dansk Fjernvarme** (tidligere *Fjernvarme (KMD Easy Energy)*) dokumenteres her.
 
+## [1.2.4] - 2026-11-25
+
+### Tilføjet & Bekræftet
+- **Hillerød Forsyning bekræftet live + 2026/2027-takst ([issue #34](https://github.com/DKAnord/fjernvarme-dk-ha/issues/34)):** Markeret som ✅ **Bekræftet** efter første live-verifikation på Watts On fra `@MichaelDepner`, inkl. officielle 2026/2027-takster (`0,67 kr./kWh` inkl. moms i 2026, `0,75 kr./kWh` i 2027 samt `1 %/°C` afkølingstarif fra [Hillerød Forsyning Priser & takster 2026](https://hfors.dk/selvbetjening/priser-takster-2026)).
+- **Hedensted Fjernvarme tilføjet og bekræftet live + 2026/2027-takst ([issue #35](https://github.com/DKAnord/fjernvarme-dk-ha/issues/35)):** Tilføjet som dedikeret ✅ **Bekræftet** E|Forsyning-værk (`hedensted-fjernvarme`, `forsyningId: 4F2200AF-8833-4237-81D9-E5CEF34582A2`) efter live-verifikation fra `@henningpetersen` (`kWh, m3, °C`), inkl. automatisk opgradering fra `eforsyning-custom` samt officielle 2026/2027-takster (`0,93125 kr./kWh` inkl. moms pr. 1. nov. 2026 / `0,85 kr./kWh` jan–okt 2026 og `2 %/°C` motivationstarif over `40 °C` + automatisk `Forv_Retur` fra [Hedensted Fjernvarmes prisliste 2026](https://hedensted-fjernvarme.dk/oekonomi/priser)).
+
+### Forbedret
+- **Automatisk `available_units`-backfill fra eksisterende cache ([issue #34](https://github.com/DKAnord/fjernvarme-dk-ha/issues/34)):** Eksisterende Watts On- og E|Forsyning-installationer, hvis cache stammer fra før `v1.2.3`, får nu efterudfyldt `available_units` (`kWh`, `m3`, `°C`) direkte ved opstart i `_enrich_derived()` ud fra registrerede kapabiliteter og historik.
+
 ## [1.2.3] - 2026-11-24
 
 ### Tilføjet

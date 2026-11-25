@@ -489,6 +489,44 @@
       ]
     },
     {
+      "id": "hedensted-fjernvarme",
+      "name": "Hedensted Fjernvarme",
+      "city": "Hedensted",
+      "portal_url": "https://eforsyning.dk/hedenstedfjernvarme/",
+      "status": "confirmed",
+      "tier": "confirmed",
+      "auth_method": "Forbrugernummer + webpinkode",
+      "backend": "eforsyning",
+      "eforsyning_supplier_id": "4F2200AF-8833-4237-81D9-E5CEF34582A2",
+      "latitude": 55.77,
+      "longitude": 9.701,
+      "notes": "E|Forsyning. forsyningid og AppServerUri (https://apiapp.dff-edb.dk/hedensted/) bekræftet live i issue #35 af @henningpetersen (kWh, m3, °C). Login med forbrugernummer + webpinkode fra regningen; daglige aflæsninger. Prisliste 2026: 931,25 kr./MWh inkl. moms pr. 1. nov. 2026 (850,00 kr./MWh jan–okt 2026) og 2 %/°C motivationstarif ved overskridelse af maksimal returtemperatur.",
+      "tariffs": [
+        {
+          "year": 2026,
+          "effective_from": "2026-11-01",
+          "price_dkk_per_kwh": 0.93125,
+          "price_dkk_per_m3": null,
+          "motivation_pct_per_k": 2.0,
+          "bonus_temp": 40.0,
+          "penalty_temp": 40.0,
+          "source": "https://hedensted-fjernvarme.dk/oekonomi/priser",
+          "source_note": "Prisliste 2026 (https://hedensted-fjernvarme.dk/p/Hedensted%20Fjernvarme/Priser/Prisliste-2026.pdf): Forbrugsbidrag 931,25 kr./MWh inkl. moms (745,00 ekskl.) pr. 1. nov. 2026 (0,93125 kr./kWh; 850,00 kr./MWh = 0,85 kr./kWh inkl. moms i jan–okt 2026). Motivationstarif: 2 %/°C ved højere årsgennemsnitlig returtemperatur end tilladt (40 °C ved >= 60 °C fremløb; bruger automatisk Forv_Retur fra E|Forsyning)."
+        },
+        {
+          "year": 2027,
+          "effective_from": "2027-01-01",
+          "price_dkk_per_kwh": 0.93125,
+          "price_dkk_per_m3": null,
+          "motivation_pct_per_k": 2.0,
+          "bonus_temp": 40.0,
+          "penalty_temp": 40.0,
+          "source": "https://hedensted-fjernvarme.dk/oekonomi/priser",
+          "source_note": "Videreført fra 1. nov. 2026-takst: 931,25 kr./MWh inkl. moms = 0,93125 kr./kWh og 2 %/°C motivationstarif."
+        }
+      ]
+    },
+    {
       "id": "solrod-fjernvarme",
       "name": "Solrød Fjernvarme",
       "city": "Solrød Strand",
@@ -681,15 +719,38 @@
       "name": "Hillerød Forsyning",
       "city": "Hillerød",
       "portal_url": "https://hfors.dk/selvbetjening/se-forbrug-regninger/watts-on-din-forbrugsapp-til-vand-varme",
-      "status": "pending_test",
-      "tier": "verified_portal",
+      "status": "confirmed",
+      "tier": "confirmed",
       "auth_method": "Watts On-konto (browser-login, ingen MitID)",
       "backend": "wattson",
       "latitude": 55.927,
       "longitude": 12.3,
-      "notes": "Watts On (eksperimentel, ikke testet live). Verificeret på hfors.dk for fjernvarme og vand (forbrug med 24 t forsinkelse, frem-/returtemperatur og varmeudnyttelse). Par først varmemåleren i Watts On-appen med kundenummer + målernummer.",
-      "tariffs": []
+      "notes": "Watts On. Bekræftet live i issue #34 af @MichaelDepner. Par først varmemåleren i Watts On-appen med kundenummer + målernummer. Takstblad 2026: 670,00 kr./MWh inkl. moms (0,67 kr./kWh; 2027: 750,00 kr./MWh = 0,75 kr./kWh) og 1 %/°C afkølingstarif.",
+      "tariffs": [
+        {
+          "year": 2026,
+          "effective_from": "2026-01-01",
+          "price_dkk_per_kwh": 0.67,
+          "price_dkk_per_m3": null,
+          "motivation_pct_per_k": 1.0,
+          "bonus_temp": 35.0,
+          "penalty_temp": 40.0,
+          "source": "https://hfors.dk/selvbetjening/priser-takster-2026",
+          "source_note": "Takstblad 2026 (https://hfors.dk/files/media/document/Hiller%C3%B8d%20varme%20-%20takstblad%202026.pdf): Forbrugsbidrag 670,00 kr./MWh inkl. moms (536,00 ekskl.) = 0,67 kr./kWh. Afkølingstarif: 1 % pr. °C manglende afkøling ift. husstandens afkølingskrav (afhænger af fremløbstemperatur; 40 °C ved 65 °C fremløb, 37 °C ved 70–79 °C)."
+        },
+        {
+          "year": 2027,
+          "effective_from": "2027-01-01",
+          "price_dkk_per_kwh": 0.75,
+          "price_dkk_per_m3": null,
+          "motivation_pct_per_k": 1.0,
+          "bonus_temp": 35.0,
+          "penalty_temp": 40.0,
+          "source": "https://hfors.dk/selvbetjening/priser-takster-2026",
+          "source_note": "Anmeldt 2027-varmepris: 750,00 kr./MWh inkl. moms (600,00 ekskl.) = 0,75 kr./kWh og 1 %/°C afkølingstarif."
+        }
+      ]
     }
   ],
-  "last_updated": "2026-11-24"
+  "last_updated": "2026-11-25"
 }

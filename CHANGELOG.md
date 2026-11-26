@@ -4,6 +4,9 @@ Alle væsentlige ændringer i **Dansk Fjernvarme** (tidligere *Fjernvarme (KMD E
 
 ## [1.3.1] - 2026-11-26
 
+### Tilføjet & Bekræftet
+- **Kongerslev Fjernvarme tilføjet og bekræftet live + 2026/2027-takst ([issue #40](https://github.com/DKAnord/fjernvarme-dk-ha/issues/40), tak til `@cokeman0`):** Tilføjet som dedikeret ✅ **Bekræftet** E|Forsyning-værk (`kongerslev-fjernvarme`, `forsyningId: 4A530E73-227F-4ACB-9D9B-A84905470921`, `https://eforsyning.dk/kongerslev/`) med automatisk opgradering fra `eforsyning-custom` samt officiel 2026/2027-takst fra [Takstblad 2026–2027](https://kongerslevfjernvarme.dk/oekonomi/priser) (`0,6875 kr./kWh` inkl. moms pr. 1. sep. 2026–30. jun. 2027 og `±3 %/°C` incitamentstarif under `30 °C` / over `37 °C` ved `> 65 °C` fremløb; bruger automatisk `Forv_Retur` fra E|Forsyning hvis oplyst).
+
 ### Sikkerhed & Privatliv (opfølgning på HACS-review [`hacs/default#14752`](https://github.com/hacs/default/pull/14752))
 - **Kryptografisk SRP-tilfældighed (`mitid_browserclient/CustomSRP.py`):** Skiftet fra `random.getrandbits(256)` til `secrets.randbits(256)` ved generering af SRP-hemmeligheden (`a`).
 - **Fjernet MitID Bruger-ID fra fejllogs (`mitid_browserclient/BrowserClient.py`):** `user_id` skrives ikke længere til Home Assistant-fejlloggen ved mislykket identifikation eller authenticator-opslag, så bruger-ID'et ikke ender i delte logs eller fejlrapporter.

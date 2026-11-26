@@ -646,3 +646,60 @@ def test_bundled_utilities_json_has_kalundborg_confirmed_and_tariff() -> None:
     assert t26.motivation_dkk_per_kwh_per_k == 0.00375
     assert t26.bonus_temp == 45.0
     assert t26.penalty_temp == 45.0
+
+
+def test_bundled_utilities_json_has_kongerslev_2026_2027_tariff_and_custom_matching() -> None:
+    from kmd_easy_energy.tariff import load_utilities, match_utility_for_entry
+
+    utilities = load_utilities()
+    by_id = {u["id"]: u for u in utilities}
+    kong = by_id["kongerslev-fjernvarme"]
+    assert kong["status"] == "confirmed"
+    assert kong["tier"] == "confirmed"
+    assert kong["eforsyning_supplier_id"] == "4A530E73-227F-4ACB-9D9B-A84905470921"
+    assert kong["portal_url"] == "https://eforsyning.dk/kongerslev/"
+
+    for year in (2026, 2027):
+        t = published_tariff("kongerslev-fjernvarme", year, utilities)
+        assert t is not None
+        assert t["price_dkk_per_kwh"] == 0.6875
+        assert t["motivation_pct_per_k"] == 3.0
+        assert t["bonus_temp"] == 30.0
+        assert t["penalty_temp"] == 37.0
+        assert t["source"].startswith("https://kongerslevfjernvarme.dk/")
+
+    by_supplier = match_utility_for_entry(
+        {
+            "utility_id": "eforsyning-custom",
+            "eforsyning_supplier_id": "4a530e73-227f-4acb-9d9b-a84905470921",
+            "portal_url": "https://eforsyning.dk/",
+        },
+        utilities,
+    )
+    assert by_supplier is not None and by_supplier["id"] == "kongerslev-fjernvarme"
+
+    by_portal = match_utility_for_entry(
+        {
+            "utility_id": "eforsyning-custom",
+            "portal_url": "https://eforsyning.dk/kongerslev",
+        },
+        utilities,
+    )
+    assert by_portal is not None and by_portal["id"] == "kongerslev-fjernvarme"
+
+    resolved = resolve_tariff(
+        _entry(
+            data={
+                "utility_id": "eforsyning-custom",
+                "portal_url": "https://eforsyning.dk/kongerslev/",
+            },
+        ),
+        today=date(2026, 11, 26),
+        utilities=utilities,
+    )
+    assert resolved.utility_id == "kongerslev-fjernvarme"
+    assert resolved.price_dkk_per_kwh == 0.6875
+    assert resolved.motivation_pct_per_k == 3.0
+    assert resolved.motivation_dkk_per_kwh_per_k == round(0.6875 * 0.03, 6)
+    assert resolved.bonus_temp == 30.0
+    assert resolved.penalty_temp == 37.0

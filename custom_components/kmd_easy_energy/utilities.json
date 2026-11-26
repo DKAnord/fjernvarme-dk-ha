@@ -745,6 +745,44 @@
       ]
     },
     {
+      "id": "kongerslev-fjernvarme",
+      "name": "Kongerslev Fjernvarme",
+      "city": "Kongerslev",
+      "portal_url": "https://eforsyning.dk/kongerslev/",
+      "status": "confirmed",
+      "tier": "confirmed",
+      "auth_method": "Forbrugernummer + webpinkode",
+      "backend": "eforsyning",
+      "eforsyning_supplier_id": "4A530E73-227F-4ACB-9D9B-A84905470921",
+      "latitude": 56.885,
+      "longitude": 10.119,
+      "notes": "E|Forsyning. forsyningid og AppServerUri (https://apiapp.dff-edb.dk/kongerslev/) bekræftet live (issue #40). Login med forbrugernummer + webpinkode fra regningen; daglige aflæsninger. Takstblad 2026–2027 (pr. 1. sep. 2026–30. jun. 2027): 0,6875 kr./kWh inkl. moms (0,550 ekskl.; jul–aug 2026: 0,6625 kr./kWh inkl. moms), trindelt fast arealbidrag (33,75 kr./m²/år 0–100 m², 18,75 kr./m²/år over 100 m² inkl. moms), abonnement 500,00 kr./år inkl. moms samt ±3 %/°C incitamentstarif (under 30 °C / over 37 °C ved > 65 °C fremløb).",
+      "tariffs": [
+        {
+          "year": 2026,
+          "effective_from": "2026-09-01",
+          "price_dkk_per_kwh": 0.6875,
+          "price_dkk_per_m3": null,
+          "motivation_pct_per_k": 3.0,
+          "bonus_temp": 30.0,
+          "penalty_temp": 37.0,
+          "source": "https://kongerslevfjernvarme.dk/oekonomi/priser",
+          "source_note": "Takstblad 2026–2027 (01.07.2026–30.06.2027, https://kongerslevfjernvarme.dk/p/Kongerslev%20Fjernvarme/Takstblad-2026-2027.pdf): Variabel varmepris pr. 1. sep. 2026 er 0,550 kr./kWh ekskl. moms / 0,6875 kr./kWh inkl. moms (1. jul.–31. aug. 2026: 0,530 ekskl. / 0,6625 kr./kWh inkl. moms). Trindelt fast BBR-arealbidrag (ikke flad m²-sats): 0–100 m² = 27,00 ekskl. / 33,75 kr./m²/år inkl. moms; over 100 m² = 15,00 ekskl. / 18,75 kr./m²/år inkl. moms. Abonnement: 400,00 ekskl. / 500,00 kr./år inkl. moms. Incitamentstarif (ved > 65 °C fremløb): -3,00 %/°C under 30 °C retur og +3,00 %/°C over 37 °C retur (+0,5 °C på grænserne pr. 1 °C lavere fremløb under 65 °C; bruger automatisk Forv_Retur fra E|Forsyning hvis oplyst)."
+        },
+        {
+          "year": 2027,
+          "effective_from": "2027-01-01",
+          "price_dkk_per_kwh": 0.6875,
+          "price_dkk_per_m3": null,
+          "motivation_pct_per_k": 3.0,
+          "bonus_temp": 30.0,
+          "penalty_temp": 37.0,
+          "source": "https://kongerslevfjernvarme.dk/oekonomi/priser",
+          "source_note": "Videreført fra Takstblad 2026–2027 (gældende t.o.m. 30.06.2027): 0,550 kr./kWh ekskl. moms / 0,6875 kr./kWh inkl. moms samt ±3,00 %/°C incitamentstarif (< 30 °C / > 37 °C ved > 65 °C fremløb; bruger automatisk Forv_Retur fra E|Forsyning hvis oplyst)."
+        }
+      ]
+    },
+    {
       "id": "solrod-fjernvarme",
       "name": "Solrød Fjernvarme",
       "city": "Solrød Strand",

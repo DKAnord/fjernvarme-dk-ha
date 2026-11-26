@@ -292,13 +292,14 @@ class BrowserClient:
 
         if r.status_code != 200:
             _LOGGER.error(
-                f"Received status code ({r.status_code}) while attempting to identify as user ({user_id})"
+                "Received status code (%s) while attempting to identify MitID user",
+                r.status_code,
             )
             if (
                 r.status_code == 400
                 and r.json()["errorCode"] == "control.identity_not_found"
             ):
-                _LOGGER.error(f"User '{user_id}' does not exist.")
+                _LOGGER.error("MitID user does not exist.")
                 raise Exception(r.content)
 
             if (
@@ -317,7 +318,8 @@ class BrowserClient:
 
         if r.status_code != 200:
             _LOGGER.error(
-                f"Received status code ({r.status_code}) while attempting to get authenticators for user ({user_id})"
+                "Received status code (%s) while attempting to get authenticators for MitID user",
+                r.status_code,
             )
             raise Exception(r.content)
 
@@ -431,7 +433,8 @@ class BrowserClient:
 
         if r.status_code != 200:
             _LOGGER.error(
-                f"Received status code ({r.status_code}) while attempting to get authenticators for user ({self.user_id})"
+                "Received status code (%s) while attempting to get authenticators for MitID user",
+                r.status_code,
             )
             raise Exception(r.content)
 

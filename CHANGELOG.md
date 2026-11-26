@@ -2,6 +2,13 @@
 
 Alle væsentlige ændringer i **Dansk Fjernvarme** (tidligere *Fjernvarme (KMD Easy Energy)*) dokumenteres her.
 
+## [1.3.1] - 2026-11-26
+
+### Sikkerhed & Privatliv (opfølgning på HACS-review [`hacs/default#14752`](https://github.com/hacs/default/pull/14752))
+- **Kryptografisk SRP-tilfældighed (`mitid_browserclient/CustomSRP.py`):** Skiftet fra `random.getrandbits(256)` til `secrets.randbits(256)` ved generering af SRP-hemmeligheden (`a`).
+- **Fjernet MitID Bruger-ID fra fejllogs (`mitid_browserclient/BrowserClient.py`):** `user_id` skrives ikke længere til Home Assistant-fejlloggen ved mislykket identifikation eller authenticator-opslag, så bruger-ID'et ikke ender i delte logs eller fejlrapporter.
+- **Kortressource:** Opdateret cache-busting ressource-URL til `/kmd_easy_energy/kmd-easy-energy-card.js?v=1.3.1`.
+
 ## [1.3.0] - 2026-11-26
 
 ### Ændret & Sikkerhed (HACS review `#14752`)

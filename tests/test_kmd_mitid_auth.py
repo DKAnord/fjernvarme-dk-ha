@@ -475,3 +475,74 @@ def test_start_session_translates_parallel_app_sessions() -> None:
     with pytest.raises(RuntimeError) as exc:
         _start_session_with_browser_client(err)
     assert str(exc.value) == MSG_MITID_PARALLEL_SESSION
+
+
+def test_custom_srp_uses_secrets_randbits() -> None:
+    """SRP ephemeral secret `a` must use cryptographic `secrets.randbits(256)`."""
+    import importlib
+    from pathlib import Path
+
+    custom_srp_mod = importlib.import_module("kmd_easy_energy.mitid_browserclient.CustomSRP")
+
+    assert not hasattr(custom_srp_mod, "random")
+    src = Path(custom_srp_mod.__file__).read_text()
+    assert "secrets.randbits(256)" in src
+    assert "random.getrandbits" not in src
+
+    with patch.object(custom_srp_mod.secrets, "randbits", return_value=123456789) as mock_randbits:
+        srp = custom_srp_mod.CustomSRP()
+        res = srp.SRPStage1()
+
+    mock_randbits.assert_called_once_with(256)
+    assert srp.a == 123456789
+    assert res == format(pow(2, 123456789, srp.N), "x")
+
+
+def test_browser_client_never_logs_mitid_user_id(caplog: pytest.LogCaptureFixture) -> None:
+    """BrowserClient must never write the MitID user ID to logger output on failure."""
+    import logging
+
+    from kmd_easy_energy.mitid_browserclient.BrowserClient import BrowserClient
+
+    secret_uid = "sensitive-mitid-user-98765"
+
+    def _new_client(put_resp=None, post_resp=None) -> BrowserClient:
+        client = BrowserClient.__new__(BrowserClient)
+        client.authentication_session_id = "sess-1"
+        client.current_authenticator_type = "TOKEN"
+        client.combination_ids = {}
+        client.user_id = secret_uid
+        client.session = SimpleNamespace(
+            put=lambda *a, **k: put_resp,
+            post=lambda *a, **k: post_resp,
+        )
+        return client
+
+    with caplog.at_level(
+        logging.DEBUG,
+        logger="kmd_easy_energy.mitid_browserclient.BrowserClient",
+    ):
+        # 1) PUT fails with control.identity_not_found -> triggers lines 294 & 301
+        put_400 = SimpleNamespace(
+            status_code=400,
+            content=b'{"errorCode":"control.identity_not_found"}',
+            json=lambda: {"errorCode": "control.identity_not_found"},
+        )
+        with pytest.raises(Exception):
+            _new_client(put_resp=put_400).identify_as_user_and_get_available_authenticators(secret_uid)
+
+        # 2) PUT succeeds, POST /next fails -> triggers line 319
+        put_200 = SimpleNamespace(status_code=200)
+        post_500 = SimpleNamespace(status_code=500, content=b"err")
+        with pytest.raises(Exception):
+            _new_client(put_resp=put_200, post_resp=post_500).identify_as_user_and_get_available_authenticators(
+                secret_uid
+            )
+
+        # 3) __select_authenticator POST /next fails -> triggers line 433
+        with pytest.raises(Exception):
+            _new_client(post_resp=post_500)._BrowserClient__select_authenticator("APP")
+
+    error_records = [rec for rec in caplog.records if rec.levelno >= logging.ERROR]
+    assert len(error_records) >= 4
+    assert secret_uid not in caplog.text

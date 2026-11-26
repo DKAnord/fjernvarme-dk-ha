@@ -14,12 +14,16 @@ Log ind med **MitID direkte i Home Assistant** i ren Python (OIDC PKCE + NemLog-
 ## 📸 Screenshots & Demo
 
 <p align="center">
-  <img src="docs/screenshots/kmd-fjernvarme-demo.gif" alt="KMD Fjernvarme HA Demo (MitID QR, sync og grafer)" width="780" />
+  <img src="docs/screenshots/kmd-fjernvarme-demo.gif" alt="Dansk Fjernvarme HA Demo (MitID QR, sync, hover-tooltip og grafer)" width="780" />
 </p>
 
-| Desktop-overblik (inkl. weekend-påmindelse) | MitID QR & Notifikations-dropdown | Mobil-grafer & Spidstime |
-| :---: | :---: | :---: |
-| <img src="docs/screenshots/kmd-fjernvarme-desktop-overview.png" alt="Desktop overblik" width="320" /> | <img src="docs/screenshots/kmd-fjernvarme-setup-mitid.png" alt="MitID QR opsætning" width="280" /> | <img src="docs/screenshots/kmd-fjernvarme-mobile-charts.png" alt="Mobil grafer" width="160" /> |
+| Desktop-overblik (inkl. 💰 årsudgift & weekend-puf) | Dynamisk afkølingstarif (Watts On / Hillerød) |
+| :---: | :---: |
+| <img src="docs/screenshots/kmd-fjernvarme-desktop-overview.png" alt="Desktop overblik inkl. forventet årsudgift" width="420" /> | <img src="docs/screenshots/kmd-fjernvarme-dynamic-tariff.png" alt="Dynamisk fremløbsafhængig afkølingstarif på Watts On" width="420" /> |
+
+| MitID QR & pris-/abonnementsindstillinger | Mobil-grafer & Spidstime |
+| :---: | :---: |
+| <img src="docs/screenshots/kmd-fjernvarme-setup-mitid.png" alt="MitID QR opsætning og prisindstillinger" width="380" /> | <img src="docs/screenshots/kmd-fjernvarme-mobile-charts.png" alt="Mobil grafer" width="210" /> |
 
 ---
 

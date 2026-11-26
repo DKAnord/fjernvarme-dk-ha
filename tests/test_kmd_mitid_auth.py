@@ -188,6 +188,44 @@ def test_beof_redirect_to_mf2_uses_plant_from_final_url() -> None:
     assert cfg["login_type"] == "mf"
 
 
+def test_albertslund_selvbetjening_discovers_mf2_plant_165() -> None:
+    albertslund_page = (
+        '<a class="btn" href="https://minforsyning-2.kmd.dk/Login?plant=165&amp;utility=0">Log ind</a>'
+    )
+    session = FakeSession(
+        {
+            "https://forsyning.albertslund.dk/selvbetjening": FakeResp(
+                status_code=200,
+                text=albertslund_page,
+                url="https://forsyning.albertslund.dk/selvbetjening",
+            )
+        }
+    )
+    cfg = _auth_with(session)._discover_oidc_config("https://forsyning.albertslund.dk/selvbetjening")
+    assert cfg["client_id"] == MF2_CLIENT
+    assert cfg["login_type"] == "mf"
+    assert cfg["utility_code"] == "0165000"
+
+
+def test_kalundborg_selvbetjening_discovers_mf2_plant_177() -> None:
+    kalundborg_page = (
+        '<a href="https://minforsyning-2.kmd.dk/?plant=177&amp;utility=1&amp;plus=True">Login Min Forsyning</a>'
+    )
+    session = FakeSession(
+        {
+            "https://kalfor.dk/selvbetjening/min-forsyning": FakeResp(
+                status_code=200,
+                text=kalundborg_page,
+                url="https://kalfor.dk/selvbetjening/min-forsyning",
+            )
+        }
+    )
+    cfg = _auth_with(session)._discover_oidc_config("https://kalfor.dk/selvbetjening/min-forsyning")
+    assert cfg["client_id"] == MF2_CLIENT
+    assert cfg["login_type"] == "mf"
+    assert cfg["utility_code"] == "0177001"
+
+
 def test_plugin_js_discovery_still_works() -> None:
     session = FakeSession(
         {

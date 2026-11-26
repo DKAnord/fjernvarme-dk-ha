@@ -3,7 +3,7 @@
  * Zero external dependencies, Shadow DOM, responsive, interactive tooltips, DA/EN i18n.
  */
 (() => {
-  const VER = "1.2.8";
+  const VER = "1.2.9";
   const MONTHS = ["Jan", "Feb", "Mar", "Apr", "Maj", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Dec"];
   const DAYS_IN_MONTH = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
   const isLeapYear = (y) => (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0;
@@ -84,8 +84,8 @@
     { id: "frederikshavn-forsyning", name: "Frederikshavn Forsyning", city: "Frederikshavn", url: "https://www.forsyningen.dk/selvbetjening", status: "confirmed" },
     { id: "vestforsyning", name: "Vestforsyning", city: "Holstebro", url: "https://www.vestforsyning.dk/selvbetjening/", status: "pending_test" },
     { id: "beof", name: "Bornholms Energi & Forsyning", city: "Bornholm", url: "https://minforsyning.beof.dk/", status: "confirmed" },
-    { id: "kalundborg-forsyning", name: "Kalundborg Forsyning", city: "Kalundborg", url: "https://kalfor.dk/selvbetjening/min-forsyning", status: "pending_test" },
-    { id: "albertslund-forsyning", name: "Albertslund Forsyning", city: "Albertslund", url: "https://forsyning.albertslund.dk/selvbetjening", status: "pending_test" },
+    { id: "kalundborg-forsyning", name: "Kalundborg Forsyning", city: "Kalundborg", url: "https://kalfor.dk/selvbetjening/min-forsyning", status: "confirmed" },
+    { id: "albertslund-forsyning", name: "Albertslund Forsyning", city: "Albertslund", url: "https://forsyning.albertslund.dk/selvbetjening", status: "confirmed" },
     { id: "nykobing-sj", name: "Nykøbing Sjælland Varmeværk", city: "Odsherred", url: "https://www.nsfv.dk/", status: "pending_test" },
     { id: "forsyning-helsingor", name: "Forsyning Helsingør", city: "Helsingør", url: "https://www.fh.dk/watts", status: "pending_test", backend: "wattson" },
     { id: "soroe-fjernvarme", name: "Sorø Fjernvarme", city: "Sorø", url: "https://eforsyning.dk/soroe/", status: "confirmed", backend: "eforsyning" },

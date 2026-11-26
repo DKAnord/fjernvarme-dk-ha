@@ -434,7 +434,16 @@ def test_utilities_json_backend_field_and_hjorring() -> None:
         assert is_uuid(u["eforsyning_supplier_id"]), uid
         assert u["portal_url"].startswith("https://"), uid
         assert isinstance(u["latitude"], (int, float)) and isinstance(u["longitude"], (int, float)), uid
-    assert by_id["albertslund-forsyning"]["backend"] == "kmd"
+    albertslund = by_id["albertslund-forsyning"]
+    assert albertslund["backend"] == "kmd"
+    assert albertslund["status"] == "confirmed"
+    assert albertslund["tier"] == "confirmed"
+    assert albertslund["auth_method"] == "MitID"
+    kalundborg = by_id["kalundborg-forsyning"]
+    assert kalundborg["backend"] == "kmd"
+    assert kalundborg["status"] == "confirmed"
+    assert kalundborg["tier"] == "confirmed"
+    assert kalundborg["auth_method"] == "MitID"
     wattson = {u["id"] for u in data["utilities"] if u.get("backend") == "wattson"}
     others = eforsyning | wattson
     assert wattson >= {"aalborg-forsyning", "forsyning-helsingor", "fjernvarme-fyn", "hillerod-forsyning"}

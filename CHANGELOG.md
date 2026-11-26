@@ -2,6 +2,12 @@
 
 Alle væsentlige ændringer i **Dansk Fjernvarme** (tidligere *Fjernvarme (KMD Easy Energy)*) dokumenteres her.
 
+## [1.2.9] - 2026-11-26
+
+### Tilføjet & Bekræftet
+- **Albertslund Forsyning bekræftet live (KMD / Min Forsyning 2):** Markeret som ✅ **Bekræftet** efter live-verifikation via MitID (`minforsyning-2.kmd.dk`, `plant=165`), inkl. eksisterende officielle 2026/2027-takster (`0,84048 kr./kWh` årssnit inkl. moms i 2026, `0,79863 kr./kWh` i 2027 samt `±1 %/°C` afkølingstakst under `35 °C` / over `40 °C`) og opdateret kortressource (`/local/js/kmd-easy-energy-card.js?v=1.2.9`).
+- **Kalundborg Forsyning bekræftet live (KMD / Min Forsyning 2):** Markeret som ✅ **Bekræftet** efter live-verifikation via MitID (`minforsyning-2.kmd.dk`, `plant=177`, `utility=1`), inkl. eksisterende officiel 2026-takst (`0,80625 kr./kWh` inkl. moms, belastningsbidrag `0,625 kr./m³`, fast arealpris `45,625 kr./m²/år` samt `±0,00375 kr./kWh/°C` ift. `45 °C`).
+
 ## [1.2.8] - 2026-11-25
 
 ### Tilføjet & Bekræftet

@@ -597,3 +597,52 @@ def test_bundled_utilities_2026_tariffs_and_non_heating_cleanup() -> None:
         for t in u["tariffs"]:
             assert t["price_dkk_per_kwh"] > 0, u["id"]
             assert str(t.get("source", "")).startswith("https://"), u["id"]
+
+
+def test_bundled_utilities_json_has_albertslund_confirmed_and_tariffs() -> None:
+    from kmd_easy_energy.tariff import load_utilities
+
+    utilities = load_utilities()
+    by_id = {u["id"]: u for u in utilities}
+    albertslund = by_id["albertslund-forsyning"]
+    assert albertslund["status"] == "confirmed"
+    assert albertslund["tier"] == "confirmed"
+
+    t26 = resolve_tariff(
+        _entry(data={"utility_id": "albertslund-forsyning"}),
+        today=date(2026, 11, 26),
+        utilities=utilities,
+    )
+    assert t26.price_dkk_per_kwh == 0.84048
+    assert t26.motivation_pct_per_k == 1.0
+    assert t26.bonus_temp == 35.0
+    assert t26.penalty_temp == 40.0
+
+    t27 = resolve_tariff(
+        _entry(data={"utility_id": "albertslund-forsyning"}),
+        today=date(2027, 2, 1),
+        utilities=utilities,
+    )
+    assert t27.price_dkk_per_kwh == 0.79863
+
+
+def test_bundled_utilities_json_has_kalundborg_confirmed_and_tariff() -> None:
+    from kmd_easy_energy.tariff import load_utilities
+
+    utilities = load_utilities()
+    by_id = {u["id"]: u for u in utilities}
+    kalundborg = by_id["kalundborg-forsyning"]
+    assert kalundborg["status"] == "confirmed"
+    assert kalundborg["tier"] == "confirmed"
+
+    t26 = resolve_tariff(
+        _entry(data={"utility_id": "kalundborg-forsyning"}),
+        today=date(2026, 11, 26),
+        utilities=utilities,
+    )
+    assert t26.price_dkk_per_kwh == 0.80625
+    assert t26.price_dkk_per_m3 == 0.625
+    assert t26.fixed_fee_dkk_per_m2_year == 45.625
+    assert t26.motivation_dkk_per_kwh_per_k == 0.00375
+    assert t26.bonus_temp == 45.0
+    assert t26.penalty_temp == 45.0

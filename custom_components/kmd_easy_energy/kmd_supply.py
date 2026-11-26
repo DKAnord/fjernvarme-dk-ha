@@ -104,7 +104,6 @@ def extract_customers(profile: dict[str, Any] | None) -> list[dict[str, Any]]:
         "CustomerRelationships",
         "Relations",
         "Accounts",
-        "Addresses",
     ):
         val = profile.get(key)
         if isinstance(val, list) and any(isinstance(x, dict) for x in val):
@@ -123,8 +122,20 @@ def customer_identity(customer: dict[str, Any] | None) -> tuple[str | None, str 
     if not isinstance(customer, dict):
         return None, None
     low = {str(k).lower(): v for k, v in customer.items()}
-    cid = low.get("customerid") or low.get("id")
-    cnum = low.get("customernumber") or low.get("customerno") or low.get("number")
+    cid = (
+        low.get("customerid")
+        or low.get("customerrelationid")
+        or low.get("accountid")
+        or low.get("id")
+    )
+    cnum = (
+        low.get("customernumber")
+        or low.get("customerno")
+        or low.get("accountnumber")
+        or low.get("agreementnumber")
+        or low.get("debtornumber")
+        or low.get("number")
+    )
     return (str(cid).strip() if cid else None, str(cnum).strip() if cnum else None)
 
 
@@ -146,7 +157,7 @@ def _unit_names(meter: dict[str, Any]) -> list[str]:
     for unit in meter.get("Units") or meter.get("units") or []:
         if not isinstance(unit, dict):
             continue
-        for key in ("Name", "Description", "UnitName"):
+        for key in ("Name", "Description", "UnitName", "Symbol", "UnitCode"):
             val = unit.get(key)
             if val:
                 names.append(str(val))
@@ -208,7 +219,11 @@ def classify_kmd_meter(meter: dict[str, Any] | None) -> Kind:
     ids = _id_text(meter)
     type_id = _consumption_type_id(meter)
     units = _norm_units(_unit_names(meter))
-    has_energy = any(u in units or "kwh" in u or u == "mwh" or "mwh" in u for u in units)
+    has_heat_unit = any(
+        u in {"mwh", "gj"} or "mwh" in u or u.startswith("gj")
+        for u in units
+    )
+    has_energy = has_heat_unit or any(u == "kwh" or "kwh" in u for u in units)
     has_volume = any(u in {"m3", "m³"} or "m3" in u for u in units)
     has_temp = any("c" == u or u.endswith("c") or "temp" in u for u in units)
 
@@ -234,8 +249,9 @@ def classify_kmd_meter(meter: dict[str, Any] | None) -> Kind:
     ):
         return "electricity"
 
-    # Heat meters typically expose energy plus volume and/or temperature.
-    if has_energy and (has_volume or has_temp):
+    # MWh/GJ meters without el/water indicators are district heating (even without m3/°C),
+    # and kWh meters with volume and/or temperature are district heating.
+    if has_heat_unit or (has_energy and (has_volume or has_temp)):
         return "heat"
     if has_volume and not has_energy:
         return "water"
@@ -404,6 +420,62 @@ MSG_MULTIPLE_HEAT = (
     "Kontoen har flere fjernvarmemålere. Vælg varmemåleren under "
     "integrationens indstillinger, og synkroniser igen."
 )
+
+_KIND_LABELS_DA = {
+    "electricity": "el",
+    "water": "vand",
+    "unknown": "ukendt",
+}
+
+
+def format_no_heat_message(supplies: dict[str, Any] | None) -> str:
+    """Return a concise, PII-free Danish error explaining what meters were found."""
+    if not isinstance(supplies, dict):
+        return MSG_NO_HEAT
+    meters = [m for m in (supplies.get("meters") or []) if isinstance(m, dict)]
+    meter_count = int(supplies.get("meter_count") or len(meters))
+    if meter_count == 0:
+        return (
+            "Ingen aktive målere blev fundet på kontoen (0 målere). "
+            "Tjek på selvbetjeningen at varmemåleren er tilknyttet dit MitID-login."
+        )
+
+    kinds = [str(m.get("kind") or "unknown") for m in meters] or [
+        str(k) for k in (supplies.get("kinds") or [])
+    ]
+    unknown_units: list[str] = []
+    seen_units: set[str] = set()
+    for m in meters:
+        if m.get("kind") != "unknown":
+            continue
+        for raw_u in m.get("units") or []:
+            u = str(raw_u).strip()
+            if u and u not in seen_units:
+                seen_units.add(u)
+                unknown_units.append(u)
+
+    if unknown_units:
+        units_txt = ", ".join(unknown_units[:5])
+        msg = (
+            "Ingen fjernvarmemåler blev fundet på kontoen "
+            f"(fandt ukendt målertype med enheder: {units_txt})."
+        )
+        return msg[:190]
+
+    seen_kinds: list[str] = []
+    for k in kinds:
+        label = _KIND_LABELS_DA.get(k, k)
+        if label and label not in seen_kinds:
+            seen_kinds.append(label)
+    if seen_kinds:
+        msg = (
+            "Ingen fjernvarmemåler blev fundet på kontoen "
+            f"(fandt kun: {', '.join(seen_kinds)}). "
+            "Tjek på selvbetjeningen at varme er tilknyttet dit MitID-login."
+        )
+        return msg[:190]
+
+    return MSG_NO_HEAT
 
 
 class KMDSupplySelectionError(RuntimeError):

@@ -29,7 +29,7 @@ update_token:
 
 refresh:
   name: Reload cached data
-  description: Re-read cached data and recompute derived values. Does not contact KMD; use start_mitid_sync (the Synkroniser button) to fetch new data.
+  description: Re-read cached data and recompute derived values. Does not contact KMD; use sync (or the Synkroniser button) to fetch new data.
   fields:
     entry_id:
       name: Config entry ID
@@ -199,6 +199,12 @@ sync:
     entry_id:
       name: Config entry ID
       description: Optional – defaults to the first entry
+      required: false
+      selector:
+        text:
+    utility_id:
+      name: Utility ID
+      description: Optional alternative to entry_id (e.g. kredslob)
       required: false
       selector:
         text:

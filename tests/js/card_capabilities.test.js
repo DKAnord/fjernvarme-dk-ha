@@ -105,7 +105,7 @@ card = render({ hourly: { kwh: Array(24).fill(1) } }, calls);
 html = card.shadowRoot.innerHTML;
 assert.ok(sections(html).includes("hourly") && html.includes("Saldo"), "legacy: all sections");
 card.shadowRoot.getElementById("syncBtn").listeners.click();
-assert.strictEqual(calls.pop()[1], "start_mitid_sync");
+assert.strictEqual(calls.pop()[1], "sync");
 
 // 6) MitID wizard utility list only offers KMD utilities.
 calls = [];
@@ -262,9 +262,9 @@ assert.ok(kmdHtml.includes('id="syncTap" role="button" tabindex="0"'), "sync ban
 assert.ok(kmdHtml.includes('tabindex="0" data-tip='), "SVG chart elements are keyboard focusable");
 assert.ok(kmdHtml.includes('id="floatTip" role="tooltip"'), "floating tooltip container rendered");
 
-// Enter key on syncTap triggers MitID sync.
+// Enter key on syncTap triggers sync.
 kmdWide.shadowRoot.getElementById("syncTap").listeners.keydown({ key: "Enter", preventDefault() {} });
-assert.deepStrictEqual(calls.pop(), ["kmd_easy_energy", "start_mitid_sync", { entry_id: "e1" }], "Enter on syncTap triggers sync");
+assert.deepStrictEqual(calls.pop(), ["kmd_easy_energy", "sync", { entry_id: "e1" }], "Enter on syncTap triggers sync");
 
 // Narrow viewport switches daily chart back to compact 540x220 viewBox.
 const kmdNarrow = new Card();

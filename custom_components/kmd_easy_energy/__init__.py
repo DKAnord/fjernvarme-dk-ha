@@ -13,7 +13,9 @@ from homeassistant.components import websocket_api
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, ServiceCall, callback
 from homeassistant.exceptions import HomeAssistantError
+from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
+from homeassistant.helpers.service import async_register_admin_service
 
 from .const import (
     CONF_ACCESS_TOKEN,
@@ -43,7 +45,6 @@ from .coordinator import KMDEasyEnergyCoordinator
 from .frontend_card import (
     async_ensure_lovelace_card_resource,
     async_register_frontend_card_static_path,
-    install_frontend_card,
     integration_version,
 )
 from .outdoor_temp import migrate_location
@@ -52,6 +53,60 @@ from .util import store_for, unique_id_for, delete_legacy_www_cache, legacy_www_
 _LOGGER = logging.getLogger(__name__)
 PLATFORMS = ["sensor", "button", "binary_sensor"]
 DEFAULT_PORTAL_URL = "https://minvarme.kredslob.dk/"
+
+SERVICE_UPDATE_TOKEN_SCHEMA = vol.Schema(
+    {
+        vol.Required("access_token"): cv.string,
+        vol.Optional("customer_id"): cv.string,
+        vol.Optional("customer_number"): cv.string,
+        vol.Optional("entry_id"): cv.string,
+    }
+)
+SERVICE_REFRESH_SCHEMA = vol.Schema(
+    {
+        vol.Optional("entry_id"): cv.string,
+    }
+)
+SERVICE_RESET_SETUP_SCHEMA = vol.Schema(
+    {
+        vol.Optional("entry_id"): cv.string,
+    }
+)
+SERVICE_SYNC_SCHEMA = vol.Schema(
+    {
+        vol.Optional("entry_id"): cv.string,
+        vol.Optional("utility_id"): cv.string,
+    }
+)
+SERVICE_START_MITID_SYNC_SCHEMA = vol.Schema(
+    {
+        vol.Optional("entry_id"): cv.string,
+        vol.Optional("utility_id"): cv.string,
+        vol.Optional("mitid_username"): cv.string,
+        vol.Optional("notify_service"): cv.string,
+    }
+)
+SERVICE_CONFIGURE_UTILITY_SCHEMA = vol.Schema(
+    {
+        vol.Optional("entry_id"): cv.string,
+        vol.Optional("utility_id"): cv.string,
+        vol.Optional("portal_url"): cv.string,
+        vol.Optional("location_name"): cv.string,
+        vol.Optional("mitid_username"): cv.string,
+        vol.Optional("notify_service"): cv.string,
+        vol.Optional(CONF_BONUS_TEMP): vol.Coerce(float),
+        vol.Optional(CONF_PENALTY_TEMP): vol.Coerce(float),
+        vol.Optional(CONF_FORWARD_TEMP): vol.Coerce(float),
+        vol.Optional(CONF_PRICE_DKK_PER_KWH): vol.Coerce(float),
+        vol.Optional(CONF_MOTIVATION_PCT_PER_K): vol.Coerce(float),
+        vol.Optional(CONF_MOTIVATION_DKK_PER_KWH_PER_K): vol.Coerce(float),
+        vol.Optional(CONF_FIXED_FEE_DKK_PER_M2_YEAR): vol.Coerce(float),
+        vol.Optional(CONF_HEATED_AREA_M2): vol.Coerce(float),
+        vol.Optional(CONF_FIXED_FEE_DKK_PER_YEAR): vol.Coerce(float),
+        vol.Optional("start_sync"): cv.boolean,
+        vol.Optional("complete_setup"): cv.boolean,
+    }
+)
 
 
 def _find_utility_meta(utility_id: str | None, utility_name: str | None = None) -> dict[str, Any] | None:
@@ -87,13 +142,23 @@ def _resolve_portal_url(utility_name: str | None, utility_id: str | None = None)
 async def _async_setup_services(hass: HomeAssistant) -> None:
     """Register domain services once."""
 
-    def _pick_entry(entry_id: str | None) -> ConfigEntry | None:
+    def _pick_entry(
+        entry_id: str | None, utility_id: str | None = None
+    ) -> ConfigEntry | None:
         entries = hass.config_entries.async_entries(DOMAIN)
-        return (
-            next((e for e in entries if e.entry_id == entry_id), None)
-            if entry_id
-            else (entries[0] if entries else None)
-        )
+        if entry_id:
+            return next((e for e in entries if e.entry_id == entry_id), None)
+        if utility_id:
+            want = str(utility_id).strip().lower()
+            return next(
+                (
+                    e
+                    for e in entries
+                    if str(e.data.get(CONF_UTILITY_ID, "")).strip().lower() == want
+                ),
+                None,
+            )
+        return entries[0] if entries else None
 
     async def handle_update_token(call: ServiceCall) -> None:
         entry = _pick_entry(call.data.get("entry_id"))
@@ -109,11 +174,11 @@ async def _async_setup_services(hass: HomeAssistant) -> None:
                 call.data.get("customer_number"),
             )
         except Exception as err:  # noqa: BLE001
-            raise HomeAssistantError(f"Synkronisering fejlede: {str(err)[:160]}") from err
+            raise HomeAssistantError(f"Synkronisering fejlede: {str(err)[:220]}") from err
 
     async def handle_sync(call: ServiceCall) -> None:
         """Backend-independent sync (MitID for KMD, login for E|Forsyning)."""
-        entry = _pick_entry(call.data.get("entry_id"))
+        entry = _pick_entry(call.data.get("entry_id"), call.data.get("utility_id"))
         if not entry:
             _LOGGER.error("No config entry found for kmd_easy_energy.sync")
             return
@@ -219,17 +284,7 @@ async def _async_setup_services(hass: HomeAssistant) -> None:
         await coord.async_set_setup_state(False)
 
     async def handle_start_mitid_sync(call: ServiceCall) -> None:
-        entry = _pick_entry(call.data.get("entry_id"))
-        if not entry and call.data.get("utility_id"):
-            want = str(call.data["utility_id"]).strip().lower()
-            entry = next(
-                (
-                    e
-                    for e in hass.config_entries.async_entries(DOMAIN)
-                    if str(e.data.get(CONF_UTILITY_ID, "")).strip().lower() == want
-                ),
-                None,
-            )
+        entry = _pick_entry(call.data.get("entry_id"), call.data.get("utility_id"))
         if not entry:
             _LOGGER.error("No config entry found for kmd_easy_energy.start_mitid_sync")
             return
@@ -247,16 +302,21 @@ async def _async_setup_services(hass: HomeAssistant) -> None:
             ),
         )
 
-    for svc_name, handler in (
-        ("update_token", handle_update_token),
-        ("refresh", handle_refresh),
-        ("configure_utility", handle_configure_utility),
-        ("reset_setup", handle_reset_setup),
-        ("start_mitid_sync", handle_start_mitid_sync),
-        ("sync", handle_sync),
+    for svc_name, handler, schema in (
+        ("update_token", handle_update_token, SERVICE_UPDATE_TOKEN_SCHEMA),
+        ("configure_utility", handle_configure_utility, SERVICE_CONFIGURE_UTILITY_SCHEMA),
+        ("reset_setup", handle_reset_setup, SERVICE_RESET_SETUP_SCHEMA),
+        ("start_mitid_sync", handle_start_mitid_sync, SERVICE_START_MITID_SYNC_SCHEMA),
     ):
         if not hass.services.has_service(DOMAIN, svc_name):
-            hass.services.async_register(DOMAIN, svc_name, handler)
+            async_register_admin_service(hass, DOMAIN, svc_name, handler, schema=schema)
+
+    for svc_name, handler, schema in (
+        ("refresh", handle_refresh, SERVICE_REFRESH_SCHEMA),
+        ("sync", handle_sync, SERVICE_SYNC_SCHEMA),
+    ):
+        if not hass.services.has_service(DOMAIN, svc_name):
+            hass.services.async_register(DOMAIN, svc_name, handler, schema=schema)
 
 
 _WS_REGISTERED = f"{DOMAIN}_ws_registered"
@@ -369,9 +429,6 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up KMD Easy Energy from a config entry."""
-    await hass.async_add_executor_job(
-        install_frontend_card, Path(hass.config.path("www/js"))
-    )
     await async_register_frontend_card_static_path(hass)
     ver = await hass.async_add_executor_job(integration_version)
     await async_ensure_lovelace_card_resource(hass, version=ver)

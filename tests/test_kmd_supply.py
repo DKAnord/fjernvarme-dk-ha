@@ -14,6 +14,7 @@ from kmd_easy_energy.coordinator import (
 from kmd_easy_energy.kmd_supply import (
     classify_kmd_meter,
     extract_customers,
+    format_no_heat_message,
     select_heat_meter,
     supply_key,
     diagnostics_supplies,
@@ -336,3 +337,52 @@ def test_clear_consumption_cache_keeps_weather() -> None:
     assert state["weather"]["monthly_temp"]["2026-01"] == 1.0
     assert state["weather_archive_fetched_on"] == "2026-11-22"
     assert state["selected_supply_key"] == "cust-el::mp-el"
+
+
+def test_classify_beof_mwh_and_gj_only_heat_meters() -> None:
+    """MWh/GJ-only meters without m3, temp, or 'Varme' label classify as heat (#39)."""
+    assert classify_kmd_meter({"Units": [{"Name": "MWh"}]}) == "heat"
+    assert classify_kmd_meter({"Units": [{"Name": "GJ"}]}) == "heat"
+    assert classify_kmd_meter({"Units": [{"Symbol": "MWh"}]}) == "heat"
+    # Water meter with m3 + °C and no energy must remain water (tautology regression).
+    assert classify_kmd_meter({"Units": [{"Name": "m3"}, {"Name": "°C"}]}) == "water"
+    # Untyped kWh-only meter remains unknown (could be electricity).
+    assert classify_kmd_meter({"Units": [{"Name": "kWh"}]}) == "unknown"
+
+
+def test_extract_customers_ignores_addresses() -> None:
+    profile = {"Addresses": [{"Id": "addr-1", "Street": "Demo 1"}]}
+    assert extract_customers(profile) == []
+
+
+def test_format_no_heat_message_is_concise_and_pii_free() -> None:
+    msg_zero = format_no_heat_message(
+        {"customer_count": 1, "meter_count": 0, "kinds": [], "meters": []}
+    )
+    assert "0 målere" in msg_zero
+    assert len(msg_zero) <= 190
+
+    msg_el = format_no_heat_message(
+        {
+            "customer_count": 1,
+            "meter_count": 1,
+            "kinds": ["electricity"],
+            "meters": [{"kind": "electricity", "units": ["kWh"], "customer_index": 1, "key": "cust-secret::mp-1"}],
+        }
+    )
+    assert "fandt kun: el" in msg_el
+    assert "cust-secret" not in msg_el
+    assert "mp-1" not in msg_el
+    assert len(msg_el) <= 190
+
+    msg_unknown = format_no_heat_message(
+        {
+            "customer_count": 1,
+            "meter_count": 1,
+            "kinds": ["unknown"],
+            "meters": [{"kind": "unknown", "units": ["kJ"], "customer_index": 1, "key": "cust-secret::mp-2"}],
+        }
+    )
+    assert "ukendt målertype med enheder: kJ" in msg_unknown
+    assert "cust-secret" not in msg_unknown
+    assert len(msg_unknown) <= 190

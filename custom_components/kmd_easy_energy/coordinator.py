@@ -99,6 +99,7 @@ from .kmd_supply import (
     MSG_NO_HEAT,
     KMDSupplySelectionError,
     classify_kmd_meter,
+    format_no_heat_message,
     meter_point_id,
     select_heat_meter,
     supply_key,
@@ -1638,7 +1639,10 @@ class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             if choice["status"] == "no_heat":
                 state["meters"] = []
                 state["available_units"] = []
-                raise KMDSupplySelectionError(MSG_NO_HEAT, choice["supplies"])
+                raise KMDSupplySelectionError(
+                    format_no_heat_message(choice["supplies"]),
+                    choice["supplies"],
+                )
             if choice["status"] == "multiple":
                 state["meters"] = []
                 state["available_units"] = []
@@ -2200,7 +2204,7 @@ class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             _LOGGER.warning(
                 "%s %s sync failed: %s", source, "automatic" if automatic else "manual", err
             )
-            self._push_sync_ui("error", f"Fejl: {str(err)[:160]}")
+            self._push_sync_ui("error", f"Fejl: {str(err)[:220]}")
 
     async def async_start_sync(self, automatic: bool = False) -> None:
         """Backend-independent "Synkroniser" (card, button, ``sync`` service)."""
@@ -2490,6 +2494,6 @@ class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             await self._async_notify(notify_svc, f"✅ {util_name} opdateret", "Fjernvarmedata er hentet.")
         except Exception as err:  # noqa: BLE001
             _LOGGER.warning("Native MitID sync failed: %s", err)
-            self._push_sync_ui("error", f"Fejl: {str(err)[:160]}")
+            self._push_sync_ui("error", f"Fejl: {str(err)[:220]}")
             await self._async_dismiss_mitid_notification()
-            await self._async_notify(notify_svc, f"⚠️ {util_name} sync fejlede", str(err)[:160])
+            await self._async_notify(notify_svc, f"⚠️ {util_name} sync fejlede", str(err)[:220])

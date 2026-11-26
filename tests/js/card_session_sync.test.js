@@ -62,9 +62,22 @@ assert.ok(!/239,68,68|#dc2626|245,158,11/.test(css), "nudge uses calm colours");
 assert.ok(html.includes("Sidst synkroniseret 17. nov"), "last synced label");
 assert.ok(!/Token udløbet/.test(html), "no token-expired wording");
 
-// 2) Sync button always starts a MitID sync (never the old cache 'refresh').
+// 2) Sync button always starts a sync via kmd_easy_energy.sync (non-admin wall tablet compatible, never cache 'refresh').
 card.shadowRoot.getElementById("syncBtn").listeners.click();
-assert.deepStrictEqual(calls[calls.length - 1], ["kmd_easy_energy", "start_mitid_sync", { entry_id: "e1" }]);
+assert.deepStrictEqual(calls[calls.length - 1], ["kmd_easy_energy", "sync", { entry_id: "e1" }]);
+
+// 2b) Non-admin wall tablet hides setup/settings buttons while sync still calls kmd_easy_energy.sync.
+const nonAdminCalls = [];
+const tabletCard = new Card();
+tabletCard.setConfig({});
+const tabletHass = mkHass({ last_sync: "2026-11-20T08:00:00+00:00", sync_reminder: false }, nonAdminCalls);
+tabletHass.user = { is_admin: false };
+tabletCard.hass = tabletHass;
+const tabletHtml = tabletCard.shadowRoot.innerHTML;
+assert.ok(!tabletHtml.includes('id="openSetupBtn"'), "non-admin hides setup button");
+assert.ok(!tabletHtml.includes('id="costHintSetupBtn"'), "non-admin hides cost-hint setup button");
+tabletCard.shadowRoot.getElementById("syncBtn").listeners.click();
+assert.deepStrictEqual(nonAdminCalls.pop(), ["kmd_easy_energy", "sync", { entry_id: "e1" }]);
 
 // 3) No reminder -> normal banner without reminder text.
 calls = [];
@@ -92,7 +105,7 @@ card.setConfig({});
 card.hass = mkHass({
   utility_id: "struer-energi",
   utility_status: "pending_test",
-  integration_version: "1.2.9",
+  integration_version: "1.3.0",
   sync_state: "error",
   sync_message: "Fejl for anna@example.com med token abcdefghijklmnopqrstuvwxyz123456",
 }, calls);
@@ -100,8 +113,8 @@ card.shadowRoot.getElementById("fbIssueBtn").listeners.click();
 assert.strictEqual(opened.length, 1);
 const issueUrl = new URL(opened[0]);
 const issueBody = issueUrl.searchParams.get("body");
-assert.ok(issueBody.includes("- **Card Version:** 1.2.9"), "issue includes Card Version");
-assert.ok(issueBody.includes("- **Integration Version:** 1.2.9"), "issue includes Integration Version");
+assert.ok(issueBody.includes("- **Card Version:** 1.3.0"), "issue includes Card Version");
+assert.ok(issueBody.includes("- **Integration Version:** 1.3.0"), "issue includes Integration Version");
 assert.ok(issueBody.includes("- **Sync State:** `error`"), "issue includes Sync State");
 assert.ok(issueBody.includes("- **Last Sync Message:** Fejl for [email] med token [redacted]"), "issue sanitizes sync message");
 assert.ok(!issueBody.includes("anna@example.com"), "issue does not leak email");
@@ -111,8 +124,8 @@ card.shadowRoot.getElementById("fbGithubBtn").listeners.click();
 assert.strictEqual(opened.length, 2);
 const confirmedUrl = new URL(opened[1]);
 const confirmedBody = confirmedUrl.searchParams.get("body");
-assert.ok(confirmedBody.includes("- **Card Version:** 1.2.9"), "confirmed includes Card Version");
-assert.ok(confirmedBody.includes("- **Integration Version:** 1.2.9"), "confirmed includes Integration Version");
+assert.ok(confirmedBody.includes("- **Card Version:** 1.3.0"), "confirmed includes Card Version");
+assert.ok(confirmedBody.includes("- **Integration Version:** 1.3.0"), "confirmed includes Integration Version");
 assert.ok(!confirmedBody.includes("Sync State:"), "confirmed omits Sync State");
 assert.ok(!confirmedBody.includes("Last Sync Message:"), "confirmed omits Last Sync Message");
 

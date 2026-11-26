@@ -142,13 +142,17 @@ class KMDClient:
         """
         from ..kmd_supply import classify_kmd_meter, customer_identity, extract_customers
 
+        orig_cid, orig_cnum = self._customer_id, self._customer_number
         profile = self._profile if self._profile is not None else await self.get_profile()
         customers = extract_customers(profile if isinstance(profile, dict) else {})
         accounts: list[dict[str, Any]] = []
         if customers:
             for idx, customer in enumerate(customers, 1):
                 cid, cnum = customer_identity(customer)
-                self.set_customer(cid, cnum)
+                if cid or cnum:
+                    self.set_customer(cid, cnum)
+                else:
+                    self.set_customer(orig_cid, orig_cnum)
                 try:
                     meters = await self._fetch_active_meters()
                 except Exception as err:  # noqa: BLE001
@@ -182,6 +186,32 @@ class KMDClient:
                         "meters": meters,
                     }
                 )
+            if sum(len(a["meters"]) for a in accounts) == 0:
+                fallback_candidates: list[tuple[str | None, str | None]] = [(orig_cid, orig_cnum)]
+                if (orig_cid, orig_cnum) != (None, None):
+                    fallback_candidates.append((None, None))
+                for fb_cid, fb_cnum in fallback_candidates:
+                    self.set_customer(fb_cid, fb_cnum)
+                    try:
+                        meters = await self._fetch_active_meters()
+                    except Exception as err:  # noqa: BLE001
+                        _LOGGER.warning("KMD fallback meters failed: %s", err)
+                        meters = []
+                    if meters:
+                        _LOGGER.info(
+                            "KMD fallback default customer meters=%d",
+                            len(meters),
+                        )
+                        accounts = [
+                            {
+                                "customer": {},
+                                "customer_index": 1,
+                                "customer_id": fb_cid,
+                                "customer_number": fb_cnum,
+                                "meters": meters,
+                            }
+                        ]
+                        break
             return accounts
 
         meters = await self._fetch_active_meters()

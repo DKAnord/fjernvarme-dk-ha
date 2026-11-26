@@ -2,6 +2,18 @@
 
 Alle væsentlige ændringer i **Dansk Fjernvarme** (tidligere *Fjernvarme (KMD Easy Energy)*) dokumenteres her.
 
+## [1.3.0] - 2026-11-26
+
+### Ændret & Sikkerhed (HACS review `#14752`)
+- **Integrationsejet statisk kortsti (`/kmd_easy_energy/kmd-easy-energy-card.js?v=1.3.0`):** Integrationen kopierer ikke længere dashboard-kortet ind i brugerens `/config/www/js/`-mappe (`install_frontend_card` fjernet), men serverer kortet direkte fra `frontend/` via integrationens egen HTTP-sti. Eksisterende storage-mode Lovelace-ressourcer under `/local/js/kmd-easy-energy-card.js` migreres og deduplikeres automatisk ved opstart (YAML-mode logger en opdateret advarsel med den nye URL).
+- **Administratorbeskyttelse på tjenester (`async_register_admin_service`):** `configure_utility`, `reset_setup`, `update_token` og `start_mitid_sync` kræver nu Home Assistant-administratorrettigheder og valideres med eksplicitte skemaer. Vægtablets og ikke-administratorer kan fortsat synkronisere via `kmd_easy_energy.sync` (uden `mitid_username`- eller `notify_service`-felter), og dashboard-kortet skjuler opsætningsknapper (`⚙️`) for ikke-administratorer efter førstegangsopsætning.
+
+### Rettet
+- **Styrket KMD/BEOF-måleridentifikation og kundeforhold ([issue #39](https://github.com/DKAnord/fjernvarme-dk-ha/issues/39)):**
+  - Rettet klassifikationsfejl i `kmd_supply.py`, så rene `MWh`- og `GJ`-varmemålere uden `m3`/`°C`-enheder eller `"Varme"`-etiket (som f.eks. Bornholms Energi & Forsyning) nu genkendes korrekt som fjernvarmemålere, og fjernet en tautologi i enhedstjekket.
+  - Fjernet `"Addresses"` fra `extract_customers()` så adresseposter i KMD-profilen ikke forveksles med kundeforhold, tilføjet fallback til tokenets standard-kundeforhold hvis kundeforhold-opslag returnerer 0 målere, og udvidet `customer_identity()` / `_unit_names()` med ekstra KMD-feltnavne.
+  - Ny selvforklarende, persondatafri fejltekst ved manglende varmemåler (viser fundne målerkategorier eller ukendte enheder) og øget trunkeringsgrænse (140/160 → 220 tegn) i fejlbeskeder og feedback-rapporten.
+
 ## [1.2.9] - 2026-11-26
 
 ### Tilføjet & Bekræftet

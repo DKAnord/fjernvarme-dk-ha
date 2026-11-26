@@ -19,10 +19,11 @@ def test_card_uses_event_and_service() -> None:
     assert "subscribeMessage" in js
     # The admin-only, recorder-stored bus subscription is no longer used for OTP/QR.
     assert "subscribeEvents" not in js
-    assert "start_mitid_sync" in js
+    assert 'callService("kmd_easy_energy", "sync"' in js
+    assert "start_mitid_sync" not in js
     assert "mitid_otp_code" not in js
     assert "mitid_qr_svg" not in js
-    assert 'VER = "1.2.9"' in js
+    assert 'VER = "1.3.0"' in js
     assert "data-kmd-card-version" in js
     # Must not guess button.<utility_id>_sync as the only path
     assert "button.${activeUtilId" not in js

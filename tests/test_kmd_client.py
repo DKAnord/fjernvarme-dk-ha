@@ -247,3 +247,32 @@ async def test_discover_accounts_fetches_meters_per_kundeforhold() -> None:
     assert len(meter_calls) == 2
     assert meter_calls[0][2]["headers"]["Customer-Id"] == "cust-el-synth"
     assert meter_calls[1][2]["headers"]["Customer-Id"] == "cust-heat-synth"
+
+
+@pytest.mark.asyncio
+async def test_discover_accounts_falls_back_to_default_when_customers_empty() -> None:
+    session = FakeSession()
+    session.set(
+        "GET",
+        "/api/profile/get",
+        FakeResp(
+            200,
+            {"Customers": [{"CustomerId": "cust-empty", "CustomerNumber": "cn-empty"}]},
+        ),
+    )
+
+    def meters_resp(method, url, **kwargs):
+        headers = kwargs.get("headers") or {}
+        if headers.get("Customer-Id") == "cust-empty":
+            return FakeResp(200, [])
+        return FakeResp(
+            200,
+            [{"MeasurementPointId": "mp-beof-1", "Units": [{"Name": "MWh"}]}],
+        )
+
+    session.set("POST", "/api/meter/customerActiveMeters", meters_resp)
+    client = KMDClient(session, "tok", referer="https://minforsyning.beof.dk/")
+    accounts = await client.discover_accounts()
+    assert len(accounts) == 1
+    assert accounts[0]["customer_id"] is None
+    assert accounts[0]["meters"][0]["MeasurementPointId"] == "mp-beof-1"

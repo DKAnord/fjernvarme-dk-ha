@@ -77,13 +77,14 @@ SIGNAL_MITID_CHALLENGE = "kmd_easy_energy_mitid_challenge_live"
 WS_TYPE_MITID_SUBSCRIBE = "kmd_easy_energy/mitid/subscribe"
 
 
-# Bundled Lovelace card. Copied to <config>/www/js/ and served under /local/js/.
-# Home Assistant caches /local for 31 days (Cache-Control: public, max-age=2678400),
-# so the Lovelace resource URL must include ?v=<manifest version> after each
-# card update. Without it, a browser or Companion app can keep a stale card
-# (v0.2.x reads the removed mitid_qr_svg attribute and shows no QR).
+# Bundled Lovelace card served directly from frontend/ under /kmd_easy_energy/
+# with cache_headers=True. The Lovelace resource URL includes ?v=<manifest version>
+# so browsers and Companion apps fetch the updated bundle immediately instead of
+# keeping a stale cached module (v0.2.x read removed attributes; legacy installs
+# under /local/js/ are automatically migrated in storage-mode Lovelace).
 CARD_JS_FILENAME = "kmd-easy-energy-card.js"
-CARD_RESOURCE_PATH = f"/local/js/{CARD_JS_FILENAME}"
+CARD_RESOURCE_PATH = f"/{DOMAIN}/{CARD_JS_FILENAME}"
+LEGACY_CARD_RESOURCE_PATH = f"/local/js/{CARD_JS_FILENAME}"
 
 # Volume is the district-heating circulating water (m³), not drinking water.
 # SensorDeviceClass.WATER lets the entity be added on the Energy dashboard

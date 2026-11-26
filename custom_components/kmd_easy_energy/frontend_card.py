@@ -1,26 +1,28 @@
-"""Install the bundled Lovelace card and keep its resource cache-busted.
+"""Serve the bundled Lovelace card from an integration-owned static path.
 
-Home Assistant serves ``/local/`` with ``Cache-Control: public, max-age=2678400``
-(31 days). The integration already overwrites ``www/js/kmd-easy-energy-card.js``
-on startup, but a Lovelace resource without ``?v=`` can keep a stale module in
-the browser or Companion app. From v0.3.0 the card reads MitID QR/OTP from the
-websocket subscription ``kmd_easy_energy/mitid/subscribe``; the v0.2.x card
-looked at the removed ``mitid_qr_svg`` / ``mitid_otp_code`` attributes, so a
-cached old card shows no QR after the update.
+The integration serves ``frontend/kmd-easy-energy-card.js`` directly at
+``/kmd_easy_energy/kmd-easy-energy-card.js`` without copying into ``/config/www``
+(which belongs to the user), and keeps the storage-mode Lovelace resource URL
+cache-busted with ``?v=<version>`` while migrating any legacy ``/local/js/``
+resource entries.
 """
 
 from __future__ import annotations
 
 import json
 import logging
-import shutil
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit
 
 from homeassistant.core import HomeAssistant
 
-from .const import CARD_JS_FILENAME, CARD_RESOURCE_PATH, DOMAIN
+from .const import (
+    CARD_JS_FILENAME,
+    CARD_RESOURCE_PATH,
+    DOMAIN,
+    LEGACY_CARD_RESOURCE_PATH,
+)
 
 _LOGGER = logging.getLogger(__name__)
 _STATIC_CARD_REGISTERED = f"{DOMAIN}_card_static_registered"
@@ -38,41 +40,20 @@ def card_resource_url(version: str | None = None) -> str:
 
 
 def is_our_card_resource_url(url: str) -> bool:
-    """True if *url* points at the bundled card under ``/local/js/``."""
+    """True if *url* points at the bundled card (current or legacy path)."""
     raw = (url or "").strip()
     if not raw:
         return False
     path = urlsplit(raw).path.rstrip("/")
-    return path == CARD_RESOURCE_PATH or path.endswith(CARD_RESOURCE_PATH)
-
-
-def install_frontend_card(www_js_dir: Path) -> Path | None:
-    """Copy bundled Lovelace card JS to ``<config>/www/js/`` (run in executor)."""
-    src = Path(__file__).parent / "frontend" / CARD_JS_FILENAME
-    if not src.exists():
-        return None
-    www_js_dir.mkdir(parents=True, exist_ok=True)
-    dst = www_js_dir / CARD_JS_FILENAME
-    try:
-        if not dst.exists() or src.read_bytes() != dst.read_bytes():
-            shutil.copy2(src, dst)
-    except Exception as err:  # noqa: BLE001
-        _LOGGER.warning("Could not install frontend card to %s: %s", dst, err)
-        return None
-    return dst
+    return any(
+        path == candidate or path.endswith(candidate)
+        for candidate in (CARD_RESOURCE_PATH, LEGACY_CARD_RESOURCE_PATH)
+    )
 
 
 async def async_register_frontend_card_static_path(hass: HomeAssistant) -> bool:
-    """Serve the bundled card directly at ``/local/js/kmd-easy-energy-card.js``.
-
-    Home Assistant only mounts ``/local`` at startup if ``<config>/www`` already
-    existed then, so a fresh install would otherwise require a second restart
-    before Lovelace can load the module. Registering the static path directly
-    makes the card available immediately.
-    """
+    """Serve the bundled card directly at ``/kmd_easy_energy/kmd-easy-energy-card.js``."""
     src = Path(__file__).parent / "frontend" / CARD_JS_FILENAME
-    if not src.exists():
-        return False
     hass_data = getattr(hass, "data", None)
     if isinstance(hass_data, dict) and hass_data.get(_STATIC_CARD_REGISTERED):
         return True
@@ -130,8 +111,8 @@ async def async_ensure_lovelace_card_resource(
         if not any(is_our_card_resource_url(url) and url.split("#")[0] == target for url in urls):
             _LOGGER.warning(
                 "Lovelace is in YAML mode. Add or update the card resource to %s "
-                "(Home Assistant caches /local for 31 days; without ?v= the browser "
-                "may keep an old card that cannot show the MitID QR).",
+                "(migrating from any legacy /local/js/ path; without ?v= the browser "
+                "may keep an old cached card that cannot show the MitID QR).",
                 target,
             )
         return target

@@ -3,7 +3,7 @@
  * Zero external dependencies, Shadow DOM, responsive, interactive tooltips, DA/EN i18n.
  */
 (() => {
-  const VER = "1.2.9";
+  const VER = "1.3.0";
   const MONTHS = ["Jan", "Feb", "Mar", "Apr", "Maj", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Dec"];
   const DAYS_IN_MONTH = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
   const isLeapYear = (y) => (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0;
@@ -827,8 +827,9 @@
       const hasData = Boolean(
         st && (Object.keys(ann).length > 0 || Object.keys(mon).length > 0 || Object.keys(dy.days || {}).length > 0)
       );
+      const isAdmin = this._hass?.user?.is_admin !== false;
       const isInitialSetup = !hasData || a.initial_setup_complete === false;
-      const showOnboarding = isInitialSetup || Boolean(this._setupOpen);
+      const showOnboarding = isInitialSetup || (isAdmin && Boolean(this._setupOpen));
       const chartCount = [has("monthly"), has("temperatures"), has("hourly"), has("daily"), has("daily")].filter(Boolean).length;
       const isDesktopWide = this._isDesktopWide();
       this._lastDesktopWide = isDesktopWide;
@@ -955,7 +956,7 @@
       const syncNudge = (syncReminder && !hasSyncMsg && syncReminderMsg)
         ? `<div class="sync-nudge" role="status"><span aria-hidden="true">💧</span><span>${esc(syncReminderMsg)}</span></div>`
         : "";
-      const costHint = (!has("cost") && hasData && !isInitialSetup)
+      const costHint = (!has("cost") && hasData && !isInitialSetup && isAdmin)
         ? `<div class="src-note" data-section="cost-hint">💰 Har du din kWh-pris? <button class="link-btn" id="costHintSetupBtn">Tilføj pris &amp; returkrav ⚙️</button></div>`
         : "";
 
@@ -1294,7 +1295,7 @@
             <div class="bn-btns">
               <button class="btn login" id="loginBtn" title="${esc(activePortalUrl)}">🔑 Portal ↗</button>
               <button class="btn" id="syncBtn">${esc(t.sync_btn)}</button>
-              <button class="btn" id="openSetupBtn" title="Skift værk / opsætning">⚙️</button>
+              ${isAdmin ? `<button class="btn" id="openSetupBtn" title="Skift værk / opsætning">⚙️</button>` : ""}
             </div>
           </div>
           ${syncNudge}
@@ -1720,15 +1721,9 @@
           this._hass.callService("input_button", "press", { entity_id: customBtn });
           return;
         }
-        // Prefer the domain service (looks up the entry by id / utility_id) so
-        // entity_id slugs like "envafors_sk_forsyning" cannot miss the button.
-        // KMD: every "Synkroniser" is one MitID login + fetch since last sync.
-        // Backends without MitID (E|Forsyning, Watts On) use the generic "sync" service.
-        if (!hasMitid) {
-          this._hass.callService("kmd_easy_energy", "sync", a.entry_id ? { entry_id: a.entry_id } : {});
-          return;
-        }
-        this._hass.callService("kmd_easy_energy", "start_mitid_sync", payload);
+        // Prefer the domain sync service (looks up the entry by id / utility_id and
+        // works for non-admin wall-tablet users across KMD, E|Forsyning, and Watts On).
+        this._hass.callService("kmd_easy_energy", "sync", payload);
       };
       const efSyncBtn = this.shadowRoot.getElementById("efSyncBtn");
       if (efSyncBtn) efSyncBtn.addEventListener("click", triggerSync);
@@ -1787,7 +1782,7 @@
         .replace(/\b[A-Za-z0-9_-]{24,}\b/g, "[redacted]")
         .replace(/\s+/g, " ")
         .trim()
-        .slice(0, 140);
+        .slice(0, 220);
       const buildFeedbackBody = (kind) => {
         const listedUnits = Array.isArray(a.available_units)
           ? a.available_units.map((u) => u.Name).filter(Boolean)

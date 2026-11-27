@@ -525,6 +525,11 @@ def test_utilities_json_backend_field_and_hjorring() -> None:
     assert horsens["tier"] == "confirmed"
     assert horsens["eforsyning_supplier_id"] == "8B563AC8-706E-45C6-A23C-A6CABCAE3E41"
     assert horsens["portal_url"] == "https://eforsyning.dk/horsens/"
+    thisted = by_id["thisted-varmeforsyning"]
+    assert thisted["status"] == "confirmed"
+    assert thisted["tier"] == "confirmed"
+    assert thisted["eforsyning_supplier_id"] == "3D6C9D52-1BB8-4718-A7A1-CE27B9D137BA"
+    assert thisted["portal_url"] == "https://eforsyning.dk/thisted-varmeforsyning/"
     silkeborg = by_id["silkeborg-forsyning"]
     assert silkeborg["backend"] == "kmd"
     assert silkeborg["status"] == "confirmed"

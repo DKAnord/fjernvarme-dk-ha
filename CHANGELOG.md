@@ -2,6 +2,12 @@
 
 Alle væsentlige ændringer i **Dansk Fjernvarme** (tidligere *Fjernvarme (KMD Easy Energy)*) dokumenteres her.
 
+## [1.3.19] - 2026-11-27
+
+### Bekræftet & Forbedret
+- **Thisted Varmeforsyning bekræftet live + officiel 2026 fremløbskurve ([issue #64](https://github.com/DKAnord/fjernvarme-dk-ha/issues/64), tak til `@dezito`):** Markeret som ✅ **Bekræftet** E|Forsyning-værk (`thisted-varmeforsyning`, `https://eforsyning.dk/thisted-varmeforsyning/`, verificeret med `kWh`, `m³` og `°C` — nu **32** live-bekræftede værker og **70/70** forudfyldte værker), inkl. eksisterende officielle 2026-takst (`0,65625 kr./kWh` / `656,25 kr./MWh` inkl. moms, fast effektbidrag `20,00 kr./m²/år`, abonnementsbidrag `750,00 kr./år`) samt tilføjet officiel fremløbsafhængig motivationsbidrag-kurve (`+1 %/°C`, kun tillæg uden bonus, `55–80 °C → 41–33 °C`).
+- **Kortressource:** Opdateret cache-busting ressource-URL til `/kmd_easy_energy/kmd-easy-energy-card.js?v=1.3.19`.
+
 ## [1.3.18] - 2026-11-27
 
 ### Bekræftet & Forbedret

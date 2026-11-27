@@ -1851,3 +1851,44 @@ def test_fjernvarme_horsens_confirmed_2026_tariff() -> None:
         )
         assert res.bonus_temp == expected_ret
         assert res.penalty_temp == expected_ret
+
+
+def test_thisted_varmeforsyning_confirmed_2026_tariff() -> None:
+    from kmd_easy_energy.tariff import load_utilities
+
+    utilities = load_utilities()
+    by_id = {u["id"]: u for u in utilities}
+    thisted = by_id["thisted-varmeforsyning"]
+    assert thisted["status"] == "confirmed"
+    assert thisted["tier"] == "confirmed"
+
+    resolved = resolve_tariff(
+        _entry(data={"utility_id": "thisted-varmeforsyning"}),
+        today=date(2026, 11, 27),
+        utilities=utilities,
+    )
+    assert resolved.utility_id == "thisted-varmeforsyning"
+    assert resolved.price_dkk_per_kwh == 0.65625
+    assert resolved.fixed_fee_dkk_per_m2_year == 20.0
+    assert resolved.suggested_fixed_fee_dkk_per_year == 750.0
+    assert resolved.motivation_pct_per_k == 1.0
+    assert resolved.motivation_bonus is False
+    assert resolved.bonus_temp == 0.0
+    assert resolved.penalty_temp == 40.0
+
+    for fwd, expected_ret in (
+        (55.0, 41.0),
+        (60.0, 39.0),
+        (70.0, 35.0),
+        (75.0, 34.0),
+        (79.0, 34.0),
+        (80.0, 33.0),
+    ):
+        res = resolve_tariff(
+            _entry(data={"utility_id": "thisted-varmeforsyning"}),
+            today=date(2026, 11, 27),
+            utilities=utilities,
+            forward_temp=fwd,
+        )
+        assert res.bonus_temp == 0.0
+        assert res.penalty_temp == expected_ret

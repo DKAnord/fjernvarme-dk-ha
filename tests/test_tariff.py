@@ -837,10 +837,10 @@ def test_bundled_utilities_json_all_69_have_tariffs_and_spot_checks() -> None:
     from kmd_easy_energy.tariff import load_utilities
 
     utilities = load_utilities()
-    assert len(utilities) == 71
+    assert len(utilities) == 72
     with_tariffs = [u for u in utilities if u.get("tariffs")]
-    assert len(with_tariffs) == len(utilities) == 71
-    assert len({u["id"] for u in utilities}) == 71
+    assert len(with_tariffs) == len(utilities) == 72
+    assert len({u["id"] for u in utilities}) == 72
 
     backends = {}
     for u in utilities:
@@ -849,7 +849,7 @@ def test_bundled_utilities_json_all_69_have_tariffs_and_spot_checks() -> None:
         for t in u["tariffs"]:
             assert t["price_dkk_per_kwh"] > 0, u["id"]
             assert str(t.get("source", "")).startswith("https://"), u["id"]
-    assert backends == {"kmd": 17, "eforsyning": 50, "wattson": 4}
+    assert backends == {"kmd": 17, "eforsyning": 51, "wattson": 4}
 
     by_id = {u["id"]: u for u in utilities}
     assert "hoje-taastrup-fjernvarme" not in by_id
@@ -1950,3 +1950,74 @@ def test_haslev_fjernvarme_confirmed_2026_2027_and_custom_matching() -> None:
     assert r_27.motivation_bonus is True
     assert r_27.bonus_temp == 38.0
     assert r_27.penalty_temp == 42.0
+
+
+def test_lemvig_varmevaerk_confirmed_2026_curve_and_custom_matching() -> None:
+    from kmd_easy_energy.tariff import load_utilities, match_utility_for_entry
+
+    utilities = load_utilities()
+    by_id = {u["id"]: u for u in utilities}
+    lemvig = by_id["lemvig-varmevaerk"]
+    assert lemvig["status"] == "confirmed"
+    assert lemvig["tier"] == "confirmed"
+    assert lemvig["eforsyning_supplier_id"] == "AC3C048A-78F6-4EEC-8B0E-34C8724F8EC9"
+    assert lemvig["portal_url"] == "https://eforsyning.dk/lemvig/"
+
+    by_supplier = match_utility_for_entry(
+        {
+            "utility_id": "eforsyning-custom",
+            "eforsyning_supplier_id": "ac3c048a-78f6-4eec-8b0e-34c8724f8ec9",
+            "portal_url": "https://eforsyning.dk/",
+        },
+        utilities,
+    )
+    assert by_supplier is not None and by_supplier["id"] == "lemvig-varmevaerk"
+
+    by_portal = match_utility_for_entry(
+        {
+            "utility_id": "eforsyning-custom",
+            "portal_url": "https://eforsyning.dk/lemvig",
+        },
+        utilities,
+    )
+    assert by_portal is not None and by_portal["id"] == "lemvig-varmevaerk"
+
+    r_base = resolve_tariff(
+        _entry(
+            data={
+                "utility_id": "eforsyning-custom",
+                "portal_url": "https://eforsyning.dk/lemvig/",
+            },
+        ),
+        today=date(2026, 11, 27),
+        utilities=utilities,
+    )
+    assert r_base.utility_id == "lemvig-varmevaerk"
+    assert r_base.price_dkk_per_kwh == 0.45
+    assert r_base.fixed_fee_dkk_per_m2_year == 30.0
+    assert r_base.suggested_fixed_fee_dkk_per_year == 2000.0
+    assert r_base.motivation_pct_per_k == 1.5
+    assert r_base.motivation_max_pct == 25.0
+    assert r_base.motivation_bonus is False
+    assert r_base.bonus_temp == 0.0
+    assert r_base.penalty_temp == 35.0
+
+    for fwd, expected_ret in [(60.0, 40.0), (64.0, 37.0), (66.0, 35.0), (70.0, 32.0), (72.0, 30.0)]:
+        res = resolve_tariff(
+            _entry(data={"utility_id": "lemvig-varmevaerk"}),
+            today=date(2026, 11, 27),
+            utilities=utilities,
+            forward_temp=fwd,
+        )
+        assert res.bonus_temp == 0.0
+        assert res.penalty_temp == expected_ret
+
+    r_forv = resolve_tariff(
+        _entry(data={"utility_id": "lemvig-varmevaerk"}),
+        today=date(2026, 11, 27),
+        utilities=utilities,
+        expected_return_temp=34.2,
+        forward_temp=70.0,
+    )
+    assert r_forv.bonus_temp == 0.0
+    assert r_forv.penalty_temp == 34.2

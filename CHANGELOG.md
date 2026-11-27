@@ -2,6 +2,12 @@
 
 Alle væsentlige ændringer i **Dansk Fjernvarme** (tidligere *Fjernvarme (KMD Easy Energy)*) dokumenteres her.
 
+## [1.3.21] - 2026-11-27
+
+### Tilføjet & Bekræftet
+- **Lemvig Varmeværk a.m.b.a. tilføjet og bekræftet live + 2026-takst & fremløbskurve ([issue #72](https://github.com/DKAnord/fjernvarme-dk-ha/issues/72), tak til `@Un1t7`):** Tilføjet som dedikeret ✅ **Bekræftet** E|Forsyning-værk (`lemvig-varmevaerk`, `forsyningId: AC3C048A-78F6-4EEC-8B0E-34C8724F8EC9`, `https://eforsyning.dk/lemvig/`, verificeret med `kWh`, `m³` og `°C`, inkl. automatisk opgradering fra `eforsyning-custom` — nu **34** live-bekræftede værker og **72/72** forudfyldte værker) med officiel 2026-takst (`0,450 kr./kWh` / `450,00 kr./MWh` inkl. moms, fast bidrag `30,00 kr./m²/år`, administrations- og målerbidrag `2.000,00 kr./år`) samt incitamentstarif (`+1,5 %/°C`, kun tillæg uden bonus, maks. `+25 %`, fremløbsafhængig tabel `60–72 °C → 40–30 °C`, bruger automatisk `Forv_Retur` fra E|Forsyning).
+- **Kortressource:** Opdateret cache-busting ressource-URL til `/kmd_easy_energy/kmd-easy-energy-card.js?v=1.3.21`.
+
 ## [1.3.20] - 2026-11-27
 
 ### Tilføjet & Bekræftet

@@ -1436,6 +1436,52 @@
       ]
     },
     {
+      "id": "lemvig-varmevaerk",
+      "name": "Lemvig Varmeværk a.m.b.a.",
+      "city": "Lemvig",
+      "portal_url": "https://eforsyning.dk/lemvig/",
+      "status": "confirmed",
+      "tier": "confirmed",
+      "auth_method": "Forbrugernummer + webpinkode",
+      "backend": "eforsyning",
+      "eforsyning_supplier_id": "AC3C048A-78F6-4EEC-8B0E-34C8724F8EC9",
+      "latitude": 56.548,
+      "longitude": 8.31,
+      "notes": "E|Forsyning (bekræftet live via issue #72 af @Un1t7 — kWh, m³ og °C). forsyningid og AppServerUri (https://apiapp.dff-edb.dk/lemvig/) bekræftet live; login med forbrugernummer + webpinkode fra regningen; daglige aflæsninger. Takstblad 2026: 450,00 kr./MWh inkl. moms (0,450 kr./kWh), fast bidrag 30,00 kr./m²/år (0–3.000 m²), administrations- og målerbidrag 2.000,00 kr./år inkl. moms samt incitamentstarif +1,5 %/°C (kun tillæg uden bonus, maks. +25 %) ift. fremløbsafhængig forventet returtemperatur (60–72 °C → 40–30 °C; bruger automatisk Forv_Retur fra E|Forsyning).",
+      "tariffs": [
+        {
+          "year": 2026,
+          "effective_from": "2026-01-01",
+          "price_dkk_per_kwh": 0.45,
+          "price_dkk_per_m3": null,
+          "fixed_fee_dkk_per_m2_year": 30.0,
+          "fixed_fee_dkk_per_year": 2000.0,
+          "motivation_pct_per_k": 1.5,
+          "motivation_max_pct": 25.0,
+          "motivation_bonus": false,
+          "bonus_temp": 0.0,
+          "penalty_temp": 35.0,
+          "expected_return_by_forward_temp": [
+            [60.0, 40.0],
+            [61.0, 39.0],
+            [62.0, 38.0],
+            [63.0, 37.0],
+            [64.0, 37.0],
+            [65.0, 36.0],
+            [66.0, 35.0],
+            [67.0, 34.0],
+            [68.0, 33.0],
+            [69.0, 33.0],
+            [70.0, 32.0],
+            [71.0, 31.0],
+            [72.0, 30.0]
+          ],
+          "source": "https://www.lemvig-varmevaerk.dk/wp-content/uploads/2025/12/Takstblad-2026.pdf",
+          "source_note": "Takstblad 2026 (Lemvig Varmeværk a.m.b.a., 01.01.2026–31.12.2026, inkl. moms): Variabelt bidrag 360,00 ekskl. / 450,00 kr./MWh inkl. moms (0,450 kr./kWh). Fast bidrag (0–3.000 m² BBR): 24,00 ekskl. / 30,00 kr./m²/år inkl. moms. Administrations- og målerbidrag: 1.600,00 ekskl. / 2.000,00 kr./år inkl. moms pr. måler. Incitamentstarif (kun tillæg uden bonus): +1,5 %/°C (maks. +25 %) ved returtemperatur over forventet returtemperatur ud fra fremløbsafhængig tabel (60–72 °C → 40–30 °C; bruger automatisk Forv_Retur fra E|Forsyning)."
+        }
+      ]
+    },
+    {
       "id": "aalestrup-norager-energi",
       "name": "Aalestrup-Nørager Energi a.m.b.a.",
       "city": "Aalestrup / Nørager",

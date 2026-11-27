@@ -474,6 +474,11 @@ def test_utilities_json_backend_field_and_hjorring() -> None:
     assert marstal["tier"] == "confirmed"
     assert marstal["eforsyning_supplier_id"] == "6BC25F8C-370A-40AB-9971-603C31AEDCA8"
     assert marstal["portal_url"] == "https://www.solarmarstal.dk/eforsyning/"
+    vestfor = by_id["vestforbraending"]
+    assert vestfor["status"] == "confirmed"
+    assert vestfor["tier"] == "confirmed"
+    assert vestfor["eforsyning_supplier_id"] == "C3FFBD4F-139B-4F4B-A243-478C7B1DCE5A"
+    assert vestfor["portal_url"] == "https://eforsyning.dk/vestfor/"
     for uid in eforsyning:
         u = by_id[uid]
         assert is_uuid(u["eforsyning_supplier_id"]), uid

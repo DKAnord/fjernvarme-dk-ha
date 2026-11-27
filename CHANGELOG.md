@@ -2,6 +2,12 @@
 
 Alle væsentlige ændringer i **Dansk Fjernvarme** (tidligere *Fjernvarme (KMD Easy Energy)*) dokumenteres her.
 
+## [1.3.9] - 2026-11-27
+
+### Bekræftet & Forbedret
+- **Vestforbrænding bekræftet live ([issue #54](https://github.com/DKAnord/fjernvarme-dk-ha/issues/54), tak til `@Hjeresen`):** Markeret som ✅ **Bekræftet** E|Forsyning-værk (`vestforbraending`, `https://eforsyning.dk/vestfor/`, verificeret med `kWh`, `m³` og `°C` — nu **21** live-bekræftede værker), inkl. eksisterende officiel 2026-takst (`0,52619 kr./kWh` inkl. moms / `526,19 kr./MWh` inkl. affaldsvarmeafgift; fast varmepris baseret på 3-års prognose uden m²- eller målerbidrag, ingen særskilt afkølingstarif).
+- **Kortressource:** Opdateret cache-busting ressource-URL til `/kmd_easy_energy/kmd-easy-energy-card.js?v=1.3.9`.
+
 ## [1.3.8] - 2026-11-27
 
 ### Tilføjet & Bekræftet

@@ -678,14 +678,14 @@
       "name": "Vestforbrænding",
       "city": "Glostrup / Storkøbenhavn",
       "portal_url": "https://eforsyning.dk/vestfor/",
-      "status": "pending_test",
-      "tier": "verified_portal",
+      "status": "confirmed",
+      "tier": "confirmed",
       "auth_method": "Forbrugernummer + webpinkode",
       "backend": "eforsyning",
       "eforsyning_supplier_id": "C3FFBD4F-139B-4F4B-A243-478C7B1DCE5A",
       "latitude": 55.694,
       "longitude": 12.433,
-      "notes": "E|Forsyning (afventer 1. test). forsyningid og AppServerUri bekræftet offentligt via GetVaerkSettings. Login med forbrugernummer + webpinkode fra regningen; daglige aflæsninger.",
+      "notes": "E|Forsyning (bekræftet live via issue #54 — kWh, m³ og °C). forsyningid og AppServerUri bekræftet; login med forbrugernummer + webpinkode fra regningen; daglige aflæsninger.",
       "tariffs": [
         {
           "year": 2026,

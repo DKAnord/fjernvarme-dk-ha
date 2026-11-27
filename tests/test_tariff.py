@@ -833,14 +833,14 @@ def test_bundled_utilities_json_has_energi_ikast_2026_2027_tariffs_and_dynamic_c
     assert with_area_est["annual_fixed_fee_dkk"] == 4375.0
 
 
-def test_bundled_utilities_json_all_64_have_tariffs_and_spot_checks() -> None:
+def test_bundled_utilities_json_all_65_have_tariffs_and_spot_checks() -> None:
     from kmd_easy_energy.tariff import load_utilities
 
     utilities = load_utilities()
-    assert len(utilities) == 64
+    assert len(utilities) == 65
     with_tariffs = [u for u in utilities if u.get("tariffs")]
-    assert len(with_tariffs) == len(utilities) == 64
-    assert len({u["id"] for u in utilities}) == 64
+    assert len(with_tariffs) == len(utilities) == 65
+    assert len({u["id"] for u in utilities}) == 65
 
     backends = {}
     for u in utilities:
@@ -849,7 +849,7 @@ def test_bundled_utilities_json_all_64_have_tariffs_and_spot_checks() -> None:
         for t in u["tariffs"]:
             assert t["price_dkk_per_kwh"] > 0, u["id"]
             assert str(t.get("source", "")).startswith("https://"), u["id"]
-    assert backends == {"kmd": 16, "eforsyning": 44, "wattson": 4}
+    assert backends == {"kmd": 16, "eforsyning": 45, "wattson": 4}
 
     by_id = {u["id"]: u for u in utilities}
     assert "hoje-taastrup-fjernvarme" not in by_id
@@ -1353,3 +1353,57 @@ def test_bundled_utilities_json_has_vinderup_2026_2027_tariffs_and_custom_matchi
     assert r27.motivation_dkk_per_kwh_per_k == 0.00625
     assert r27.bonus_temp == 30.0
     assert r27.penalty_temp == 35.0
+
+
+def test_bundled_utilities_json_has_marstal_2026_tariff_and_custom_matching() -> None:
+    from kmd_easy_energy.tariff import load_utilities, match_utility_for_entry
+
+    utilities = load_utilities()
+    by_id = {u["id"]: u for u in utilities}
+    marstal = by_id["marstal-fjernvarme"]
+    assert marstal["status"] == "confirmed"
+    assert marstal["tier"] == "confirmed"
+    assert marstal["eforsyning_supplier_id"] == "6BC25F8C-370A-40AB-9971-603C31AEDCA8"
+    assert marstal["portal_url"] == "https://www.solarmarstal.dk/eforsyning/"
+
+    t26 = published_tariff("marstal-fjernvarme", 2026, utilities)
+    assert t26 is not None
+    assert t26["price_dkk_per_kwh"] == 0.88
+    assert t26["fixed_fee_dkk_per_year"] == 500.0
+    assert t26.get("fixed_fee_dkk_per_m2_year") is None
+    assert t26["source"].startswith("https://solarmarstal.dk/")
+
+    by_supplier = match_utility_for_entry(
+        {
+            "utility_id": "eforsyning-custom",
+            "eforsyning_supplier_id": "6bc25f8c-370a-40ab-9971-603c31aedca8",
+            "portal_url": "https://eforsyning.dk/",
+        },
+        utilities,
+    )
+    assert by_supplier is not None and by_supplier["id"] == "marstal-fjernvarme"
+
+    by_portal = match_utility_for_entry(
+        {
+            "utility_id": "eforsyning-custom",
+            "portal_url": "https://www.solarmarstal.dk/eforsyning",
+        },
+        utilities,
+    )
+    assert by_portal is not None and by_portal["id"] == "marstal-fjernvarme"
+
+    resolved = resolve_tariff(
+        _entry(
+            data={
+                "utility_id": "eforsyning-custom",
+                "portal_url": "https://www.solarmarstal.dk/eforsyning/",
+            },
+        ),
+        today=date(2026, 11, 27),
+        utilities=utilities,
+    )
+    assert resolved.utility_id == "marstal-fjernvarme"
+    assert resolved.price_dkk_per_kwh == 0.88
+    assert resolved.fixed_fee_dkk_per_m2_year is None
+    assert resolved.suggested_fixed_fee_dkk_per_year == 500.0
+    assert resolved.motivation_dkk_per_kwh_per_k is None

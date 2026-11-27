@@ -2,6 +2,12 @@
 
 Alle væsentlige ændringer i **Dansk Fjernvarme** (tidligere *Fjernvarme (KMD Easy Energy)*) dokumenteres her.
 
+## [1.3.8] - 2026-11-27
+
+### Tilføjet & Bekræftet
+- **Marstal Fjernvarme tilføjet og bekræftet live + 2026-takst ([issue #51](https://github.com/DKAnord/fjernvarme-dk-ha/issues/51), tak til `@Milfeldt`):** Tilføjet som dedikeret ✅ **Bekræftet** E|Forsyning-værk (`marstal-fjernvarme`, `forsyningId: 6BC25F8C-370A-40AB-9971-603C31AEDCA8`, `https://www.solarmarstal.dk/eforsyning/`, verificeret med `kWh`, `m³` og `°C` — nu **20** live-bekræftede værker og **65/65** forudfyldte værker) med automatisk opgradering fra `eforsyning-custom` samt officiel 2026-takst (`0,88 kr./kWh` inkl. moms, målerleje `500,00 kr./år`, trindelt fast BBR-arealafgift og +1 %/°C afkølingstillæg under `30 °C` ΔT, maks. 10 %).
+- **Kortressource:** Opdateret cache-busting ressource-URL til `/kmd_easy_energy/kmd-easy-energy-card.js?v=1.3.8`.
+
 ## [1.3.7] - 2026-11-27
 
 ### Tilføjet & Bekræftet

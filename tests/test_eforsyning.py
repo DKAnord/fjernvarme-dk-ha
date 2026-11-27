@@ -410,7 +410,7 @@ def test_utilities_json_backend_field_and_hjorring() -> None:
     assert fh["tier"] == "confirmed"
 
     eforsyning = {u["id"] for u in data["utilities"] if u.get("backend") == "eforsyning"}
-    assert len(eforsyning) == 44
+    assert len(eforsyning) == 45
     assert "hoje-taastrup-fjernvarme" not in by_id
     assert eforsyning >= {
         "soroe-fjernvarme",
@@ -420,6 +420,7 @@ def test_utilities_json_backend_field_and_hjorring() -> None:
         "kongerslev-fjernvarme",
         "grenaa-varmevaerk",
         "vinderup-varmevaerk",
+        "marstal-fjernvarme",
         "hjorring-varmeforsyning",
         "fjernvarme-horsens",
         "vestforbraending",
@@ -468,6 +469,11 @@ def test_utilities_json_backend_field_and_hjorring() -> None:
     assert vinderup["tier"] == "confirmed"
     assert vinderup["eforsyning_supplier_id"] == "C0584E30-4F38-4774-B32E-7F6E6AFCCA35"
     assert vinderup["portal_url"] == "https://eforsyning.dk/vinderupvarme/"
+    marstal = by_id["marstal-fjernvarme"]
+    assert marstal["status"] == "confirmed"
+    assert marstal["tier"] == "confirmed"
+    assert marstal["eforsyning_supplier_id"] == "6BC25F8C-370A-40AB-9971-603C31AEDCA8"
+    assert marstal["portal_url"] == "https://www.solarmarstal.dk/eforsyning/"
     for uid in eforsyning:
         u = by_id[uid]
         assert is_uuid(u["eforsyning_supplier_id"]), uid

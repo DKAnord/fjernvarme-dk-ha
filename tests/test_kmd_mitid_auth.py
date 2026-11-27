@@ -21,6 +21,7 @@ from kmd_easy_energy.api.kmd_mitid_auth import (
     _form_action_url,
     _form_payload,
     _is_auto_post_form,
+    _is_discovery_follow_url,
     _is_external_provider_form,
     _is_interactive_account_page,
     _parse_mf2_utility_code,
@@ -546,3 +547,49 @@ def test_browser_client_never_logs_mitid_user_id(caplog: pytest.LogCaptureFixtur
     error_records = [rec for rec in caplog.records if rec.levelno >= logging.ERROR]
     assert len(error_records) >= 4
     assert secret_uid not in caplog.text
+
+
+def test_direct_mf2_url_discovers_locally_without_http_get() -> None:
+    session = FakeSession({})
+    cfg = _auth_with(session)._discover_oidc_config(
+        "https://minforsyning-2.kmd.dk/?plant=120&utility=0&plus=True"
+    )
+    assert cfg["client_id"] == MF2_CLIENT
+    assert cfg["login_type"] == "mf"
+    assert cfg["utility_code"] == "0120000"
+    assert session.gets == []
+
+
+def test_discovery_ignores_invalid_urls_with_whitespace() -> None:
+    assert _is_discovery_follow_url("https://www.nfs.as/min-forsyning/", "var K=1") is False
+
+    # Page with an invalid relative href containing whitespace should not be fetched.
+    bad_only = FakeSession(
+        {
+            "https://www.nfs.as/min-forsyning/": FakeResp(
+                status_code=200,
+                text='<html><body><a href="var K=1">min-forsyning</a></body></html>',
+                url="https://www.nfs.as/min-forsyning/",
+            )
+        }
+    )
+    with pytest.raises(RuntimeError, match="Kunne ikke finde login-oplysningerne"):
+        _auth_with(bad_only)._discover_oidc_config("https://www.nfs.as/min-forsyning/")
+    assert bad_only.gets == ["https://www.nfs.as/min-forsyning/"]
+
+    # If a valid MF2 link is also present alongside the invalid href, discovery succeeds.
+    with_mf2 = FakeSession(
+        {
+            "https://www.nfs.as/min-forsyning/": FakeResp(
+                status_code=200,
+                text=(
+                    '<a href="var K=1">min-forsyning</a>'
+                    '<a href="https://minforsyning-2.kmd.dk/?plant=120&amp;utility=0&amp;plus=True">Login</a>'
+                ),
+                url="https://www.nfs.as/min-forsyning/",
+            )
+        }
+    )
+    cfg = _auth_with(with_mf2)._discover_oidc_config("https://www.nfs.as/min-forsyning/")
+    assert cfg["utility_code"] == "0120000"
+    assert cfg["client_id"] == MF2_CLIENT

@@ -576,6 +576,31 @@
       ]
     },
     {
+      "id": "nyborg-forsyning",
+      "name": "Nyborg Forsyning & Service",
+      "city": "Nyborg",
+      "portal_url": "https://minforsyning-2.kmd.dk/?plant=120&utility=0&plus=True",
+      "status": "pending_test",
+      "tier": "verified_portal",
+      "auth_method": "MitID",
+      "backend": "kmd",
+      "latitude": 55.313,
+      "longitude": 10.79,
+      "notes": "KMD Min Forsyning 2 (minforsyning-2.kmd.dk, plant 120 / utility 0120000). Direkte KMD MF2 portal-URL bruges, da nfs.as viser browser-tjek ved automatiske opslag. Afventer 1. bekræftet brugertest med MitID (issue #66).",
+      "tariffs": [
+        {
+          "year": 2026,
+          "effective_from": "2026-01-01",
+          "price_dkk_per_kwh": 0.75,
+          "price_dkk_per_m3": null,
+          "fixed_fee_dkk_per_m2_year": 16.0,
+          "fixed_fee_dkk_per_year": 750.0,
+          "source": "https://www.nfs.as/wp-content/uploads/2025/11/NFS-Varme-AS-2026-Takster.pdf",
+          "source_note": "Varmepriser 2026 (NFS Varme A/S / Nyborg Forsyning & Service, inkl. moms): Forbrugspris 750,00 kr./MWh (0,75 kr./kWh). Fast afgift (0–5.000 m²): 16,00 kr./m²/år og abonnement: 750,00 kr./år inkl. moms. Ingen særskilt afkølingstarif i takstblad 2026 (leveringsbestemmelser angiver generelt retur ≤ 40 °C / afkøling ≥ 30 °C)."
+        }
+      ]
+    },
+    {
       "id": "soroe-fjernvarme",
       "name": "Sorø Fjernvarme",
       "city": "Sorø",

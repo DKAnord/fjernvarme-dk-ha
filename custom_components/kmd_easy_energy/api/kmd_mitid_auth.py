@@ -188,6 +188,8 @@ def _urls_in_html(html: str) -> list[str]:
 def _is_discovery_follow_url(base_url: str, candidate: str) -> bool:
     """Whether a link from a portal page is worth fetching for OIDC discovery."""
     url = urljoin(base_url, candidate)
+    if any(ch.isspace() or ord(ch) < 32 for ch in url):
+        return False
     parsed = urlparse(url)
     if parsed.scheme not in ("http", "https"):
         return False
@@ -538,6 +540,13 @@ class KMDMitIDAuthenticator:
         """
         if "minvarme.kredslob.dk" in portal_url:
             return dict(DEFAULT_KREDSLOB)
+        parsed_host = (urlparse(portal_url).hostname or "").lower()
+        if parsed_host == "minforsyning-2.kmd.dk":
+            mf2_code = _parse_mf2_utility_code(portal_url)
+            if mf2_code:
+                cfg = dict(DEFAULT_MINFORSYNING2)
+                cfg["utility_code"] = mf2_code
+                return cfg
         try:
             return self._discover_oidc_config_uncached(portal_url)
         except RuntimeError:

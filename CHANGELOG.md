@@ -2,6 +2,13 @@
 
 Alle væsentlige ændringer i **Dansk Fjernvarme** (tidligere *Fjernvarme (KMD Easy Energy)*) dokumenteres her.
 
+## [1.3.17] - 2026-11-27
+
+### Tilføjet & Rettet
+- **Nyborg Forsyning & Service tilføjet + officiel 2026-takst ([issue #66](https://github.com/DKAnord/fjernvarme-dk-ha/issues/66), tak til `@rw-johansen`):** Tilføjet som 🧪 **Afventer 1. test** KMD (Min Forsyning 2)-værk (`nyborg-forsyning`, `https://minforsyning-2.kmd.dk/?plant=120&utility=0&plus=True`, `utility_code: 0120000` — nu **70/70** forudfyldte værker) med officiel 2026-takst (`0,75 kr./kWh` / `750,00 kr./MWh` inkl. moms, fast afgift `16,00 kr./m²/år` for 0–5.000 m² og abonnement `750,00 kr./år` inkl. moms).
+- **Robust KMD Min Forsyning 2 OIDC-opslag:** Direkte `minforsyning-2.kmd.dk?plant=...`-URL'er opslås nu lokalt uden unødvendigt HTTP-kald, og `_is_discovery_follow_url()` afviser ugyldige URL'er med mellemrum/kontroltegn fra eksterne sider (f.eks. browser-tjek på `nfs.as`).
+- **Kortressource:** Opdateret cache-busting ressource-URL til `/kmd_easy_energy/kmd-easy-energy-card.js?v=1.3.17`.
+
 ## [1.3.16] - 2026-11-27
 
 ### Bekræftet & Forbedret

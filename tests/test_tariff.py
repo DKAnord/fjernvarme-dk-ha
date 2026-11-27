@@ -837,10 +837,10 @@ def test_bundled_utilities_json_all_69_have_tariffs_and_spot_checks() -> None:
     from kmd_easy_energy.tariff import load_utilities
 
     utilities = load_utilities()
-    assert len(utilities) == 69
+    assert len(utilities) == 70
     with_tariffs = [u for u in utilities if u.get("tariffs")]
-    assert len(with_tariffs) == len(utilities) == 69
-    assert len({u["id"] for u in utilities}) == 69
+    assert len(with_tariffs) == len(utilities) == 70
+    assert len({u["id"] for u in utilities}) == 70
 
     backends = {}
     for u in utilities:
@@ -849,7 +849,7 @@ def test_bundled_utilities_json_all_69_have_tariffs_and_spot_checks() -> None:
         for t in u["tariffs"]:
             assert t["price_dkk_per_kwh"] > 0, u["id"]
             assert str(t.get("source", "")).startswith("https://"), u["id"]
-    assert backends == {"kmd": 16, "eforsyning": 49, "wattson": 4}
+    assert backends == {"kmd": 17, "eforsyning": 49, "wattson": 4}
 
     by_id = {u["id"]: u for u in utilities}
     assert "hoje-taastrup-fjernvarme" not in by_id
@@ -1793,3 +1793,26 @@ def test_aabenraa_fjernvarme_confirmed_2026_and_2027_tariffs() -> None:
         )
         assert res.bonus_temp == 0.0
         assert res.penalty_temp == expected_ret
+
+
+def test_nyborg_forsyning_2026_tariff() -> None:
+    from kmd_easy_energy.tariff import load_utilities
+
+    utilities = load_utilities()
+    by_id = {u["id"]: u for u in utilities}
+    nyborg = by_id["nyborg-forsyning"]
+    assert nyborg["backend"] == "kmd"
+    assert nyborg["status"] == "pending_test"
+    assert nyborg["tier"] == "verified_portal"
+    assert nyborg["portal_url"] == "https://minforsyning-2.kmd.dk/?plant=120&utility=0&plus=True"
+
+    resolved = resolve_tariff(
+        _entry(data={"utility_id": "nyborg-forsyning"}),
+        today=date(2026, 11, 27),
+        utilities=utilities,
+    )
+    assert resolved.utility_id == "nyborg-forsyning"
+    assert resolved.price_dkk_per_kwh == 0.75
+    assert resolved.fixed_fee_dkk_per_m2_year == 16.0
+    assert resolved.suggested_fixed_fee_dkk_per_year == 750.0
+    assert resolved.motivation_dkk_per_kwh_per_k is None

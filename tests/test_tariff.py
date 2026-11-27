@@ -833,14 +833,14 @@ def test_bundled_utilities_json_has_energi_ikast_2026_2027_tariffs_and_dynamic_c
     assert with_area_est["annual_fixed_fee_dkk"] == 4375.0
 
 
-def test_bundled_utilities_json_all_66_have_tariffs_and_spot_checks() -> None:
+def test_bundled_utilities_json_all_67_have_tariffs_and_spot_checks() -> None:
     from kmd_easy_energy.tariff import load_utilities
 
     utilities = load_utilities()
-    assert len(utilities) == 66
+    assert len(utilities) == 67
     with_tariffs = [u for u in utilities if u.get("tariffs")]
-    assert len(with_tariffs) == len(utilities) == 66
-    assert len({u["id"] for u in utilities}) == 66
+    assert len(with_tariffs) == len(utilities) == 67
+    assert len({u["id"] for u in utilities}) == 67
 
     backends = {}
     for u in utilities:
@@ -849,7 +849,7 @@ def test_bundled_utilities_json_all_66_have_tariffs_and_spot_checks() -> None:
         for t in u["tariffs"]:
             assert t["price_dkk_per_kwh"] > 0, u["id"]
             assert str(t.get("source", "")).startswith("https://"), u["id"]
-    assert backends == {"kmd": 16, "eforsyning": 46, "wattson": 4}
+    assert backends == {"kmd": 16, "eforsyning": 47, "wattson": 4}
 
     by_id = {u["id"]: u for u in utilities}
     assert "hoje-taastrup-fjernvarme" not in by_id
@@ -1477,3 +1477,75 @@ def test_bundled_utilities_json_has_silkeborg_confirmed_and_spjald_2026_2027_tar
     assert r_27.price_dkk_per_kwh == 1.0
     assert r_27.fixed_fee_dkk_per_m2_year == 37.5
     assert r_27.suggested_fixed_fee_dkk_per_year == 1875.0
+
+
+def test_odder_forsyning_confirmed_2026_2027_and_dynamic_curve() -> None:
+    from kmd_easy_energy.tariff import (
+        expected_return_from_forward_temp,
+        load_utilities,
+        match_utility_for_entry,
+    )
+
+    utilities = load_utilities()
+    by_id = {u["id"]: u for u in utilities}
+    odder = by_id["odder-forsyning"]
+    assert odder["status"] == "confirmed"
+    assert odder["tier"] == "confirmed"
+    assert odder["eforsyning_supplier_id"] == "ACD7B9D3-E7FA-41DF-A4C1-3E459AD74660"
+    assert odder["portal_url"] == "https://eforsyning.dk/odderforsyningsselskab-varme/"
+
+    by_supplier = match_utility_for_entry(
+        {
+            "utility_id": "eforsyning-custom",
+            "eforsyning_supplier_id": "acd7b9d3-e7fa-41df-a4c1-3e459ad74660",
+            "portal_url": "https://eforsyning.dk/",
+        },
+        utilities,
+    )
+    assert by_supplier is not None and by_supplier["id"] == "odder-forsyning"
+
+    by_portal = match_utility_for_entry(
+        {
+            "utility_id": "eforsyning-custom",
+            "portal_url": "https://eforsyning.dk/odderforsyningsselskab-varme",
+        },
+        utilities,
+    )
+    assert by_portal is not None and by_portal["id"] == "odder-forsyning"
+
+    r_26 = resolve_tariff(
+        _entry(
+            data={
+                "utility_id": "eforsyning-custom",
+                "portal_url": "https://eforsyning.dk/odderforsyningsselskab-varme/",
+            },
+        ),
+        today=date(2026, 11, 27),
+        utilities=utilities,
+    )
+    assert r_26.utility_id == "odder-forsyning"
+    assert r_26.price_dkk_per_kwh == 0.8625
+    assert r_26.fixed_fee_dkk_per_m2_year == 22.5
+    assert r_26.suggested_fixed_fee_dkk_per_year == 1250.0
+    assert r_26.motivation_pct_per_k == 3.0
+    assert r_26.motivation_bonus is False
+    assert r_26.bonus_temp == 0.0
+    assert r_26.penalty_temp == 35.0
+    assert r_26.motivation_dkk_per_kwh_per_k == round(0.8625 * 0.03, 6)
+
+    curve = r_26.expected_return_by_forward_temp
+    assert curve is not None
+    assert expected_return_from_forward_temp(62.0, curve) == 35.0
+    assert expected_return_from_forward_temp(58.0, curve) == 36.0
+    assert expected_return_from_forward_temp(50.0, curve) == 40.0
+
+    r_27 = resolve_tariff(
+        _entry(data={"utility_id": "odder-forsyning"}),
+        today=date(2027, 1, 15),
+        utilities=utilities,
+    )
+    assert r_27.price_dkk_per_kwh == 0.9225
+    assert r_27.fixed_fee_dkk_per_m2_year == 22.5
+    assert r_27.suggested_fixed_fee_dkk_per_year == 1250.0
+    assert r_27.motivation_pct_per_k == 3.0
+    assert r_27.motivation_bonus is False

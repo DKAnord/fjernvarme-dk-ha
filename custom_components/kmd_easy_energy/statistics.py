@@ -195,7 +195,10 @@ def build_cost_buckets(
         if isinstance(state.get("cost_estimate"), Mapping)
         else {}
     )
-    current_rt = _num(cost_est.get("current_return_temp"))
+    current_rt = _first_num(
+        cost_est.get("annual_return_temp"),
+        cost_est.get("current_return_temp"),
+    )
 
     tariff_cache: dict[tuple[date, float | None, float | None], ResolvedTariff] = {}
     out: list[tuple[datetime, float]] = []

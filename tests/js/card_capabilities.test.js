@@ -686,4 +686,35 @@ kmdStdFeeCard.shadowRoot.getElementById("completeNowBtn").listeners.click();
 savedPayload = calls.pop();
 assert.strictEqual(savedPayload[2].fixed_fee_dkk_per_year, 918.75);
 
+// 18) Effective price and Expected annual cost explicitly display YTD return-temp basis (DA & EN)
+const ytdBasisBase = {
+  backend: "eforsyning",
+  data_source: "E|Forsyning",
+  utility: "Odder Forsyningsselskab I/S",
+  utility_id: "odder-forsyning",
+  utility_status: "confirmed",
+  capabilities: ["auto_sync", "cost", "daily", "monthly", "temperatures", "volume"],
+  cost_estimate: {
+    base_price_dkk_per_kwh: 0.8625,
+    effective_price_dkk_per_kwh: 0.8729,
+    adjustment_pct: 1.2,
+    annual_return_temp: 35.4,
+    return_temp_basis: "annual",
+    annual_fixed_fee_dkk: 5705,
+    forecast_annual_kwh: 12000,
+    forecast_annual_dkk: 16180,
+    excludes_fixed_fees: false,
+  },
+};
+const daBasisHtml = render(ytdBasisBase, []).shadowRoot.innerHTML;
+assert.ok(daBasisHtml.includes("ÅTD 35,4 °C"), "DA effective price shows YTD return temp basis");
+assert.ok(daBasisHtml.includes("v/ ÅTD 35,4 °C (+1,2 %)"), "DA expected annual cost shows YTD temp & surcharge");
+
+const enCard = new Card();
+enCard.setConfig({ language: "en" });
+enCard.hass = mkHass(ytdBasisBase, []);
+const enBasisHtml = enCard.shadowRoot.innerHTML;
+assert.ok(enBasisHtml.includes("YTD 35,4 °C") || enBasisHtml.includes("YTD 35.4 °C"), "EN effective price shows YTD return temp basis");
+assert.ok(enBasisHtml.includes("at YTD 35,4 °C (+1,2 %)") || enBasisHtml.includes("at YTD 35.4 °C (+1.2 %)"), "EN expected annual cost shows YTD temp & surcharge");
+
 console.log("card_capabilities.test.js: OK");

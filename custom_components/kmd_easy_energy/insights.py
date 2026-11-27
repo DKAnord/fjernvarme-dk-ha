@@ -446,6 +446,9 @@ def estimate_variable_costs(
     forecast_annual_kwh: float | None = None,
     bonus_rate: float | None = None,
     penalty_rate: float | None = None,
+    annual_return_temp: float | None = None,
+    daily_return_temp: dict[str, Any] | None = None,
+    expected_return_daily: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Estimate heating cost in DKK (variable + optional prorated fixed fees)."""
     if price_dkk_per_kwh is None or price_dkk_per_kwh <= 0:
@@ -453,20 +456,35 @@ def estimate_variable_costs(
     today = today or copenhagen_today()
     base_price = float(price_dkk_per_kwh)
     max_adj = (base_price * (float(max_pct) / 100.0)) if (max_pct is not None and max_pct > 0) else None
-    adj = (
-        motivation_dkk_per_kwh(
-            current_return_temp,
-            bonus_temp,
-            penalty_temp,
-            motivation_rate,
-            max_dkk_per_kwh=max_adj,
-            allow_bonus=allow_bonus,
-            bonus_rate=bonus_rate,
-            penalty_rate=penalty_rate,
+
+    def _is_num(val: Any) -> bool:
+        return isinstance(val, (int, float)) and not isinstance(val, bool)
+
+    def _calc_adj(rt: float | None, b_temp: float, p_temp: float) -> float:
+        return (
+            motivation_dkk_per_kwh(
+                rt,
+                b_temp,
+                p_temp,
+                motivation_rate,
+                max_dkk_per_kwh=max_adj,
+                allow_bonus=allow_bonus,
+                bonus_rate=bonus_rate,
+                penalty_rate=penalty_rate,
+            )
+            or 0.0
         )
-        or 0.0
+
+    has_annual_rt = _is_num(annual_return_temp)
+    annual_ref_rt = float(annual_return_temp) if has_annual_rt else current_return_temp
+    return_temp_basis: str | None = (
+        "annual"
+        if has_annual_rt
+        else ("current" if current_return_temp is not None else None)
     )
-    effective_price = round(max(0.0, base_price + adj), 4)
+    adj = _calc_adj(annual_ref_rt, bonus_temp, penalty_temp)
+    annual_effective_price_raw = max(0.0, base_price + adj)
+    effective_price = round(annual_effective_price_raw, 4)
     adjustment_pct = round((adj / base_price) * 100.0, 1)
 
     annual_fixed = round(max(0.0, float(annual_fixed_fee_dkk or 0.0)), 2)
@@ -479,17 +497,25 @@ def estimate_variable_costs(
     days_map = daily_obj.get("days") or {}
     numeric_days: list[tuple[int, float]] = []
     for k, v in days_map.items():
-        if not isinstance(v, (int, float)) or isinstance(v, bool):
+        if not _is_num(v):
             continue
         try:
             numeric_days.append((int(k), float(v)))
         except (TypeError, ValueError):
             continue
 
+    cur_dim = calendar.monthrange(today.year, today.month)[1]
+    daily_matches_cur_month = (
+        str(daily_obj.get("latest_date") or "").startswith(f"{today.year:04d}-{today.month:02d}-")
+        or str(daily_obj.get("month") or "").strip().lower().startswith(cur_label.lower())
+    )
+
     latest_day_dkk: int | None = None
     latest_day_kwh: float | None = None
     latest_day_label: str | None = None
     latest_day_num: int | None = None
+    latest_day_effective_price: float | None = None
+    latest_day_return_temp: float | None = None
     if numeric_days:
         numeric_days.sort(key=lambda pair: pair[0])
         if daily_obj.get("latest_complete") is False and len(numeric_days) > 1:
@@ -498,15 +524,47 @@ def estimate_variable_costs(
             day_num, day_kwh = numeric_days[-1]
         latest_day_num = day_num
         latest_day_kwh = round(day_kwh, 1)
-        latest_day_dkk = int(round(day_kwh * effective_price + daily_fixed))
+
+        raw_latest_date = str(daily_obj.get("latest_date") or "")
+        latest_day_iso: str | None = None
+        if len(raw_latest_date) >= 10 and raw_latest_date[4] == "-" and raw_latest_date[7] == "-":
+            latest_day_iso = f"{raw_latest_date[:8]}{day_num:02d}"
+        elif daily_matches_cur_month:
+            latest_day_iso = f"{today.year:04d}-{today.month:02d}-{day_num:02d}"
+
+        latest_day_month_label = cur_label
+        if latest_day_iso is not None:
+            try:
+                latest_day_month_label = MONTH_LABELS_DA[int(latest_day_iso[5:7]) - 1]
+            except (ValueError, IndexError):
+                latest_day_month_label = cur_label
+
+        raw_day_rt = (daily_return_temp or {}).get(latest_day_iso) if latest_day_iso else None
+        if _is_num(raw_day_rt):
+            day_rt: float | None = float(raw_day_rt)
+        elif current_return_temp is not None:
+            day_rt = float(current_return_temp)
+        else:
+            day_rt = annual_ref_rt
+
+        raw_day_exp = (expected_return_daily or {}).get(latest_day_iso) if latest_day_iso else None
+        if not (_is_num(raw_day_exp) and float(raw_day_exp) > 0):
+            raw_day_exp = (expected_return_monthly or {}).get(latest_day_month_label)
+        if _is_num(raw_day_exp) and float(raw_day_exp) > 0:
+            day_bonus = float(raw_day_exp) if allow_bonus else 0.0
+            day_penalty = float(raw_day_exp)
+        else:
+            day_bonus = bonus_temp if allow_bonus else 0.0
+            day_penalty = penalty_temp
+
+        day_adj = _calc_adj(day_rt, day_bonus, day_penalty)
+        day_price = max(0.0, base_price + day_adj)
+        latest_day_effective_price = round(day_price, 4)
+        latest_day_return_temp = round(float(day_rt), 1) if day_rt is not None else None
+        latest_day_dkk = int(round(day_kwh * day_price + daily_fixed))
         month_name = str(daily_obj.get("month") or cur_label).strip()
         latest_day_label = f"{day_num}. {month_name}"
 
-    cur_dim = calendar.monthrange(today.year, today.month)[1]
-    daily_matches_cur_month = (
-        str(daily_obj.get("latest_date") or "").startswith(f"{today.year:04d}-{today.month:02d}-")
-        or str(daily_obj.get("month") or "").strip().lower().startswith(cur_label.lower())
-    )
     if daily_matches_cur_month and latest_day_num is not None:
         cur_month_elapsed_days = min(cur_dim, max(1, latest_day_num))
     else:
@@ -518,38 +576,26 @@ def estimate_variable_costs(
     monthly_variable_dkk: dict[str, int] = {}
     monthly_fixed_total = 0.0
     current_month_fixed = 0.0
+    ytd_kwh_sum = 0.0
+    current_month_effective_price: float | None = None
+    current_month_return_temp: float | None = None
     for month_idx, label in enumerate(MONTH_LABELS_DA, start=1):
         raw_kwh = monthly_map.get(label)
-        if not isinstance(raw_kwh, (int, float)) or isinstance(raw_kwh, bool):
+        if not _is_num(raw_kwh):
             continue
         raw_rt = rt_map.get(label)
-        m_rt = float(raw_rt) if isinstance(raw_rt, (int, float)) else current_return_temp
+        m_rt = float(raw_rt) if _is_num(raw_rt) else annual_ref_rt
         raw_exp = (expected_return_monthly or {}).get(label)
-        if (
-            isinstance(raw_exp, (int, float))
-            and not isinstance(raw_exp, bool)
-            and float(raw_exp) > 0
-        ):
+        if _is_num(raw_exp) and float(raw_exp) > 0:
             m_bonus = float(raw_exp) if allow_bonus else 0.0
             m_penalty = float(raw_exp)
         else:
             m_bonus = bonus_temp if allow_bonus else 0.0
             m_penalty = penalty_temp
-        m_adj = (
-            motivation_dkk_per_kwh(
-                m_rt,
-                m_bonus,
-                m_penalty,
-                motivation_rate,
-                max_dkk_per_kwh=max_adj,
-                allow_bonus=allow_bonus,
-                bonus_rate=bonus_rate,
-                penalty_rate=penalty_rate,
-            )
-            or 0.0
-        )
+        m_adj = _calc_adj(m_rt, m_bonus, m_penalty)
         m_price = max(0.0, base_price + m_adj)
         var_m = float(raw_kwh) * m_price
+        ytd_kwh_sum += float(raw_kwh)
         dim = calendar.monthrange(today.year, month_idx)[1]
         m_days = cur_month_elapsed_days if month_idx == today.month else dim
         fix_m = (annual_fixed * (m_days / days_in_year)) if has_fixed else 0.0
@@ -558,27 +604,46 @@ def estimate_variable_costs(
         monthly_fixed_total += fix_m
         if label == cur_label:
             current_month_fixed = fix_m
+            current_month_effective_price = round(m_price, 4)
+            current_month_return_temp = round(float(m_rt), 1) if m_rt is not None else None
 
     current_month_dkk: int | None = monthly_dkk.get(cur_label)
     current_month_kwh: float | None = (
         float(monthly_map[cur_label])
-        if isinstance(monthly_map.get(cur_label), (int, float))
+        if _is_num(monthly_map.get(cur_label))
         else None
     )
-    if current_month_dkk is None and isinstance(daily_obj.get("total"), (int, float)):
+    if current_month_dkk is None and _is_num(daily_obj.get("total")):
         current_month_kwh = float(daily_obj["total"])
         current_month_fixed = (annual_fixed * (cur_month_elapsed_days / days_in_year)) if has_fixed else 0.0
-        current_month_dkk = int(round(current_month_kwh * effective_price + current_month_fixed))
+        raw_cur_rt = rt_map.get(cur_label)
+        cur_m_rt = float(raw_cur_rt) if _is_num(raw_cur_rt) else annual_ref_rt
+        raw_cur_exp = (expected_return_monthly or {}).get(cur_label)
+        if _is_num(raw_cur_exp) and float(raw_cur_exp) > 0:
+            cur_m_bonus = float(raw_cur_exp) if allow_bonus else 0.0
+            cur_m_penalty = float(raw_cur_exp)
+        else:
+            cur_m_bonus = bonus_temp if allow_bonus else 0.0
+            cur_m_penalty = penalty_temp
+        cur_m_adj = _calc_adj(cur_m_rt, cur_m_bonus, cur_m_penalty)
+        cur_m_price = max(0.0, base_price + cur_m_adj)
+        current_month_effective_price = round(cur_m_price, 4)
+        current_month_return_temp = round(float(cur_m_rt), 1) if cur_m_rt is not None else None
+        current_month_dkk = int(round(current_month_kwh * cur_m_price + current_month_fixed))
 
-    ytd_dkk = int(sum(monthly_dkk.values())) if monthly_dkk else None
-    ytd_variable_dkk = int(sum(monthly_variable_dkk.values())) if monthly_dkk else None
+    if monthly_dkk:
+        if has_annual_rt:
+            ytd_variable_dkk: int | None = int(round(ytd_kwh_sum * annual_effective_price_raw))
+            ytd_dkk: int | None = int(round(ytd_kwh_sum * annual_effective_price_raw + monthly_fixed_total))
+        else:
+            ytd_dkk = int(sum(monthly_dkk.values()))
+            ytd_variable_dkk = int(sum(monthly_variable_dkk.values()))
+    else:
+        ytd_dkk = None
+        ytd_variable_dkk = None
     ytd_fixed_dkk = int(round(monthly_fixed_total)) if (has_fixed and monthly_dkk) else 0
 
-    if (
-        isinstance(forecast_annual_kwh, (int, float))
-        and not isinstance(forecast_annual_kwh, bool)
-        and float(forecast_annual_kwh) > 0
-    ):
+    if _is_num(forecast_annual_kwh) and float(forecast_annual_kwh) > 0:
         fc_kwh: float | None = round(float(forecast_annual_kwh), 1)
         fc_var_dkk: int | None = int(round(fc_kwh * effective_price))
         fc_total_dkk: int | None = int(round(fc_kwh * effective_price + annual_fixed))
@@ -596,13 +661,19 @@ def estimate_variable_costs(
         "current_return_temp": round(float(current_return_temp), 1)
         if current_return_temp is not None
         else None,
+        "annual_return_temp": round(float(annual_return_temp), 1) if has_annual_rt else None,
+        "return_temp_basis": return_temp_basis,
         "latest_day_dkk": latest_day_dkk,
         "latest_day_kwh": latest_day_kwh,
         "latest_day_label": latest_day_label,
+        "latest_day_effective_price_dkk_per_kwh": latest_day_effective_price,
+        "latest_day_return_temp": latest_day_return_temp,
         "current_month_dkk": current_month_dkk,
         "current_month_kwh": round(current_month_kwh, 1)
         if current_month_kwh is not None
         else None,
+        "current_month_effective_price_dkk_per_kwh": current_month_effective_price,
+        "current_month_return_temp": current_month_return_temp,
         "ytd_dkk": ytd_dkk,
         "monthly_dkk": monthly_dkk,
         "excludes_fixed_fees": not has_fixed,

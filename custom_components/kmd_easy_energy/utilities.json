@@ -1261,6 +1261,58 @@
       ]
     },
     {
+      "id": "odder-forsyning",
+      "name": "Odder Forsyningsselskab I/S",
+      "city": "Odder",
+      "portal_url": "https://eforsyning.dk/odderforsyningsselskab-varme/",
+      "status": "confirmed",
+      "tier": "confirmed",
+      "auth_method": "Forbrugernummer + webpinkode",
+      "backend": "eforsyning",
+      "eforsyning_supplier_id": "ACD7B9D3-E7FA-41DF-A4C1-3E459AD74660",
+      "latitude": 55.976,
+      "longitude": 10.153,
+      "notes": "E|Forsyning. forsyningid og AppServerUri (https://apiapp.dff-edb.dk/odder/) bekræftet live i issue #56 af @Bluhme1 (kWh, m3, °C). Login med forbrugernummer + webpinkode fra regningen; daglige aflæsninger. Prisblad 2026: 862,50 kr./MWh inkl. moms (0,8625 kr./kWh; Saksild/Rørt 0,925 kr./kWh i 2026) og 922,50 kr./MWh inkl. moms (0,9225 kr./kWh) ensartet fra 1. jan. 2027; effektbidrag 22,50 kr./m²/år, abonnementsbidrag 1.250,00 kr./år og +3 %/°C motivationsbidrag (kun tillæg, ingen bonus) over årsgennemsnitlig grænse 35 °C ved >= 60 °C fremløb (+0,5 °C pr. °C under 60 °C fremløb).",
+      "tariffs": [
+        {
+          "year": 2026,
+          "effective_from": "2026-01-01",
+          "price_dkk_per_kwh": 0.8625,
+          "price_dkk_per_m3": null,
+          "fixed_fee_dkk_per_m2_year": 22.5,
+          "fixed_fee_dkk_per_year": 1250.0,
+          "motivation_pct_per_k": 3.0,
+          "motivation_bonus": false,
+          "bonus_temp": 0.0,
+          "penalty_temp": 35.0,
+          "expected_return_by_forward_temp": [
+            [40.0, 45.0],
+            [60.0, 35.0]
+          ],
+          "source": "https://odderforsyning.dk/p/Odder%20Forsyningsselskab/Varme/Prisblade/prisblad-pr-1-januar-2026.pdf",
+          "source_note": "Prisblad gældende pr. 1. januar 2026 (Odder Varmeværk / Odder Forsyningsselskab I/S, inkl. moms): Forbrugsbidrag 862,50 kr./MWh (690,00 ekskl.) = 0,8625 kr./kWh for Odder, Gylling, Ørting, Falling, Hundslund og Oldrup (Saksild og Rørt: 925,00 kr./MWh = 0,925 kr./kWh, kan overstyres i ⚙️). Faste bidrag: effektbidrag 22,50 kr./m²/år (18,00 ekskl.) og abonnementsbidrag 1.250,00 kr./år (1.000,00 ekskl.). Motivationsbidrag: +3 %/°C af forbrugsbidraget (kun tillæg, ingen bonus) når årsgennemsnitlig returtemperatur overstiger 35 °C ved >= 60 °C årsgennemsnitlig fremløbstemperatur; under 60 °C stiger grænsen med 0,5 °C pr. °C fald i fremløbstemperatur."
+        },
+        {
+          "year": 2027,
+          "effective_from": "2027-01-01",
+          "price_dkk_per_kwh": 0.9225,
+          "price_dkk_per_m3": null,
+          "fixed_fee_dkk_per_m2_year": 22.5,
+          "fixed_fee_dkk_per_year": 1250.0,
+          "motivation_pct_per_k": 3.0,
+          "motivation_bonus": false,
+          "bonus_temp": 0.0,
+          "penalty_temp": 35.0,
+          "expected_return_by_forward_temp": [
+            [40.0, 45.0],
+            [60.0, 35.0]
+          ],
+          "source": "https://odderforsyning.dk/nyheder/nye-varmepriser-fra-1-januar-2027",
+          "source_note": "Varslede varmepriser pr. 1. januar 2027 (Odder Varmeværk, inkl. moms): Forbrugsbidrag 922,50 kr./MWh = 0,9225 kr./kWh ensartet i hele forsyningsområdet (inkl. Saksild og Rørt). Uændrede faste bidrag (22,50 kr./m²/år + 1.250,00 kr./år) og motivationsbidrag (+3 %/°C over 35 °C ved >= 60 °C fremløb, +0,5 °C pr. °C under 60 °C)."
+        }
+      ]
+    },
+    {
       "id": "solrod-fjernvarme",
       "name": "Solrød Fjernvarme",
       "city": "Solrød Strand",

@@ -1616,6 +1616,17 @@ class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         state["volume_price_dkk_per_m3"] = tariff.price_dkk_per_m3
 
         # Current return temperature: same rule as KMDReturnTempSensor
+        rt_ann = (state.get("return_temp") or {}).get("annual") or {}
+        yr_s = str(today.year)
+        raw_ann_rt = rt_ann.get(yr_s)
+        annual_return_temp: float | None = (
+            float(raw_ann_rt)
+            if isinstance(raw_ann_rt, (int, float))
+            and not isinstance(raw_ann_rt, bool)
+            and float(raw_ann_rt) > 0
+            else None
+        )
+
         return_temp: float | None = None
         if state.get("has_direct_temp"):
             series = state.get("hourly_temp") or []
@@ -1626,24 +1637,32 @@ class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             latest_rt = (state.get("latest_reading") or {}).get("temp_return")
             if isinstance(latest_rt, (int, float)) and latest_rt > 0:
                 return_temp = float(latest_rt)
-        if return_temp is None:
-            rt_ann = (state.get("return_temp") or {}).get("annual") or {}
-            yr_s = str(today.year)
-            if yr_s in rt_ann and rt_ann[yr_s] is not None:
-                return_temp = float(rt_ann[yr_s])
+        if return_temp is None and annual_return_temp is not None:
+            return_temp = annual_return_temp
+
+        motivation_ref_temp = annual_return_temp if annual_return_temp is not None else return_temp
+        state["motivation_return_temp"] = (
+            round(motivation_ref_temp, 1) if motivation_ref_temp is not None else None
+        )
+        state["motivation_return_temp_basis"] = (
+            "annual"
+            if annual_return_temp is not None
+            else ("current" if return_temp is not None else None)
+        )
+
         max_adj = (
             (tariff.price_dkk_per_kwh * tariff.motivation_max_pct / 100.0)
             if (tariff.price_dkk_per_kwh and tariff.motivation_max_pct)
             else None
         )
         state["motivation_status"] = motivation_status(
-            return_temp,
+            motivation_ref_temp,
             tariff.bonus_temp,
             tariff.penalty_temp,
             allow_bonus=tariff.motivation_bonus,
         )
         state["motivation_dkk_per_kwh"] = motivation_dkk_per_kwh(
-            return_temp,
+            motivation_ref_temp,
             tariff.bonus_temp,
             tariff.penalty_temp,
             tariff.motivation_dkk_per_kwh_per_k,
@@ -1652,6 +1671,28 @@ class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             bonus_rate=tariff.motivation_bonus_dkk_per_kwh_per_k,
             penalty_rate=tariff.motivation_penalty_dkk_per_kwh_per_k,
         )
+
+        exp_daily: dict[str, float] | None = None
+        if expected_return_auto:
+            raw_exp_daily = state.get("daily_expected_return_temp")
+            if isinstance(raw_exp_daily, dict) and raw_exp_daily:
+                exp_daily = raw_exp_daily
+            elif (
+                tariff.expected_return_by_forward_temp
+                and tariff.forward_temp_source == "meter"
+                and isinstance(state.get("daily_forward_temp"), dict)
+            ):
+                built_exp: dict[str, float] = {}
+                for day_s, fwd_v in state["daily_forward_temp"].items():
+                    if not str(day_s).startswith(f"{yr_s}-"):
+                        continue
+                    exp_v = expected_return_from_forward_temp(
+                        fwd_v, tariff.expected_return_by_forward_temp
+                    )
+                    if exp_v is not None:
+                        built_exp[str(day_s)] = exp_v
+                if built_exp:
+                    exp_daily = built_exp
 
         daily_kwh = daily_kwh_from_history(
             state.get("daily_kwh_history"),
@@ -1702,6 +1743,9 @@ class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             forecast_annual_kwh=forecast_kwh,
             bonus_rate=tariff.motivation_bonus_dkk_per_kwh_per_k,
             penalty_rate=tariff.motivation_penalty_dkk_per_kwh_per_k,
+            annual_return_temp=annual_return_temp,
+            daily_return_temp=state.get("daily_return_temp"),
+            expected_return_daily=exp_daily,
         )
         if state["cost_estimate"].get("forecast_annual_dkk") is not None:
             state["degree_day"]["forecast_annual_dkk"] = float(

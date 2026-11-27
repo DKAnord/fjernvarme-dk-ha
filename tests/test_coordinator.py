@@ -1064,10 +1064,12 @@ async def test_kmd_energi_ikast_enriches_cooling_flow_and_dynamic_tariff(tmp_pat
     assert state["expected_return_temp"] == 34.0
     assert state["penalty_temp"] == 34.0
     assert state["bonus_temp"] == 0.0
-    # latest_reading has 36.5 °C return > 34.0 °C target -> penalty
+    # Annual return_temp is 35.7 °C > 34.0 °C target -> penalty (+1.7 K)
     assert state["latest_reading"]["temp_return"] == 36.5
+    assert state["motivation_return_temp"] == 35.7
+    assert state["motivation_return_temp_basis"] == "annual"
     assert state["motivation_status"] == "penalty"
-    assert state["motivation_dkk_per_kwh"] == round(2.5 * 0.00375, 5)
+    assert state["motivation_dkk_per_kwh"] == round((35.7 - 34.0) * 0.00375, 5)
     assert state["daily_m3_history"] == {"2026-11-22": 1.2, "2026-11-23": 1.3}
     assert state["daily_m3"]["source"] == "kmd_cooling"
     assert state["daily_m3"]["total"] == 2.5
@@ -1270,3 +1272,80 @@ async def test_update_data_backfills_cost_statistics_and_refreshes_on_price_chan
         assert stat_lookup.call_count >= 2
         rows = list(add.call_args_list[1].args[2])
         assert [r["sum"] for r in rows] == [50.95, 52.85]
+
+
+@pytest.mark.asyncio
+async def test_odder_coordinator_uses_annual_return_temp_for_ytd_and_forecast(
+    tmp_path: Path,
+) -> None:
+    import datetime as dt
+    from kmd_easy_energy.insights import DK_TZ
+
+    store = FakeStore(
+        {
+            "annual": {"2026": 8000.0},
+            "monthly": {"2026": {"Jan": 2000.0, "Nov": 1000.0}},
+            "daily": {
+                "month": "November 2026",
+                "days": {"26": 50.0},
+                "total": 1000.0,
+                "latest_complete": True,
+                "latest_date": "2026-11-26",
+            },
+            "daily_kwh_history": {
+                **{f"2026-11-{d:02d}": 40.0 for d in range(1, 26)},
+                "2026-11-26": 50.0,
+            },
+            "daily_return_temp": {"2026-11-26": 42.72},
+            "daily_forward_temp": {"2026-11-26": 62.0},
+            "weather": {
+                "daily_temp": {f"2026-11-{d:02d}": 7.0 for d in range(1, 27)}
+            },
+            "return_temp": {
+                "annual": {"2026": 35.4},
+                "monthly_2026": {"Jan": 34.0, "Nov": 38.0},
+                "forward_annual": {"2026": 62.0},
+                "forward_monthly_2026": {"Jan": 62.0, "Nov": 58.0},
+            },
+            "latest_reading": {"date": "2026-11-26", "temp_return": 42.72, "temp_forward": 62.0},
+            "eforsyning": {"detected": ["daily", "monthly", "temperatures", "volume"]},
+        }
+    )
+    coord, _, _, _ = make_coordinator(
+        tmp_path,
+        store=store,
+        backend="eforsyning",
+        utility="Odder Forsyningsselskab I/S",
+        utility_id="eforsyning-custom",
+        portal_url="https://eforsyning.dk/odderforsyningsselskab-varme/",
+    )
+    coord.entry.options = {"heated_area_m2": 198.0, "fixed_fee_dkk_per_year": 1250.0}
+    fixed_now = dt.datetime(2026, 11, 27, 12, 0, tzinfo=DK_TZ)
+    with (
+        patch("kmd_easy_energy.coordinator.dt_util.now", return_value=fixed_now),
+        patch("kmd_easy_energy.coordinator.copenhagen_today", return_value=dt.date(2026, 11, 27)),
+        patch("kmd_easy_energy.tariff.copenhagen_today", return_value=dt.date(2026, 11, 27)),
+    ):
+        state = await coord._async_update_data()
+
+    assert state["tariff"]["utility_id"] == "odder-forsyning"
+    assert state["expected_return_temp"] == 35.0
+    assert state["motivation_return_temp"] == 35.4
+    assert state["motivation_return_temp_basis"] == "annual"
+    assert state["motivation_status"] == "penalty"
+
+    rate = round(0.8625 * 0.03, 6)
+    assert state["motivation_dkk_per_kwh"] == round(0.4 * rate, 5)
+
+    est = state["cost_estimate"]
+    assert est["annual_return_temp"] == 35.4
+    assert est["return_temp_basis"] == "annual"
+    assert est["adjustment_pct"] == 1.2
+    assert est["effective_price_dkk_per_kwh"] == round(0.8625 + 0.4 * rate, 4)
+    assert est["latest_day_return_temp"] == 42.7
+    assert est["latest_day_effective_price_dkk_per_kwh"] == round(0.8625 + 7.72 * rate, 4)
+    # Nov forward temp is 58 °C -> dynamic target 36.0 °C (not 35.0 °C), Nov return 38.0 °C -> +2.0 °C (+6%).
+    assert est["current_month_effective_price_dkk_per_kwh"] == round(0.8625 + 2.0 * rate, 4)
+    assert est["forecast_annual_dkk"] == int(
+        round(est["forecast_annual_kwh"] * est["effective_price_dkk_per_kwh"] + 5705.0)
+    )

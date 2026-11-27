@@ -298,3 +298,70 @@ def test_estimate_costs_with_fixed_fee_and_annual_forecast() -> None:
     assert mon_s.extra_state_attributes["fixed_fee_dkk"] == int(round(nov_fixed))
     assert yr_s.extra_state_attributes["annual_fixed_fee_dkk"] == 6733.12
     assert yr_s.extra_state_attributes["forecast_annual_dkk"] == est["forecast_annual_dkk"]
+
+
+def test_estimate_variable_costs_odder_uses_annual_avg_for_ytd_and_forecast() -> None:
+    # Reproduce issue #56 (Odder Forsyningsselskab I/S):
+    # Base 0.8625 DKK/kWh, +3%/°C penalty above 35 °C (no bonus),
+    # annual average return temp 35.4 °C (+1.2%), latest day 42.72 °C (+23.2%).
+    rate = round(0.8625 * 0.03, 6)
+    est = estimate_variable_costs(
+        price_dkk_per_kwh=0.8625,
+        bonus_temp=0.0,
+        penalty_temp=35.0,
+        motivation_rate=rate,
+        current_return_temp=42.72,
+        annual_return_temp=35.4,
+        daily_return_temp={"2026-11-26": 42.72},
+        daily={
+            "days": {"26": 50.0},
+            "latest_complete": True,
+            "month": "November 2026",
+            "latest_date": "2026-11-26",
+        },
+        monthly_cur_year={"Jan": 2000.0, "Nov": 1000.0},
+        return_temp_monthly={"Jan": 34.0, "Nov": 38.0},
+        today=date(2026, 11, 27),
+        allow_bonus=False,
+        annual_fixed_fee_dkk=5705.0,
+        forecast_annual_kwh=12000.0,
+    )
+    assert est["annual_return_temp"] == 35.4
+    assert est["current_return_temp"] == 42.7
+    assert est["return_temp_basis"] == "annual"
+    assert est["adjustment_pct"] == 1.2
+    assert est["effective_price_dkk_per_kwh"] == round(0.8625 + 0.4 * rate, 4)
+    # Latest day uses latest day's 42.72 °C (+23.16%), NOT annual 35.4 °C.
+    assert est["latest_day_return_temp"] == 42.7
+    assert est["latest_day_effective_price_dkk_per_kwh"] == round(0.8625 + 7.72 * rate, 4)
+    assert est["latest_day_dkk"] == int(round(50.0 * (0.8625 + 7.72 * rate) + 5705.0 / 365))
+    # Monthly uses each month's own return temp (Jan 34° <= 35° -> 0%, Nov 38° -> +9%).
+    jan_fix = 5705.0 * (31 / 365)
+    nov_fix = 5705.0 * (26 / 365)
+    assert est["monthly_dkk"]["Jan"] == int(round(2000.0 * 0.8625 + jan_fix))
+    assert est["monthly_dkk"]["Nov"] == int(round(1000.0 * (0.8625 + 3.0 * rate) + nov_fix))
+    assert est["current_month_return_temp"] == 38.0
+    assert est["current_month_effective_price_dkk_per_kwh"] == round(0.8625 + 3.0 * rate, 4)
+    # YTD & Annual forecast use annual/YTD average (35.4 °C -> +1.2%), not 42.72 °C.
+    annual_eff_raw = 0.8625 + 0.4 * rate
+    assert est["ytd_variable_dkk"] == int(round(3000.0 * annual_eff_raw))
+    assert est["ytd_dkk"] == int(round(3000.0 * annual_eff_raw + jan_fix + nov_fix))
+    assert est["forecast_annual_variable_dkk"] == int(round(12000.0 * est["effective_price_dkk_per_kwh"]))
+    assert est["forecast_annual_dkk"] == int(round(12000.0 * est["effective_price_dkk_per_kwh"] + 5705.0))
+
+    coord = MagicMock()
+    coord.data = {"cost_estimate": est}
+    entry = SimpleNamespace(entry_id="e-odder", title="Odder")
+    eff_s = KMDEffectivePriceSensor(coord, entry)
+    day_s = KMDLatestDayCostSensor(coord, entry)
+    mon_s = KMDMonthCostSensor(coord, entry)
+    yr_s = KMDYearCostSensor(coord, entry)
+    assert eff_s.extra_state_attributes["annual_return_temp"] == 35.4
+    assert eff_s.extra_state_attributes["return_temp_basis"] == "annual"
+    assert day_s.extra_state_attributes["effective_price_dkk_per_kwh"] == est["latest_day_effective_price_dkk_per_kwh"]
+    assert day_s.extra_state_attributes["return_temp"] == 42.7
+    assert mon_s.extra_state_attributes["effective_price_dkk_per_kwh"] == est["current_month_effective_price_dkk_per_kwh"]
+    assert mon_s.extra_state_attributes["return_temp"] == 38.0
+    assert yr_s.extra_state_attributes["effective_price_dkk_per_kwh"] == est["effective_price_dkk_per_kwh"]
+    assert yr_s.extra_state_attributes["annual_return_temp"] == 35.4
+    assert yr_s.extra_state_attributes["adjustment_pct"] == 1.2

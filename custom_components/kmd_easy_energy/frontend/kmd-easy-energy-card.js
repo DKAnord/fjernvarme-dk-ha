@@ -3,7 +3,7 @@
  * Zero external dependencies, Shadow DOM, responsive, interactive tooltips, DA/EN i18n.
  */
 (() => {
-  const VER = "1.3.10";
+  const VER = "1.3.11";
   const MONTHS = ["Jan", "Feb", "Mar", "Apr", "Maj", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Dec"];
   const DAYS_IN_MONTH = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
   const isLeapYear = (y) => (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0;
@@ -106,6 +106,7 @@
     { id: "marstal-fjernvarme", name: "Marstal Fjernvarme", city: "Marstal", url: "https://www.solarmarstal.dk/eforsyning/", status: "confirmed", backend: "eforsyning" },
     { id: "vestforbraending", name: "Vestforbrænding", city: "Glostrup / Storkøbenhavn", url: "https://eforsyning.dk/vestfor/", status: "confirmed", backend: "eforsyning" },
     { id: "spjald-fjernvarme", name: "Spjald Fjernvarme- og Vandværk", city: "Spjald", url: "https://eforsyning.dk/spjaldvarme/", status: "confirmed", backend: "eforsyning" },
+    { id: "odder-forsyning", name: "Odder Forsyningsselskab I/S", city: "Odder", url: "https://eforsyning.dk/odderforsyningsselskab-varme/", status: "confirmed", backend: "eforsyning" },
     { id: "hjorring-varmeforsyning", name: "Hjørring Varmeforsyning", city: "Hjørring", url: "https://eforsyning.dk/hjvarme/", status: "pending_test", backend: "eforsyning" },
     { id: "aalborg-forsyning", name: "Aalborg Forsyning", city: "Aalborg", url: "https://aalborgforsyning.dk/services/forbrug/watts-on/", status: "confirmed", backend: "wattson" },
     { id: "fjernvarme-fyn", name: "Fjernvarme Fyn", city: "Odense / Fyn", url: "https://www.fjernvarmefyn.dk/spar-paa-energien/overblik/watts-on-app/", status: "confirmed", backend: "wattson" },
@@ -1522,17 +1523,28 @@
             const hasFixedFee = costEst.excludes_fixed_fees === false
               && typeof costEst.annual_fixed_fee_dkk === "number"
               && costEst.annual_fixed_fee_dkk > 0;
+            const hasAnnualRt = typeof costEst.annual_return_temp === "number";
+            const useAnnualBasis = costEst.return_temp_basis === "annual" && hasAnnualRt;
+            const basisTxt = useAnnualBasis
+              ? (lang === "en" ? `YTD ${fmtDec(costEst.annual_return_temp, 1)} °C` : `ÅTD ${fmtDec(costEst.annual_return_temp, 1)} °C`)
+              : "";
             const hasBase = typeof costEst.base_price_dkk_per_kwh === "number";
             const baseTxt = hasBase ? `${fmtDec(costEst.base_price_dkk_per_kwh, 3)} kr/kWh` : "";
             const adj = costEst.adjustment_pct;
             let effSub = "";
             if (typeof adj === "number" && adj < 0) {
-              effSub = `<span class="good">${fmtDec(Math.abs(adj), 1)} % bonus</span>${hasBase ? ` · ${lang === "en" ? "base" : "grundpris"} ${baseTxt}` : ""}`;
+              effSub = `<span class="good">${fmtDec(Math.abs(adj), 1)} % bonus</span>${basisTxt ? ` (${basisTxt})` : ""}${hasBase ? ` · ${lang === "en" ? "base" : "grundpris"} ${baseTxt}` : ""}`;
             } else if (typeof adj === "number" && adj > 0) {
-              effSub = `<span class="bad">+${fmtDec(adj, 1)} % ${lang === "en" ? "surcharge" : "gebyr"}</span>${hasBase ? ` · ${lang === "en" ? "base" : "grundpris"} ${baseTxt}` : ""}`;
+              effSub = `<span class="bad">+${fmtDec(adj, 1)} % ${lang === "en" ? "surcharge" : "gebyr"}</span>${basisTxt ? ` (${basisTxt})` : ""}${hasBase ? ` · ${lang === "en" ? "base" : "grundpris"} ${baseTxt}` : ""}`;
             } else if (hasBase) {
-              effSub = `${lang === "en" ? "Base price" : "Grundpris"} ${baseTxt}`;
+              effSub = `${basisTxt ? `${basisTxt} · ` : ""}${lang === "en" ? (basisTxt ? "base" : "Base price") : (basisTxt ? "grundpris" : "Grundpris")} ${baseTxt}`;
             }
+            const fcAdjTxt = (typeof adj === "number" && adj > 0)
+              ? `+${fmtDec(adj, 1)} %`
+              : ((typeof adj === "number" && adj < 0) ? `${fmtDec(adj, 1)} %` : "0 %");
+            const fcBasisTxt = hasAnnualRt
+              ? `${(typeof costEst.forecast_annual_kwh === "number" || hasFixedFee) ? " · " : ""}${lang === "en" ? `at YTD ${fmtDec(costEst.annual_return_temp, 1)} °C (${fcAdjTxt})` : `v/ ÅTD ${fmtDec(costEst.annual_return_temp, 1)} °C (${fcAdjTxt})`}`
+              : "";
             const panelTitle = hasFixedFee
               ? (lang === "en" ? `💰 Estimated cost (${curYr})` : `💰 Estimeret udgift (${curYr})`)
               : (lang === "en" ? `💰 Estimated variable cost (${curYr})` : `💰 Estimeret forbrug i kr. (${curYr})`);
@@ -1571,7 +1583,7 @@
                 ${typeof costEst.forecast_annual_dkk === "number" ? `<div class="kpi">
                   <div class="k-lbl">${lang === "en" ? "Expected annual cost" : "Forventet årsudgift"}</div>
                   <div class="k-val">~${fmtInt(costEst.forecast_annual_dkk)} kr.</div>
-                  <div class="k-sub">${typeof costEst.forecast_annual_kwh === "number" ? `${fmtInt(costEst.forecast_annual_kwh)} kWh` : ""}${hasFixedFee ? `${typeof costEst.forecast_annual_kwh === "number" ? " · " : ""}${lang === "en" ? "incl." : "inkl."} ${fmtInt(costEst.annual_fixed_fee_dkk)} kr. ${lang === "en" ? "fixed" : "fast"}` : ""}</div>
+                  <div class="k-sub">${typeof costEst.forecast_annual_kwh === "number" ? `${fmtInt(costEst.forecast_annual_kwh)} kWh` : ""}${hasFixedFee ? `${typeof costEst.forecast_annual_kwh === "number" ? " · " : ""}${lang === "en" ? "incl." : "inkl."} ${fmtInt(costEst.annual_fixed_fee_dkk)} kr. ${lang === "en" ? "fixed" : "fast"}` : ""}${fcBasisTxt}</div>
                 </div>` : ""}
                 ${typeof costEst.effective_price_dkk_per_kwh === "number" ? `<div class="kpi">
                   <div class="k-lbl">${lang === "en" ? "Effective price" : "Effektiv pris"}</div>

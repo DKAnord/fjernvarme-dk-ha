@@ -437,6 +437,8 @@ class KMDEffectivePriceSensor(KMDBaseSensor):
             "adjustment_dkk_per_kwh": est.get("adjustment_dkk_per_kwh"),
             "adjustment_pct": est.get("adjustment_pct"),
             "current_return_temp": est.get("current_return_temp"),
+            "annual_return_temp": est.get("annual_return_temp"),
+            "return_temp_basis": est.get("return_temp_basis"),
         }
 
 
@@ -465,7 +467,11 @@ class KMDLatestDayCostSensor(KMDBaseSensor):
         return {
             "kwh": est.get("latest_day_kwh"),
             "day": est.get("latest_day_label"),
-            "effective_price_dkk_per_kwh": est.get("effective_price_dkk_per_kwh"),
+            "effective_price_dkk_per_kwh": est.get(
+                "latest_day_effective_price_dkk_per_kwh",
+                est.get("effective_price_dkk_per_kwh"),
+            ),
+            "return_temp": est.get("latest_day_return_temp"),
             "daily_fixed_fee_dkk": est.get("daily_fixed_fee_dkk", 0.0),
             "excludes_fixed_fees": est.get("excludes_fixed_fees", True),
         }
@@ -495,7 +501,11 @@ class KMDMonthCostSensor(KMDBaseSensor):
         est = (self.coordinator.data or {}).get("cost_estimate") or {}
         return {
             "kwh": est.get("current_month_kwh"),
-            "effective_price_dkk_per_kwh": est.get("effective_price_dkk_per_kwh"),
+            "effective_price_dkk_per_kwh": est.get(
+                "current_month_effective_price_dkk_per_kwh",
+                est.get("effective_price_dkk_per_kwh"),
+            ),
+            "return_temp": est.get("current_month_return_temp"),
             "fixed_fee_dkk": est.get("current_month_fixed_dkk", 0),
             "excludes_fixed_fees": est.get("excludes_fixed_fees", True),
         }
@@ -542,6 +552,9 @@ class KMDYearCostSensor(KMDBaseSensor):
             "annual_fixed_fee_dkk": est.get("annual_fixed_fee_dkk", 0.0),
             "forecast_annual_dkk": est.get("forecast_annual_dkk"),
             "forecast_annual_kwh": est.get("forecast_annual_kwh"),
+            "effective_price_dkk_per_kwh": est.get("effective_price_dkk_per_kwh"),
+            "annual_return_temp": est.get("annual_return_temp"),
+            "adjustment_pct": est.get("adjustment_pct"),
             "excludes_fixed_fees": est.get("excludes_fixed_fees", True),
         }
 
@@ -573,6 +586,8 @@ class KMDMotivationStatusSensor(KMDBaseSensor):
             "motivation_penalty_dkk_per_kwh_per_k": tariff.get("motivation_penalty_dkk_per_kwh_per_k"),
             "expected_return_temp": data.get("expected_return_temp"),
             "forward_temp": data.get("forward_temp"),
+            "annual_return_temp": data.get("motivation_return_temp"),
+            "return_temp_basis": data.get("motivation_return_temp_basis"),
             "adjustment_dkk_per_kwh": data.get("motivation_dkk_per_kwh"),
         }
 

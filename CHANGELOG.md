@@ -2,6 +2,16 @@
 
 Alle væsentlige ændringer i **Dansk Fjernvarme** (tidligere *Fjernvarme (KMD Easy Energy)*) dokumenteres her.
 
+## [1.3.11] - 2026-11-27
+
+### Rettet & Tilføjet
+- **Periodekorrekt motivationstarif i årsudgift, ÅTD og effektiv pris ([issue #56](https://github.com/DKAnord/fjernvarme-dk-ha/issues/56), tak til `@Bluhme1`):**
+  - `estimate_variable_costs()`, `coordinator.py` og `statistics.py` bruger nu **år-til-dato (ÅTD) vægtet gennemsnitlig returtemperatur** (`annual_return_temp`) ved beregning af `effective_price_dkk_per_kwh`, `adjustment_pct`, `ytd_dkk`, `forecast_annual_dkk` samt `motivation_status` / `motivation_dkk_per_kwh` / `motivation_penalty`, i stedet for at lade seneste enkelte døgns returtemperatur slå igennem på hele året og prognosen.
+  - **Seneste døgn** (`latest_day_dkk`) og **månedstal** (`monthly_dkk` / `current_month_dkk`) beregnes fortsat med deres egne respektive døgn-/månedstemperaturer og eventuelle dynamiske krav (`daily_return_temp`, `expected_return_daily`, `expected_return_monthly`), og de nye sensorattributter udstiller både `annual_return_temp`, `return_temp_basis` og periode-specifik `return_temp`.
+  - Dashboard-kortet (`kmd-easy-energy-card.js`) viser nu tydeligt den benyttede ÅTD-temperaturforudsætning under **Effektiv pris** (`ÅTD XX,X °C`) og **Forventet årsudgift** (`v/ ÅTD XX,X °C (+X,X %)`).
+- **Odder Forsyningsselskab I/S tilføjet og bekræftet live + 2026/2027-takster ([issue #56](https://github.com/DKAnord/fjernvarme-dk-ha/issues/56), tak til `@Bluhme1`):** Tilføjet som dedikeret ✅ **Bekræftet** E|Forsyning-værk (`odder-forsyning`, `forsyningId: ACD7B9D3-E7FA-41DF-A4C1-3E459AD74660`, `https://eforsyning.dk/odderforsyningsselskab-varme/`, verificeret med `kWh`, `m³` og `°C` — nu **24** live-bekræftede værker og **67/67** forudfyldte værker) med automatisk opgradering fra `eforsyning-custom` samt officielle takster (`0,8625 kr./kWh` inkl. moms i 2026 for Odder m.fl. og ensartet `0,9225 kr./kWh` pr. 1. jan. 2027; effektbidrag `22,50 kr./m²/år`, abonnementsbidrag `1.250,00 kr./år` og `+3 %/°C` gebyr-only motivationstarif med dynamisk fremløbskurve `35 °C` ved `>= 60 °C` fremløb og `+0,5 °C` pr. `°C` under `60 °C`).
+- **Kortressource:** Opdateret cache-busting ressource-URL til `/kmd_easy_energy/kmd-easy-energy-card.js?v=1.3.11`.
+
 ## [1.3.10] - 2026-11-27
 
 ### Tilføjet & Bekræftet

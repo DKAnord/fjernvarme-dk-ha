@@ -2,6 +2,12 @@
 
 Alle væsentlige ændringer i **Dansk Fjernvarme** (tidligere *Fjernvarme (KMD Easy Energy)*) dokumenteres her.
 
+## [1.3.14] - 2026-11-27
+
+### Bekræftet & Forbedret
+- **Greve Fjernvarme bekræftet live ([issue #58](https://github.com/DKAnord/fjernvarme-dk-ha/issues/58), tak til `@heki1972`):** Markeret som ✅ **Bekræftet** E|Forsyning-værk (`greve-fjernvarme`, `https://eforsyning.dk/grevefjernvarme/`, verificeret med `kWh`, `m³` og `°C` — nu **27** live-bekræftede værker og **68/68** forudfyldte værker), inkl. eksisterende officielle 2026/2027-takster (`0,3375` / `0,3825 kr./kWh` inkl. moms, mængdebidrag `6,48` / `6,85 kr./m³`, arealbidrag `35,39 kr./m²/år` og måler-/administrationsbidrag `375,00` / `600,00 kr./år`).
+- **Kortressource:** Opdateret cache-busting ressource-URL til `/kmd_easy_energy/kmd-easy-energy-card.js?v=1.3.14`.
+
 ## [1.3.13] - 2026-11-27
 
 ### Bekræftet & Forbedret

@@ -424,6 +424,7 @@ def test_utilities_json_backend_field_and_hjorring() -> None:
         "spjald-fjernvarme",
         "odder-forsyning",
         "hammel-fjernvarme",
+        "greve-fjernvarme",
         "hjorring-varmeforsyning",
         "fjernvarme-horsens",
         "vestforbraending",
@@ -497,6 +498,11 @@ def test_utilities_json_backend_field_and_hjorring() -> None:
     assert hammel["tier"] == "confirmed"
     assert hammel["eforsyning_supplier_id"] == "F97D7E2D-EB87-4122-A01F-44244527317A"
     assert hammel["portal_url"] == "https://eforsyning.dk/hammelfjernvarme/"
+    greve = by_id["greve-fjernvarme"]
+    assert greve["status"] == "confirmed"
+    assert greve["tier"] == "confirmed"
+    assert greve["eforsyning_supplier_id"] == "B82285E4-1E8B-4F66-BA8C-4444E2329C22"
+    assert greve["portal_url"] == "https://eforsyning.dk/grevefjernvarme/"
     silkeborg = by_id["silkeborg-forsyning"]
     assert silkeborg["backend"] == "kmd"
     assert silkeborg["status"] == "confirmed"

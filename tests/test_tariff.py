@@ -1628,3 +1628,35 @@ def test_bronderslev_forsyning_confirmed_2026_tariff() -> None:
     assert resolved.bonus_temp == 0.0
     assert resolved.penalty_temp == 30.0
     assert resolved.motivation_dkk_per_kwh_per_k == round(0.75825 * 0.01, 6)
+
+
+def test_greve_fjernvarme_confirmed_2026_and_2027_tariffs() -> None:
+    from kmd_easy_energy.tariff import load_utilities
+
+    utilities = load_utilities()
+    by_id = {u["id"]: u for u in utilities}
+    greve = by_id["greve-fjernvarme"]
+    assert greve["status"] == "confirmed"
+    assert greve["tier"] == "confirmed"
+
+    resolved_2026 = resolve_tariff(
+        _entry(data={"utility_id": "greve-fjernvarme"}),
+        today=date(2026, 11, 27),
+        utilities=utilities,
+    )
+    assert resolved_2026.utility_id == "greve-fjernvarme"
+    assert resolved_2026.price_dkk_per_kwh == 0.3375
+    assert resolved_2026.price_dkk_per_m3 == 6.48
+    assert resolved_2026.fixed_fee_dkk_per_m2_year == 35.39
+    assert resolved_2026.suggested_fixed_fee_dkk_per_year == 375.0
+
+    resolved_2027 = resolve_tariff(
+        _entry(data={"utility_id": "greve-fjernvarme"}),
+        today=date(2027, 2, 1),
+        utilities=utilities,
+    )
+    assert resolved_2027.utility_id == "greve-fjernvarme"
+    assert resolved_2027.price_dkk_per_kwh == 0.3825
+    assert resolved_2027.price_dkk_per_m3 == 6.85
+    assert resolved_2027.fixed_fee_dkk_per_m2_year == 35.39
+    assert resolved_2027.suggested_fixed_fee_dkk_per_year == 600.0

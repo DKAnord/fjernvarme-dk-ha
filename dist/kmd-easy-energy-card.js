@@ -3,7 +3,7 @@
  * Zero external dependencies, Shadow DOM, responsive, interactive tooltips, DA/EN i18n.
  */
 (() => {
-  const VER = "1.3.13";
+  const VER = "1.3.14";
   const MONTHS = ["Jan", "Feb", "Mar", "Apr", "Maj", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Dec"];
   const DAYS_IN_MONTH = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
   const isLeapYear = (y) => (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0;
@@ -108,6 +108,7 @@
     { id: "spjald-fjernvarme", name: "Spjald Fjernvarme- og Vandværk", city: "Spjald", url: "https://eforsyning.dk/spjaldvarme/", status: "confirmed", backend: "eforsyning" },
     { id: "odder-forsyning", name: "Odder Forsyningsselskab I/S", city: "Odder", url: "https://eforsyning.dk/odderforsyningsselskab-varme/", status: "confirmed", backend: "eforsyning" },
     { id: "hammel-fjernvarme", name: "Hammel Fjernvarme a.m.b.a.", city: "Hammel", url: "https://eforsyning.dk/hammelfjernvarme/", status: "confirmed", backend: "eforsyning" },
+    { id: "greve-fjernvarme", name: "Greve Fjernvarme", city: "Greve", url: "https://eforsyning.dk/grevefjernvarme/", status: "confirmed", backend: "eforsyning" },
     { id: "hjorring-varmeforsyning", name: "Hjørring Varmeforsyning", city: "Hjørring", url: "https://eforsyning.dk/hjvarme/", status: "pending_test", backend: "eforsyning" },
     { id: "aalborg-forsyning", name: "Aalborg Forsyning", city: "Aalborg", url: "https://aalborgforsyning.dk/services/forbrug/watts-on/", status: "confirmed", backend: "wattson" },
     { id: "fjernvarme-fyn", name: "Fjernvarme Fyn", city: "Odense / Fyn", url: "https://www.fjernvarmefyn.dk/spar-paa-energien/overblik/watts-on-app/", status: "confirmed", backend: "wattson" },

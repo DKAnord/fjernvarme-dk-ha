@@ -1853,14 +1853,14 @@
       "name": "Greve Fjernvarme",
       "city": "Greve",
       "portal_url": "https://eforsyning.dk/grevefjernvarme/",
-      "status": "pending_test",
-      "tier": "verified_portal",
+      "status": "confirmed",
+      "tier": "confirmed",
       "auth_method": "Forbrugernummer + webpinkode",
       "backend": "eforsyning",
       "eforsyning_supplier_id": "B82285E4-1E8B-4F66-BA8C-4444E2329C22",
       "latitude": 55.583,
       "longitude": 12.297,
-      "notes": "E|Forsyning (afventer 1. test). forsyningid og AppServerUri bekræftet live via GetVaerkSettings. Login med forbrugernummer + webpinkode.",
+      "notes": "E|Forsyning (bekræftet live via issue #58 — kWh, m³ og °C). forsyningid og AppServerUri bekræftet; login med forbrugernummer + webpinkode fra regningen; daglige aflæsninger.",
       "tariffs": [
         {
           "year": 2026,

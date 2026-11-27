@@ -3,7 +3,7 @@
  * Zero external dependencies, Shadow DOM, responsive, interactive tooltips, DA/EN i18n.
  */
 (() => {
-  const VER = "1.3.21";
+  const VER = "1.3.22";
   const MONTHS = ["Jan", "Feb", "Mar", "Apr", "Maj", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Dec"];
   const DAYS_IN_MONTH = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
   const isLeapYear = (y) => (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0;
@@ -117,6 +117,9 @@
     { id: "thisted-varmeforsyning", name: "Thisted Varmeforsyning", city: "Thisted", url: "https://eforsyning.dk/thisted-varmeforsyning/", status: "confirmed", backend: "eforsyning" },
     { id: "haslev-fjernvarme", name: "Haslev Fjernvarme A.m.b.a.", city: "Haslev", url: "https://eforsyning.dk/haslev-fjernvarme/", status: "confirmed", backend: "eforsyning" },
     { id: "lemvig-varmevaerk", name: "Lemvig Varmeværk a.m.b.a.", city: "Lemvig", url: "https://eforsyning.dk/lemvig/", status: "confirmed", backend: "eforsyning" },
+    { id: "gladsaxe-fjernvarme", name: "Gladsaxe Fjernvarme", city: "Gladsaxe", url: "https://eforsyning.dk/gladsaxe/", status: "confirmed", backend: "eforsyning" },
+    { id: "norfors-fjernvarme", name: "Norfors Fjernvarme", city: "Hørsholm / Nordsjælland", url: "https://eforsyning.dk/norfors/", status: "confirmed", backend: "eforsyning" },
+    { id: "hornslet-fjernvarme", name: "Hornslet Fjernvarme A.m.b.a.", city: "Hornslet", url: "https://eforsyning.dk/hornslet-fjernvarme/", status: "confirmed", backend: "eforsyning" },
     { id: "hjorring-varmeforsyning", name: "Hjørring Varmeforsyning", city: "Hjørring", url: "https://eforsyning.dk/hjvarme/", status: "pending_test", backend: "eforsyning" },
     { id: "aalborg-forsyning", name: "Aalborg Forsyning", city: "Aalborg", url: "https://aalborgforsyning.dk/services/forbrug/watts-on/", status: "confirmed", backend: "wattson" },
     { id: "fjernvarme-fyn", name: "Fjernvarme Fyn", city: "Odense / Fyn", url: "https://www.fjernvarmefyn.dk/spar-paa-energien/overblik/watts-on-app/", status: "confirmed", backend: "wattson" },
@@ -678,11 +681,14 @@
       return `<svg viewBox="0 0 ${W} ${H}" class="svg">${grid}${bars}</svg>`;
     }
 
-    _renderDailySvg(daily, dailyTemp, t, wide = false, precomputedClean = null) {
+    _renderDailySvg(daily, dailyTemp, t, wide = false, precomputedClean = null, isEforsyning = false, isEn = false) {
       const clean = precomputedClean || this._cleanDailyEntries(daily);
       if (clean.length === 0) return `<div class="empty">${esc(t.no_daily)}</div>`;
 
       const ymPrefix = (daily?.latest_date || new Date().toISOString().slice(0, 7)).slice(0, 7);
+      const hasValidYm = /^\d{4}-\d{2}$/.test(ymPrefix);
+      const ymYear = hasValidYm ? Number(ymPrefix.slice(0, 4)) : 0;
+      const ymMonthIdx = hasValidYm ? Number(ymPrefix.slice(5, 7)) - 1 : 0;
       const W = wide ? 960 : 540, H = 220, pad = { l: 42, r: 40, t: 26, b: 32 };
       const cw = W - pad.l - pad.r, ch = H - pad.t - pad.b;
       const topK = Math.max(70, ...clean.map((x) => x[1] * 1.08));
@@ -717,7 +723,12 @@
         const y = yK(v);
         const bw = Math.min(wide ? 22 : 20, xStep * 0.64);
         const dt = dailyTemp[`${ymPrefix}-${String(d).padStart(2, "0")}`];
-        bars += `<rect x="${cx - bw / 2}" y="${y}" width="${bw}" height="${Math.max(2, pad.t + ch - y)}" rx="3.5" fill="url(#gDay)" tabindex="0" data-tip="${esc(`${d}.: ${v} kWh${typeof dt === 'number' ? ` · ${t.outdoor} ${fmtDec(dt)} °C` : ''}`)}"/>`;
+        let rdNote = "";
+        if (isEforsyning && hasValidYm) {
+          const rd = new Date(Date.UTC(ymYear, ymMonthIdx, Number(d) + 1));
+          rdNote = ` · ${isEn ? "read" : "aflæst"} ${rd.getUTCDate()}/${rd.getUTCMonth() + 1}`;
+        }
+        bars += `<rect x="${cx - bw / 2}" y="${y}" width="${bw}" height="${Math.max(2, pad.t + ch - y)}" rx="3.5" fill="url(#gDay)" tabindex="0" data-tip="${esc(`${d}.: ${v} kWh${typeof dt === 'number' ? ` · ${t.outdoor} ${fmtDec(dt)} °C` : ''}${rdNote}`)}"/>`;
         if (idx % labelStep === 0 || idx === clean.length - 1 && (clean.length - 1) % labelStep === 0) {
           bars += `<text x="${cx}" y="${H - 8}" text-anchor="middle" class="ax">${d}.</text>`;
         }
@@ -1652,10 +1663,11 @@
                 <div class="p-title">📅 ${esc(dy.month || `${curYr}`)}: Dagligt forbrug (kWh)${dCurHasTemp ? " &amp; Udetemp" : ""}</div>
                 <div class="p-leg">
                   <span>Snit ${fmtDec(dy.gennemsnit || 0)} ${esc(t.avg_day)}</span>
+                  ${backend === "eforsyning" ? `<span>${isEn ? "Usage day (read 00:00 next day)" : "Forbrugsdøgn (aflæst kl. 00:00 dagen efter)"}</span>` : ""}
                   ${dCurHasTemp ? `<span><i class="dot" style="background:#38bdf8"></i>${esc(t.outdoor)} °C</span>` : ""}
                 </div>
               </div>
-              ${this._renderDailySvg(dy, wx.daily_temp || {}, t, wideDaily, dailyCleanEntries)}
+              ${this._renderDailySvg(dy, wx.daily_temp || {}, t, wideDaily, dailyCleanEntries, backend === "eforsyning", isEn)}
             </div>` : ""}
           </div>` : ""}
 

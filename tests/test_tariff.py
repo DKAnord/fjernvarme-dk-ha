@@ -837,10 +837,10 @@ def test_bundled_utilities_json_all_69_have_tariffs_and_spot_checks() -> None:
     from kmd_easy_energy.tariff import load_utilities
 
     utilities = load_utilities()
-    assert len(utilities) == 72
+    assert len(utilities) == 73
     with_tariffs = [u for u in utilities if u.get("tariffs")]
-    assert len(with_tariffs) == len(utilities) == 72
-    assert len({u["id"] for u in utilities}) == 72
+    assert len(with_tariffs) == len(utilities) == 73
+    assert len({u["id"] for u in utilities}) == 73
 
     backends = {}
     for u in utilities:
@@ -849,7 +849,7 @@ def test_bundled_utilities_json_all_69_have_tariffs_and_spot_checks() -> None:
         for t in u["tariffs"]:
             assert t["price_dkk_per_kwh"] > 0, u["id"]
             assert str(t.get("source", "")).startswith("https://"), u["id"]
-    assert backends == {"kmd": 17, "eforsyning": 51, "wattson": 4}
+    assert backends == {"kmd": 17, "eforsyning": 52, "wattson": 4}
 
     by_id = {u["id"]: u for u in utilities}
     assert "hoje-taastrup-fjernvarme" not in by_id
@@ -2021,3 +2021,90 @@ def test_lemvig_varmevaerk_confirmed_2026_curve_and_custom_matching() -> None:
     )
     assert r_forv.bonus_temp == 0.0
     assert r_forv.penalty_temp == 34.2
+
+
+def test_hornslet_gladsaxe_and_norfors_confirmed_tariffs_and_matching() -> None:
+    from kmd_easy_energy.tariff import load_utilities, match_utility_for_entry
+
+    utilities = load_utilities()
+    by_id = {u["id"]: u for u in utilities}
+
+    hornslet = by_id["hornslet-fjernvarme"]
+    assert hornslet["status"] == "confirmed"
+    assert hornslet["tier"] == "confirmed"
+    assert hornslet["eforsyning_supplier_id"] == "CB473D79-8603-415A-9B45-2342F9765E36"
+    assert hornslet["portal_url"] == "https://eforsyning.dk/hornslet-fjernvarme/"
+
+    by_supplier = match_utility_for_entry(
+        {
+            "utility_id": "eforsyning-custom",
+            "eforsyning_supplier_id": "cb473d79-8603-415a-9b45-2342f9765e36",
+            "portal_url": "https://eforsyning.dk/",
+        },
+        utilities,
+    )
+    assert by_supplier is not None and by_supplier["id"] == "hornslet-fjernvarme"
+
+    by_portal = match_utility_for_entry(
+        {
+            "utility_id": "eforsyning-custom",
+            "portal_url": "https://eforsyning.dk/hornslet-fjernvarme",
+        },
+        utilities,
+    )
+    assert by_portal is not None and by_portal["id"] == "hornslet-fjernvarme"
+
+    r_hornslet = resolve_tariff(
+        _entry(
+            data={
+                "utility_id": "eforsyning-custom",
+                "portal_url": "https://eforsyning.dk/hornslet-fjernvarme/",
+            },
+        ),
+        today=date(2026, 11, 27),
+        utilities=utilities,
+    )
+    assert r_hornslet.utility_id == "hornslet-fjernvarme"
+    assert r_hornslet.price_dkk_per_kwh == 0.94
+    assert r_hornslet.fixed_fee_dkk_per_m2_year == 4.7
+    assert r_hornslet.suggested_fixed_fee_dkk_per_year == 887.5
+
+    gladsaxe = by_id["gladsaxe-fjernvarme"]
+    assert gladsaxe["status"] == "confirmed"
+    assert gladsaxe["tier"] == "confirmed"
+    assert gladsaxe["eforsyning_supplier_id"] == "8CBCABDB-C971-4548-8D26-F35881640DE8"
+    assert gladsaxe["portal_url"] == "https://eforsyning.dk/gladsaxe/"
+    r_gladsaxe = resolve_tariff(
+        _entry(data={"utility_id": "gladsaxe-fjernvarme"}),
+        today=date(2026, 11, 27),
+        utilities=utilities,
+    )
+    assert r_gladsaxe.price_dkk_per_kwh == 0.37745
+    assert r_gladsaxe.suggested_fixed_fee_dkk_per_year == 857.26
+    assert r_gladsaxe.motivation_dkk_per_kwh_per_k == 0.00403
+    assert r_gladsaxe.bonus_temp == 42.0
+    assert r_gladsaxe.penalty_temp == 42.0
+
+    norfors = by_id["norfors-fjernvarme"]
+    assert norfors["status"] == "confirmed"
+    assert norfors["tier"] == "confirmed"
+    assert norfors["eforsyning_supplier_id"] == "44D82A4B-7C43-4838-A046-CDA86D8ED1CB"
+    assert norfors["portal_url"] == "https://eforsyning.dk/norfors/"
+    r_norfors_26 = resolve_tariff(
+        _entry(data={"utility_id": "norfors-fjernvarme"}),
+        today=date(2026, 11, 27),
+        utilities=utilities,
+    )
+    assert r_norfors_26.price_dkk_per_kwh == 0.93758
+    assert r_norfors_26.fixed_fee_dkk_per_m2_year == 52.66
+    assert r_norfors_26.suggested_fixed_fee_dkk_per_year == 1269.35
+    assert r_norfors_26.motivation_pct_per_k == 3.0
+    assert r_norfors_26.motivation_bonus is False
+    assert r_norfors_26.penalty_temp == 45.0
+
+    r_norfors_27 = resolve_tariff(
+        _entry(data={"utility_id": "norfors-fjernvarme"}),
+        today=date(2027, 2, 1),
+        utilities=utilities,
+    )
+    assert r_norfors_27.price_dkk_per_kwh == 0.99384

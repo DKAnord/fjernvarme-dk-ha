@@ -73,18 +73,106 @@ def _weighted_temp(days: list[str], temps: dict[str, float], m3: dict[str, float
     return None
 
 
+def _merge_monthly_temps(
+    prev_mt: dict[str, Any], new_mt: dict[str, Any], today: date
+) -> dict[str, Any]:
+    """Merge server monthly/annual temperature caches, keeping current + previous year."""
+    keep_years = {str(today.year - 1), str(today.year)}
+    monthly: dict[str, dict[str, dict[str, float]]] = {}
+    annual: dict[str, dict[str, float]] = {}
+
+    for src in (prev_mt, new_mt):
+        if not isinstance(src, dict):
+            continue
+        raw_m = src.get("monthly")
+        if isinstance(raw_m, dict):
+            for ys, kinds in raw_m.items():
+                if str(ys) not in keep_years or not isinstance(kinds, dict):
+                    continue
+                dst_y = monthly.setdefault(str(ys), {})
+                for kind, mmap in kinds.items():
+                    if not isinstance(mmap, dict):
+                        continue
+                    dst_k = dst_y.setdefault(str(kind), {})
+                    for mk, val in mmap.items():
+                        if isinstance(val, (int, float)) and not isinstance(val, bool) and val > 0:
+                            dst_k[str(mk)] = round(float(val), 2)
+        raw_a = src.get("annual")
+        if isinstance(raw_a, dict):
+            for ys, amap in raw_a.items():
+                if str(ys) not in keep_years or not isinstance(amap, dict):
+                    continue
+                dst_a = annual.setdefault(str(ys), {})
+                for kind, val in amap.items():
+                    if isinstance(val, (int, float)) and not isinstance(val, bool) and val > 0:
+                        dst_a[str(kind)] = round(float(val), 2)
+
+    out: dict[str, Any] = {}
+    if monthly:
+        out["monthly"] = monthly
+    if annual:
+        out["annual"] = annual
+    return out
+
+
+def _apply_server_monthly_temps(
+    state: dict[str, Any], monthly_temps: dict[str, Any], today: date
+) -> None:
+    """Overlay server-computed afMaanedsvis temperatures onto state['return_temp']."""
+    if not monthly_temps:
+        return
+    rt = state.setdefault("return_temp", {})
+    m_all = monthly_temps.get("monthly") or {}
+    a_all = monthly_temps.get("annual") or {}
+    for y in (today.year - 1, today.year):
+        ys = str(y)
+        m_yr = m_all.get(ys) or {}
+        a_yr = a_all.get(ys) or {}
+        for kind, mon_key, ann_key in (
+            ("return", f"monthly_{ys}", "annual"),
+            ("forward", f"forward_monthly_{ys}", "forward_annual"),
+            ("expected_return", f"expected_monthly_{ys}", "expected_annual"),
+        ):
+            src_m = m_yr.get(kind)
+            if isinstance(src_m, dict) and src_m:
+                dst_m = rt.setdefault(mon_key, {})
+                for mk, val in src_m.items():
+                    if isinstance(val, (int, float)) and not isinstance(val, bool) and val > 0:
+                        dst_m[mk] = round(float(val), 1)
+            a_val = a_yr.get(kind)
+            if isinstance(a_val, (int, float)) and not isinstance(a_val, bool) and a_val > 0:
+                rt.setdefault(ann_key, {})[ys] = round(float(a_val), 1)
+            elif isinstance(src_m, dict) and src_m:
+                ann_dict = rt.get(ann_key)
+                if not isinstance(ann_dict, dict) or ys not in ann_dict:
+                    cur_m = rt.get(mon_key) or {}
+                    vals = [
+                        float(v)
+                        for v in cur_m.values()
+                        if isinstance(v, (int, float)) and not isinstance(v, bool) and v > 0
+                    ]
+                    if vals:
+                        rt.setdefault(ann_key, {})[ys] = round(sum(vals) / len(vals), 1)
+
+
 def apply_eforsyning_data(
     state: dict[str, Any], fetched: dict[str, Any], today: date
 ) -> dict[str, Any]:
     """Merge one E|Forsyning fetch into ``state`` (in place) and return it."""
+    prev_mt = ((state.get("eforsyning") or {}).get("monthly_temps") or {})
+    merged_mt = _merge_monthly_temps(prev_mt, fetched.get("monthly_temps") or {}, today)
     rows = [r for r in (fetched.get("readings") or []) if isinstance(r, dict) and r.get("date")]
     apply_daily_readings(state, rows, today)
-    state["eforsyning"] = {
+    _apply_server_monthly_temps(state, merged_mt, today)
+    ef_meta: dict[str, Any] = {
         "years": fetched.get("years") or [],
         "year_marker": fetched.get("year_marker") or {},
         "installation": fetched.get("installation") or {},
         "readings_last_fetch": len(rows),
     }
+    if merged_mt:
+        ef_meta["monthly_temps"] = merged_mt
+    state["eforsyning"] = ef_meta
     return state
 
 

@@ -2,6 +2,19 @@
 
 Alle væsentlige ændringer i **Dansk Fjernvarme** (tidligere *Fjernvarme (KMD Easy Energy)*) dokumenteres her.
 
+## [1.3.22] - 2026-11-27
+
+### Tilføjet & Bekræftet
+- **Hornslet Fjernvarme A.m.b.a., Gladsaxe Fjernvarme & Norfors Fjernvarme bekræftet live + yderligere verificering af Fjernvarme Horsens ([issue #70](https://github.com/DKAnord/fjernvarme-dk-ha/issues/70) `@simonruds-sandcraft`, [issue #69](https://github.com/DKAnord/fjernvarme-dk-ha/issues/69) `@IvanSoenderholm`, [issue #50](https://github.com/DKAnord/fjernvarme-dk-ha/issues/50) `@Christianokholmbonde`, [issue #68](https://github.com/DKAnord/fjernvarme-dk-ha/issues/68) `@FrankLeth` — nu 37 live-bekræftede værker og 73/73 forudfyldte værker):**
+  - **Hornslet Fjernvarme A.m.b.a.** (`hornslet-fjernvarme`, `forsyningId: CB473D79-8603-415A-9B45-2342F9765E36`, `https://eforsyning.dk/hornslet-fjernvarme/`, automatisk opgradering fra `eforsyning-custom`) med officiel 2026-takst (`0,94 kr./kWh` inkl. moms, fast bidrag `4,70 kr./m²/år`, målerleje `887,50 kr./år`).
+  - **Gladsaxe Fjernvarme** (`gladsaxe-fjernvarme`) og **Norfors Fjernvarme** (`norfors-fjernvarme`, inkl. 2026-takst verificeret live) rykket op til ✅ **Bekræftet**, samt credit til `@FrankLeth` på **Fjernvarme Horsens** (`fjernvarme-horsens`).
+
+### Forbedret
+- **E|Forsyning serverberegnede måneds- og årstemperaturer (`afMaanedsvis`, [issue #70](https://github.com/DKAnord/fjernvarme-dk-ha/issues/70)):** `EforsyningClient` henter nu også E|Forsynings månedsvise oversigt (`afMaanedsvis`), så måneds-/årskurver for returtemperatur, fremløbstemperatur og `Forv_Retur` bruger værkets eksakte `ENG2`/`TV2`-beregnede gennemsnit i stedet for afrundede døgnværdier.
+- **Tydelig forbrugsdøgn- og aflæsningsdato-label på E|Forsyning-døgngrafen ([issue #50](https://github.com/DKAnord/fjernvarme-dk-ha/issues/50), [issue #70](https://github.com/DKAnord/fjernvarme-dk-ha/issues/70)):** Døgnsøjlerne på E|Forsyning vises fortsat på den fysiske forbrugsdag (`FraDato`, så de passer 1:1 med udetemperatur/graddage), nu med tydelig legend (*Forbrugsdøgn (aflæst kl. 00:00 dagen efter)*) og `aflæst DD/MM` i hver søjles tooltip.
+- **Forbedret Watts On-opsætningsguide i UI & README ([issue #63](https://github.com/DKAnord/fjernvarme-dk-ha/issues/63)):** Tydelig trin-for-trin-vejledning i både `config_flow` (`da`/`en`) og `README.md` (åbn login i ny fane, slå **F12 → Network → Preserve log** til *før* login, brug Watts On-appens e-mail/adgangskode, og kopiér `msauth://`-redirect fra Console eller `302 location`).
+- **Demo-GIF & kortressource:** Opdateret `docs/screenshots/kmd-fjernvarme-demo.gif` samt cache-busting ressource-URL til `/kmd_easy_energy/kmd-easy-energy-card.js?v=1.3.22`.
+
 ## [1.3.21] - 2026-11-27
 
 ### Tilføjet & Bekræftet

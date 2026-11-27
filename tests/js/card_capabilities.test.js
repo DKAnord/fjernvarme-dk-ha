@@ -719,4 +719,32 @@ const enBasisHtml = enCard.shadowRoot.innerHTML;
 assert.ok(enBasisHtml.includes("YTD 35,4 °C") || enBasisHtml.includes("YTD 35.4 °C"), "EN effective price shows YTD return temp basis");
 assert.ok(enBasisHtml.includes("at YTD 35,4 °C (+1,2 %)") || enBasisHtml.includes("at YTD 35.4 °C (+1.2 %)"), "EN expected annual cost shows YTD temp & surcharge");
 
+// 19) E|Forsyning daily chart legend and bar tooltips show usage-day / reading-date clarity (DA & EN)
+const efDailyState = {
+  backend: "eforsyning",
+  data_source: "E|Forsyning",
+  utility: "Hornslet Fjernvarme A.m.b.a.",
+  utility_id: "hornslet-fjernvarme",
+  utility_status: "confirmed",
+  capabilities: ["auto_sync", "daily"],
+  daily: {
+    month: "November 2026",
+    latest_date: "2026-11-25",
+    latest_complete: true,
+    gennemsnit: 96,
+    days: { "25": 96, "30": 42 },
+  },
+};
+const efDailyDaHtml = render(efDailyState, []).shadowRoot.innerHTML;
+assert.ok(efDailyDaHtml.includes("Forbrugsdøgn (aflæst kl. 00:00 dagen efter)"), "DA eforsyning daily chart legend explains usage day");
+assert.ok(efDailyDaHtml.includes("25.: 96 kWh · aflæst 26/11"), "DA eforsyning daily tooltip includes reading date");
+assert.ok(efDailyDaHtml.includes("30.: 42 kWh · aflæst 1/12"), "DA eforsyning daily tooltip rolls reading date across month end");
+
+const efDailyEnCard = new Card();
+efDailyEnCard.setConfig({ language: "en" });
+efDailyEnCard.hass = mkHass(efDailyState, []);
+const efDailyEnHtml = efDailyEnCard.shadowRoot.innerHTML;
+assert.ok(efDailyEnHtml.includes("Usage day (read 00:00 next day)"), "EN eforsyning daily chart legend explains usage day");
+assert.ok(efDailyEnHtml.includes("25.: 96 kWh · read 26/11"), "EN eforsyning daily tooltip includes reading date");
+
 console.log("card_capabilities.test.js: OK");

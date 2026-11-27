@@ -24,6 +24,7 @@ from kmd_easy_energy.api.eforsyning_client import (
     is_uuid,
     normalize_eforsyning_url,
     parse_eforsyning_directory,
+    parse_monthly_temperatures,
     parse_number,
     parse_readings,
     parse_umbraco_suppliers,
@@ -135,10 +136,15 @@ async def test_fetch_tries_new_year_in_january_and_skips_empty_years() -> None:
 
     session = fx.FakeSession({"getforbrug": forbrug})
     out = await _client(session).async_fetch(date(2027, 1, 5), years_back=0)
-    years = [json.loads(c["data"])["AarsMaerke"] for c in session.calls if "getforbrug" in c["url"]]
-    assert years == [2026, 2027]
+    calls = [
+        (json.loads(c["data"])["AarsMaerke"], json.loads(c["data"])["Aflaesningsfilter"])
+        for c in session.calls
+        if "getforbrug" in c["url"]
+    ]
+    assert calls == [(2026, "afDagsvis"), (2026, "afMaanedsvis"), (2027, "afDagsvis")]
     assert out["years"] == [2026]
     assert len(out["readings"]) == 3
+    assert "monthly_temps" not in out  # daily fixture has duplicate month -> ignored
     assert "Adresse" not in json.dumps(out, ensure_ascii=False)  # no address / meter no. leaks
     assert fx.USERNAME not in json.dumps(out)
 
@@ -147,8 +153,17 @@ async def test_fetch_tries_new_year_in_january_and_skips_empty_years() -> None:
 async def test_fetch_first_sync_includes_previous_billing_year() -> None:
     session = fx.FakeSession()
     await _client(session).async_fetch(date(2026, 11, 5), years_back=1)
-    years = [json.loads(c["data"])["AarsMaerke"] for c in session.calls if "getforbrug" in c["url"]]
-    assert years == [2025, 2026]
+    calls = [
+        (json.loads(c["data"])["AarsMaerke"], json.loads(c["data"])["Aflaesningsfilter"])
+        for c in session.calls
+        if "getforbrug" in c["url"]
+    ]
+    assert calls == [
+        (2025, "afDagsvis"),
+        (2025, "afMaanedsvis"),
+        (2026, "afDagsvis"),
+        (2026, "afMaanedsvis"),
+    ]
 
 
 @pytest.mark.asyncio
@@ -198,6 +213,124 @@ def test_response_has_lines() -> None:
     assert not response_has_lines(fx.NO_DATA_ERROR)
     assert not response_has_lines(fx.NO_LINES)
     assert not response_has_lines(None)
+
+
+def test_parse_monthly_temperatures_ignores_daily_and_parses_monthly() -> None:
+    # Daily response has multiple lines in the same (year, month) -> returns {}.
+    assert parse_monthly_temperatures(fx.daily_response()) == {}
+
+    monthly_raw = {
+        "ForbrugsLinjer": {
+            "AntLinjer": "2",
+            "TForbrugsLinje": [
+                {
+                    "FraDatoStr": "01-07-2026",
+                    "TilDatoStr": "01-08-2026",
+                    "Tempfrem": "52,49",
+                    "TempRetur": "33,33",
+                    "Forv_Retur": "39,00",
+                },
+                {
+                    "FraDatoStr": "31-10-2026",
+                    "TilDatoStr": "01-12-2026",
+                    "Tempfrem": "67,10",
+                    "TempRetur": "37,80",
+                    "Forv_Retur": "35,00",
+                },
+            ],
+        },
+        "IaltLinje": {
+            "FraDatoStr": "01-01-2026",
+            "TilDatoStr": "26-11-2026",
+            "Tempfrem": "63,40",
+            "TempRetur": "34,20",
+            "Forv_Retur": "36,10",
+        },
+    }
+    mt = parse_monthly_temperatures(monthly_raw)
+    assert mt["monthly"]["2026"]["return"] == {"Jul": 33.33, "Nov": 37.8}
+    assert mt["monthly"]["2026"]["forward"] == {"Jul": 52.49, "Nov": 67.1}
+    assert mt["monthly"]["2026"]["expected_return"] == {"Jul": 39.0, "Nov": 35.0}
+    assert mt["annual"]["2026"] == {"return": 34.2, "forward": 63.4, "expected_return": 36.1}
+
+    # Non-calendar billing year in IaltLinje should not override calendar annual stats.
+    non_cal = {
+        **monthly_raw,
+        "IaltLinje": {
+            "FraDatoStr": "01-07-2026",
+            "TilDatoStr": "26-11-2026",
+            "Tempfrem": "60,00",
+            "TempRetur": "33,00",
+            "Forv_Retur": "37,00",
+        },
+    }
+    assert "annual" not in parse_monthly_temperatures(non_cal)
+
+
+@pytest.mark.asyncio
+async def test_fetch_and_mapping_overlay_server_monthly_temperatures() -> None:
+    def forbrug(method, url, kwargs):
+        payload = json.loads(kwargs["data"])
+        year = payload["AarsMaerke"]
+        if payload["Aflaesningsfilter"] == "afMaanedsvis":
+            if year == 2025:
+                return {
+                    "ForbrugsLinjer": {
+                        "AntLinjer": "1",
+                        "TForbrugsLinje": [
+                            {
+                                "FraDatoStr": "01-12-2025",
+                                "TilDatoStr": "01-01-2026",
+                                "Tempfrem": "70,20",
+                                "TempRetur": "35,40",
+                                "Forv_Retur": "34,80",
+                            }
+                        ],
+                    }
+                }
+            return {
+                "ForbrugsLinjer": {
+                    "AntLinjer": "1",
+                    "TForbrugsLinje": [
+                        {
+                            "FraDatoStr": "01-07-2026",
+                            "TilDatoStr": "01-08-2026",
+                            "Tempfrem": "52,49",
+                            "TempRetur": "33,33",
+                            "Forv_Retur": "39,00",
+                        }
+                    ],
+                },
+                "IaltLinje": {
+                    "FraDatoStr": "01-01-2026",
+                    "TilDatoStr": "05-11-2026",
+                    "Tempfrem": "62,50",
+                    "TempRetur": "33,90",
+                    "Forv_Retur": "36,80",
+                },
+            }
+        return fx.daily_response()
+
+    session = fx.FakeSession({"getforbrug": forbrug})
+    fetched_first = await _client(session).async_fetch(date(2026, 11, 5), years_back=1)
+    assert fetched_first["monthly_temps"]["monthly"]["2026"]["return"]["Jul"] == 33.33
+    assert fetched_first["monthly_temps"]["monthly"]["2025"]["return"]["Dec"] == 35.4
+
+    state = apply_eforsyning_data({}, fetched_first, date(2026, 11, 5))
+    assert state["return_temp"]["monthly_2026"]["Jul"] == 33.3
+    assert state["return_temp"]["forward_monthly_2026"]["Jul"] == 52.5
+    assert state["return_temp"]["expected_monthly_2026"]["Jul"] == 39.0
+    assert state["return_temp"]["annual"]["2026"] == 33.9
+    assert state["return_temp"]["forward_annual"]["2026"] == 62.5
+    assert state["return_temp"]["expected_annual"]["2026"] == 36.8
+    assert state["return_temp"]["monthly_2025"]["Dec"] == 35.4
+
+    # Subsequent sync (years_back=0) preserves 2025 server monthly temps in state["eforsyning"].
+    fetched_second = await _client(session).async_fetch(date(2026, 11, 5), years_back=0)
+    assert "2025" not in fetched_second["monthly_temps"]["monthly"]
+    state2 = apply_eforsyning_data(state, fetched_second, date(2026, 11, 5))
+    assert state2["return_temp"]["monthly_2025"]["Dec"] == 35.4
+    assert state2["return_temp"]["monthly_2026"]["Jul"] == 33.3
 
 
 # -------------------------------------------------------------------- mapping
@@ -410,7 +543,7 @@ def test_utilities_json_backend_field_and_hjorring() -> None:
     assert fh["tier"] == "confirmed"
 
     eforsyning = {u["id"] for u in data["utilities"] if u.get("backend") == "eforsyning"}
-    assert len(eforsyning) == 51
+    assert len(eforsyning) == 52
     assert "hoje-taastrup-fjernvarme" not in by_id
     assert eforsyning >= {
         "soroe-fjernvarme",
@@ -426,6 +559,8 @@ def test_utilities_json_backend_field_and_hjorring() -> None:
         "hammel-fjernvarme",
         "haslev-fjernvarme",
         "lemvig-varmevaerk",
+        "hornslet-fjernvarme",
+        "gladsaxe-fjernvarme",
         "aalestrup-norager-energi",
         "greve-fjernvarme",
         "hjorring-varmeforsyning",
@@ -542,6 +677,21 @@ def test_utilities_json_backend_field_and_hjorring() -> None:
     assert lemvig["tier"] == "confirmed"
     assert lemvig["eforsyning_supplier_id"] == "AC3C048A-78F6-4EEC-8B0E-34C8724F8EC9"
     assert lemvig["portal_url"] == "https://eforsyning.dk/lemvig/"
+    hornslet = by_id["hornslet-fjernvarme"]
+    assert hornslet["status"] == "confirmed"
+    assert hornslet["tier"] == "confirmed"
+    assert hornslet["eforsyning_supplier_id"] == "CB473D79-8603-415A-9B45-2342F9765E36"
+    assert hornslet["portal_url"] == "https://eforsyning.dk/hornslet-fjernvarme/"
+    gladsaxe = by_id["gladsaxe-fjernvarme"]
+    assert gladsaxe["status"] == "confirmed"
+    assert gladsaxe["tier"] == "confirmed"
+    assert gladsaxe["eforsyning_supplier_id"] == "8CBCABDB-C971-4548-8D26-F35881640DE8"
+    assert gladsaxe["portal_url"] == "https://eforsyning.dk/gladsaxe/"
+    norfors = by_id["norfors-fjernvarme"]
+    assert norfors["status"] == "confirmed"
+    assert norfors["tier"] == "confirmed"
+    assert norfors["eforsyning_supplier_id"] == "44D82A4B-7C43-4838-A046-CDA86D8ED1CB"
+    assert norfors["portal_url"] == "https://eforsyning.dk/norfors/"
     silkeborg = by_id["silkeborg-forsyning"]
     assert silkeborg["backend"] == "kmd"
     assert silkeborg["status"] == "confirmed"

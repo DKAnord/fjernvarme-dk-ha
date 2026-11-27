@@ -684,7 +684,7 @@
       "eforsyning_supplier_id": "8B563AC8-706E-45C6-A23C-A6CABCAE3E41",
       "latitude": 55.861,
       "longitude": 9.85,
-      "notes": "E|Forsyning (bekræftet live via issue #65 af @Larven1337 — kWh, m³ og °C). forsyningid og AppServerUri bekræftet; login med forbrugernummer + webpinkode fra regningen; daglige aflæsninger. Takstblad 2026: 685,00 kr./MWh inkl. moms (0,685 kr./kWh), fast effektbidrag 30,625 kr./m²/år, abonnementsbidrag 825,00 kr./år samt motivationstarif ±1 %/°C (maks. ±35 %) ift. fremløbsafhængig forventet returtemperatur (50–75 °C → 40–33 °C; bruger automatisk Forv_Retur fra E|Forsyning).",
+      "notes": "E|Forsyning (bekræftet live via issue #65 af @Larven1337 og issue #68 af @FrankLeth — kWh, m³ og °C). forsyningid og AppServerUri bekræftet; login med forbrugernummer + webpinkode fra regningen; daglige aflæsninger. Takstblad 2026: 685,00 kr./MWh inkl. moms (0,685 kr./kWh), fast effektbidrag 30,625 kr./m²/år, abonnementsbidrag 825,00 kr./år samt motivationstarif ±1 %/°C (maks. ±35 %) ift. fremløbsafhængig forventet returtemperatur (50–75 °C → 40–33 °C; bruger automatisk Forv_Retur fra E|Forsyning).",
       "tariffs": [
         {
           "year": 2026,
@@ -1482,6 +1482,32 @@
       ]
     },
     {
+      "id": "hornslet-fjernvarme",
+      "name": "Hornslet Fjernvarme A.m.b.a.",
+      "city": "Hornslet",
+      "portal_url": "https://eforsyning.dk/hornslet-fjernvarme/",
+      "status": "confirmed",
+      "tier": "confirmed",
+      "auth_method": "Forbrugernummer + webpinkode",
+      "backend": "eforsyning",
+      "eforsyning_supplier_id": "CB473D79-8603-415A-9B45-2342F9765E36",
+      "latitude": 56.316,
+      "longitude": 10.32,
+      "notes": "E|Forsyning (bekræftet live via issue #70 af @simonruds-sandcraft — kWh, m³ og °C). forsyningid og AppServerUri (https://apiapp.dff-edb.dk/hornslet/) bekræftet live; login med forbrugernummer + webpinkode fra regningen; daglige aflæsninger. Prisblad 2026: 0,94 kr./kWh inkl. moms (0,75 ekskl.), fast bidrag 4,70 kr./m²/år inkl. moms (3,76 ekskl.) efter BBR samt målerleje 887,50 kr./år inkl. moms (710,00 ekskl.). Ingen økonomisk motivationstarif i 2026 (varslet pr. 1. jan. 2027; viser vejledende Forv_Retur fra E|Forsyning).",
+      "tariffs": [
+        {
+          "year": 2026,
+          "effective_from": "2026-01-01",
+          "price_dkk_per_kwh": 0.94,
+          "price_dkk_per_m3": null,
+          "fixed_fee_dkk_per_m2_year": 4.7,
+          "fixed_fee_dkk_per_year": 887.5,
+          "source": "https://hornslet-fjernvarme.dk/oekonomi/priser",
+          "source_note": "Prisblad 01.01.2026–31.12.2026 (Hornslet Fjernvarme A.m.b.a., inkl. moms): Forbrugsafgift 0,75 ekskl. / 0,94 kr./kWh inkl. moms. Fast bidrag ifølge BBR: 3,76 ekskl. / 4,70 kr./m²/år inkl. moms. Målerleje: 710,00 ekskl. / 887,50 kr./år inkl. moms (forsyningsafgift for almene boliger på 1.820,00 kr./år inkl. moms kan evt. tillægges manuelt). Ingen økonomisk afkølingstarif i 2026 (varslet indført fra 01.01.2027)."
+        }
+      ]
+    },
+    {
       "id": "aalestrup-norager-energi",
       "name": "Aalestrup-Nørager Energi a.m.b.a.",
       "city": "Aalestrup / Nørager",
@@ -2091,14 +2117,14 @@
       "name": "Gladsaxe Fjernvarme",
       "city": "Gladsaxe",
       "portal_url": "https://eforsyning.dk/gladsaxe/",
-      "status": "pending_test",
-      "tier": "verified_portal",
+      "status": "confirmed",
+      "tier": "confirmed",
       "auth_method": "Forbrugernummer + webpinkode",
       "backend": "eforsyning",
       "eforsyning_supplier_id": "8CBCABDB-C971-4548-8D26-F35881640DE8",
       "latitude": 55.733,
       "longitude": 12.488,
-      "notes": "E|Forsyning (afventer 1. test). forsyningid og AppServerUri bekræftet live via GetVaerkSettings. Login med forbrugernummer + webpinkode.",
+      "notes": "E|Forsyning (bekræftet live via issue #69 af @IvanSoenderholm — kWh, m³ og °C). forsyningid og AppServerUri bekræftet live via GetVaerkSettings; login med forbrugernummer + webpinkode fra regningen; daglige aflæsninger. Takstblad 2026: 377,45 kr./MWh inkl. moms (0,37745 kr./kWh), abonnement 857,26 kr./år inkl. moms samt incitamentstakst ±4,03 kr./MWh/°C (±0,00403 kr./kWh/°C) ift. 42 °C.",
       "tariffs": [
         {
           "year": 2026,
@@ -2119,14 +2145,14 @@
       "name": "Norfors Fjernvarme",
       "city": "Hørsholm / Nordsjælland",
       "portal_url": "https://eforsyning.dk/norfors/",
-      "status": "pending_test",
-      "tier": "verified_portal",
+      "status": "confirmed",
+      "tier": "confirmed",
       "auth_method": "Forbrugernummer + webpinkode",
       "backend": "eforsyning",
       "eforsyning_supplier_id": "44D82A4B-7C43-4838-A046-CDA86D8ED1CB",
       "latitude": 55.881,
       "longitude": 12.495,
-      "notes": "E|Forsyning (afventer 1. test). forsyningid og AppServerUri bekræftet live via GetVaerkSettings. Login med forbrugernummer + webpinkode.",
+      "notes": "E|Forsyning (bekræftet live via issue #50 af @Christianokholmbonde — kWh, m³ og °C samt 2026-takster verificeret). forsyningid og AppServerUri bekræftet live via GetVaerkSettings; login med forbrugernummer + webpinkode fra regningen; daglige aflæsninger. Takstblad 2026: 937,58 kr./MWh inkl. moms (0,93758 kr./kWh; 2027: 0,99384 kr./kWh), fast arealbidrag 52,66 kr./m²/år, målerafgift/abonnement 1.269,35 kr./år samt motivationstarif +3,0 %/°C over 45 °C (kun tillæg, ingen bonus).",
       "tariffs": [
         {
           "year": 2026,

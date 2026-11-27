@@ -56,6 +56,7 @@ _TIMEOUT = aiohttp.ClientTimeout(total=20)
 _ID_CHARS = string.digits + string.ascii_uppercase
 # Values above this are treated as a missing decimal comma (seen in the wild).
 _TEMP_SANITY_MAX = 150.0
+_MONTH_KEYS = ("Jan", "Feb", "Mar", "Apr", "Maj", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Dec")
 
 
 _UUID_RE = re.compile(
@@ -428,6 +429,84 @@ def parse_readings(result: dict[str, Any]) -> list[dict[str, Any]]:
     return rows
 
 
+def parse_monthly_temperatures(result: dict[str, Any]) -> dict[str, Any]:
+    """Extract server-computed monthly/annual temperatures from an afMaanedsvis response."""
+    if not response_has_lines(result):
+        return {}
+    lines = ((result or {}).get("ForbrugsLinjer") or {}).get("TForbrugsLinje") or []
+    if isinstance(lines, dict):
+        lines = [lines]
+
+    parsed_rows: list[tuple[int, int, dict[str, Any]]] = []
+    ym_counts: dict[tuple[int, int], int] = {}
+    for line in lines:
+        if not isinstance(line, dict):
+            continue
+        d_from = _parse_dmy(line.get("FraDatoStr"))
+        d_to = _parse_dmy(line.get("TilDatoStr"))
+        if d_from is None or d_to is None:
+            continue
+        span = (d_to - d_from).days
+        if not (1 <= span <= 35):
+            continue
+        if span >= 2:
+            mid = d_from + timedelta(days=span // 2)
+            ym = (mid.year, mid.month)
+        elif d_from.day >= 28 and d_to.day == 1:
+            ym = (d_to.year, d_to.month)
+        else:
+            ym = (d_from.year, d_from.month)
+        ym_counts[ym] = ym_counts.get(ym, 0) + 1
+        parsed_rows.append((ym[0], ym[1], line))
+
+    if not parsed_rows or any(cnt > 1 for cnt in ym_counts.values()):
+        return {}
+
+    def _extract_temps(src: dict[str, Any]) -> dict[str, float]:
+        out: dict[str, float] = {}
+        for dst_key, src_key in (
+            ("return", "TempRetur"),
+            ("forward", "Tempfrem"),
+            ("expected_return", "Forv_Retur"),
+        ):
+            val = parse_number(src.get(src_key), _TEMP_SANITY_MAX)
+            if val is not None and val > 0:
+                out[dst_key] = round(val, 2)
+        return out
+
+    monthly: dict[str, dict[str, dict[str, float]]] = {}
+    for yr, mo, line in parsed_rows:
+        temps = _extract_temps(line)
+        if not temps:
+            continue
+        m_key = _MONTH_KEYS[mo - 1]
+        y_bucket = monthly.setdefault(str(yr), {})
+        for kind, val in temps.items():
+            y_bucket.setdefault(kind, {})[m_key] = val
+
+    annual: dict[str, dict[str, float]] = {}
+    ialt = (result or {}).get("IaltLinje")
+    if isinstance(ialt, dict):
+        i_from = _parse_dmy(ialt.get("FraDatoStr"))
+        i_to = _parse_dmy(ialt.get("TilDatoStr"))
+        if (
+            i_from is not None
+            and i_to is not None
+            and i_to.year >= i_from.year
+            and i_from in (date(i_to.year, 1, 1), date(i_to.year - 1, 12, 31))
+        ):
+            a_temps = _extract_temps(ialt)
+            if a_temps:
+                annual[str(i_to.year)] = a_temps
+
+    out: dict[str, Any] = {}
+    if monthly:
+        out["monthly"] = monthly
+    if annual:
+        out["annual"] = annual
+    return out
+
+
 def response_has_lines(result: Any) -> bool:
     """False for the documented "no data" shapes (error text or zero lines)."""
     if not isinstance(result, dict) or "response" in result:
@@ -585,8 +664,7 @@ class EforsyningClient:
         self.year_marker = dict(res or {})
         return self.year_marker
 
-    async def async_get_daily(self, year: int) -> dict[str, Any]:
-        """Daily readings (non-averaged temps) for one supplier billing year."""
+    async def _async_get_forbrug(self, year: int, flt: str) -> dict[str, Any]:
         inst = self.installation or {}
         body = {
             "Ejendomnr": self._username,
@@ -600,7 +678,7 @@ class EforsyningClient:
             "ForbrugsAfgraensning_MedtagMellemliggendeMellemaflas": "true",
             "Optioner": "foBestemtBeboer, foSkabDetaljer, foMedtagWebAflaes",
             "AHoejDetail": "false",
-            "Aflaesningsfilter": "afDagsvis",
+            "Aflaesningsfilter": flt,
             "AflaesningsFilterDag": "ULTIMO",
             "AflaesningsUdjaevning": "true",
             "SletFiltreredeAflaesninger": "true",
@@ -609,6 +687,14 @@ class EforsyningClient:
         }
         url = f"{self._api}api/getforbrug?id={self._access}{self._consumer_query()}"
         return await self._request("POST", url, body, what="getforbrug")
+
+    async def async_get_daily(self, year: int) -> dict[str, Any]:
+        """Daily readings (non-averaged temps) for one supplier billing year."""
+        return await self._async_get_forbrug(year, "afDagsvis")
+
+    async def async_get_monthly(self, year: int) -> dict[str, Any]:
+        """Monthly readings (server-computed ENG2/TV2 temps) for one billing year."""
+        return await self._async_get_forbrug(year, "afMaanedsvis")
 
     async def async_fetch(self, today: date, years_back: int = 1) -> dict[str, Any]:
         """Login and fetch daily readings for the current (+ previous) billing year."""
@@ -627,6 +713,7 @@ class EforsyningClient:
             years = [y for y in years if y >= self.moved_in.year - 1] or [latest]
         readings: list[dict[str, Any]] = []
         fetched: list[int] = []
+        monthly_temps: dict[str, dict[str, Any]] = {"monthly": {}, "annual": {}}
         for year in years:
             try:
                 raw = await self.async_get_daily(year)
@@ -639,8 +726,23 @@ class EforsyningClient:
                 continue
             readings.extend(parse_readings(raw))
             fetched.append(year)
+            try:
+                raw_monthly = await self.async_get_monthly(year)
+            except EforsyningLoginError:
+                raise
+            except EforsyningError as err:
+                _LOGGER.debug("E|Forsyning monthly %s not available: %s", year, err)
+                raw_monthly = None
+            if raw_monthly is not None:
+                mt = parse_monthly_temperatures(raw_monthly)
+                for yr_s, kinds in (mt.get("monthly") or {}).items():
+                    dst_yr = monthly_temps["monthly"].setdefault(yr_s, {})
+                    for kind, m_map in kinds.items():
+                        dst_yr.setdefault(kind, {}).update(m_map)
+                for yr_s, a_map in (mt.get("annual") or {}).items():
+                    monthly_temps["annual"].setdefault(yr_s, {}).update(a_map)
         inst = self.installation or {}
-        return {
+        out: dict[str, Any] = {
             "readings": readings,
             "years": fetched,
             "year_marker": {
@@ -652,3 +754,7 @@ class EforsyningClient:
                 "installation_count": len(self.installations),
             },
         }
+        compact_mt = {k: v for k, v in monthly_temps.items() if v}
+        if compact_mt:
+            out["monthly_temps"] = compact_mt
+        return out

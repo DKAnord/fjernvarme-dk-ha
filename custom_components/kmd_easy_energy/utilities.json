@@ -1148,6 +1148,48 @@
       ]
     },
     {
+      "id": "vinderup-varmevaerk",
+      "name": "Vinderup Varmeværk",
+      "city": "Vinderup",
+      "portal_url": "https://eforsyning.dk/vinderupvarme/",
+      "status": "confirmed",
+      "tier": "confirmed",
+      "auth_method": "Forbrugernummer + webpinkode",
+      "backend": "eforsyning",
+      "eforsyning_supplier_id": "C0584E30-4F38-4774-B32E-7F6E6AFCCA35",
+      "latitude": 56.48,
+      "longitude": 8.781,
+      "notes": "E|Forsyning. forsyningid og AppServerUri (https://apiapp.dff-edb.dk/vinderup/) bekræftet live i issue #49 af @askov68 (kWh, m3, °C). Login med forbrugernummer + webpinkode fra regningen; daglige aflæsninger. Takstblad 2026 & Nyheder dec. 2026 (2027): 500,00 kr./MWh (0,50 kr./kWh) i 2026 og 575,00 kr./MWh (0,575 kr./kWh) i 2027 inkl. moms; fast afgift indenfor byskiltet 0–200 m²: 22,38 kr./m²/år (>200 m²: 19,31 kr./m²/år; udenfor byskiltet 0–200 m²: 30,63 kr./m²/år), måler- og administrationsgebyr 750,00 kr./år samt motivationstarif ±6,25 kr./MWh/°C (±0,00625 kr./kWh/°C) under 30 °C / over 35 °C.",
+      "tariffs": [
+        {
+          "year": 2026,
+          "effective_from": "2026-01-01",
+          "price_dkk_per_kwh": 0.5,
+          "price_dkk_per_m3": null,
+          "fixed_fee_dkk_per_m2_year": 22.38,
+          "motivation_dkk_per_kwh_per_k": 0.00625,
+          "bonus_temp": 30.0,
+          "penalty_temp": 35.0,
+          "source": "https://vinderupvarme.dk/p/Vinderup%20Varmev%C3%A6rk/Filer/Priser/Prisliste-g%C3%A6ldende-for-1.-januar-2026-til-31.-december-2026.pdf",
+          "source_note": "Takstblad 2026 (Vinderup Varmeværk A.m.b.a., 01.01.2026–31.12.2026): Forbrugsafgift 400,00 kr./MWh ekskl. / 500,00 kr./MWh inkl. moms (0,50 kr./kWh). Fast afgift indenfor byskiltet (Vinderup/Sevel, 0–200 m²): 17,90 ekskl. / 22,38 kr./m²/år inkl. moms (>200 m²: 19,31 kr./m²/år; udenfor byskiltet 0–200 m²: 30,63 kr./m²/år, >200 m²: 26,48 kr./m²/år). Måler- og administrationsgebyr: 600,00 ekskl. / 750,00 kr./år inkl. moms. Motivationstarif: -6,25 kr./MWh/°C (-0,00625 kr./kWh/°C) inkl. moms under 30 °C retur og +6,25 kr./MWh/°C (+0,00625 kr./kWh/°C) inkl. moms over 35 °C retur.",
+          "fixed_fee_dkk_per_year": 750.0
+        },
+        {
+          "year": 2027,
+          "effective_from": "2027-01-01",
+          "price_dkk_per_kwh": 0.575,
+          "price_dkk_per_m3": null,
+          "fixed_fee_dkk_per_m2_year": 22.38,
+          "motivation_dkk_per_kwh_per_k": 0.00625,
+          "bonus_temp": 30.0,
+          "penalty_temp": 35.0,
+          "source": "https://vinderupvarme.dk/p/Vinderup%20Varmev%C3%A6rk/Filer/Nyheder-december-2026.pdf",
+          "source_note": "Nyheder december 2026 (Vinderup Varmeværk A.m.b.a.): Variabel forbrugsafgift hæves for 2027 fra 500 til 575 kr./MWh inkl. moms (0,575 kr./kWh). Standardhus (125 m², 13,4 MWh) stiger præcis 1.005 kr. til 11.252 kr./år inkl. moms, hvilket bekræfter uændrede faste bidrag (22,38 kr./m²/år indenfor byskiltet 0–200 m² og 750,00 kr./år måler- og administrationsgebyr) samt motivationstarif (±0,00625 kr./kWh/°C under 30 °C / over 35 °C).",
+          "fixed_fee_dkk_per_year": 750.0
+        }
+      ]
+    },
+    {
       "id": "solrod-fjernvarme",
       "name": "Solrød Fjernvarme",
       "city": "Solrød Strand",

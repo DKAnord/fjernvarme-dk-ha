@@ -833,14 +833,14 @@ def test_bundled_utilities_json_has_energi_ikast_2026_2027_tariffs_and_dynamic_c
     assert with_area_est["annual_fixed_fee_dkk"] == 4375.0
 
 
-def test_bundled_utilities_json_all_63_have_tariffs_and_spot_checks() -> None:
+def test_bundled_utilities_json_all_64_have_tariffs_and_spot_checks() -> None:
     from kmd_easy_energy.tariff import load_utilities
 
     utilities = load_utilities()
-    assert len(utilities) == 63
+    assert len(utilities) == 64
     with_tariffs = [u for u in utilities if u.get("tariffs")]
-    assert len(with_tariffs) == len(utilities) == 63
-    assert len({u["id"] for u in utilities}) == 63
+    assert len(with_tariffs) == len(utilities) == 64
+    assert len({u["id"] for u in utilities}) == 64
 
     backends = {}
     for u in utilities:
@@ -849,7 +849,7 @@ def test_bundled_utilities_json_all_63_have_tariffs_and_spot_checks() -> None:
         for t in u["tariffs"]:
             assert t["price_dkk_per_kwh"] > 0, u["id"]
             assert str(t.get("source", "")).startswith("https://"), u["id"]
-    assert backends == {"kmd": 16, "eforsyning": 43, "wattson": 4}
+    assert backends == {"kmd": 16, "eforsyning": 44, "wattson": 4}
 
     by_id = {u["id"]: u for u in utilities}
     assert "hoje-taastrup-fjernvarme" not in by_id
@@ -1266,3 +1266,90 @@ def test_bundled_utilities_json_has_grenaa_2026_tariff_and_custom_matching() -> 
     assert resolved.motivation_dkk_per_kwh_per_k == round(0.39 * 0.01, 6)
     assert resolved.bonus_temp == 32.0
     assert resolved.penalty_temp == 35.0
+
+
+def test_bundled_utilities_json_has_vinderup_2026_2027_tariffs_and_custom_matching() -> None:
+    from kmd_easy_energy.tariff import load_utilities, match_utility_for_entry
+
+    utilities = load_utilities()
+    by_id = {u["id"]: u for u in utilities}
+    vinderup = by_id["vinderup-varmevaerk"]
+    assert vinderup["status"] == "confirmed"
+    assert vinderup["tier"] == "confirmed"
+    assert vinderup["eforsyning_supplier_id"] == "C0584E30-4F38-4774-B32E-7F6E6AFCCA35"
+    assert vinderup["portal_url"] == "https://eforsyning.dk/vinderupvarme/"
+
+    t26 = published_tariff("vinderup-varmevaerk", 2026, utilities)
+    assert t26 is not None
+    assert t26["price_dkk_per_kwh"] == 0.5
+    assert t26["fixed_fee_dkk_per_m2_year"] == 22.38
+    assert t26["fixed_fee_dkk_per_year"] == 750.0
+    assert t26["motivation_dkk_per_kwh_per_k"] == 0.00625
+    assert t26["bonus_temp"] == 30.0
+    assert t26["penalty_temp"] == 35.0
+    assert t26["source"].startswith("https://vinderupvarme.dk/")
+
+    t27 = published_tariff("vinderup-varmevaerk", 2027, utilities)
+    assert t27 is not None
+    assert t27["price_dkk_per_kwh"] == 0.575
+    assert t27["fixed_fee_dkk_per_m2_year"] == 22.38
+    assert t27["fixed_fee_dkk_per_year"] == 750.0
+    assert t27["motivation_dkk_per_kwh_per_k"] == 0.00625
+    assert t27["bonus_temp"] == 30.0
+    assert t27["penalty_temp"] == 35.0
+    assert t27["source"].startswith("https://vinderupvarme.dk/")
+
+    by_supplier = match_utility_for_entry(
+        {
+            "utility_id": "eforsyning-custom",
+            "eforsyning_supplier_id": "c0584e30-4f38-4774-b32e-7f6e6afcca35",
+            "portal_url": "https://eforsyning.dk/",
+        },
+        utilities,
+    )
+    assert by_supplier is not None and by_supplier["id"] == "vinderup-varmevaerk"
+
+    by_portal = match_utility_for_entry(
+        {
+            "utility_id": "eforsyning-custom",
+            "portal_url": "https://eforsyning.dk/vinderupvarme",
+        },
+        utilities,
+    )
+    assert by_portal is not None and by_portal["id"] == "vinderup-varmevaerk"
+
+    r26 = resolve_tariff(
+        _entry(
+            data={
+                "utility_id": "eforsyning-custom",
+                "portal_url": "https://eforsyning.dk/vinderupvarme/",
+            },
+        ),
+        today=date(2026, 11, 27),
+        utilities=utilities,
+    )
+    assert r26.utility_id == "vinderup-varmevaerk"
+    assert r26.price_dkk_per_kwh == 0.5
+    assert r26.fixed_fee_dkk_per_m2_year == 22.38
+    assert r26.suggested_fixed_fee_dkk_per_year == 750.0
+    assert r26.motivation_dkk_per_kwh_per_k == 0.00625
+    assert r26.bonus_temp == 30.0
+    assert r26.penalty_temp == 35.0
+
+    r27 = resolve_tariff(
+        _entry(
+            data={
+                "utility_id": "eforsyning-custom",
+                "portal_url": "https://eforsyning.dk/vinderupvarme/",
+            },
+        ),
+        today=date(2027, 2, 1),
+        utilities=utilities,
+    )
+    assert r27.utility_id == "vinderup-varmevaerk"
+    assert r27.price_dkk_per_kwh == 0.575
+    assert r27.fixed_fee_dkk_per_m2_year == 22.38
+    assert r27.suggested_fixed_fee_dkk_per_year == 750.0
+    assert r27.motivation_dkk_per_kwh_per_k == 0.00625
+    assert r27.bonus_temp == 30.0
+    assert r27.penalty_temp == 35.0

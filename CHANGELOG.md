@@ -2,6 +2,12 @@
 
 Alle væsentlige ændringer i **Dansk Fjernvarme** (tidligere *Fjernvarme (KMD Easy Energy)*) dokumenteres her.
 
+## [1.3.7] - 2026-11-27
+
+### Tilføjet & Bekræftet
+- **Vinderup Varmeværk tilføjet og bekræftet live + 2026/2027-takster ([issue #49](https://github.com/DKAnord/fjernvarme-dk-ha/issues/49), tak til `@askov68`):** Tilføjet som dedikeret ✅ **Bekræftet** E|Forsyning-værk (`vinderup-varmevaerk`, `forsyningId: C0584E30-4F38-4774-B32E-7F6E6AFCCA35`, `https://eforsyning.dk/vinderupvarme/`, verificeret med `kWh`, `m³` og `°C` — nu **19** live-bekræftede værker og **64/64** forudfyldte værker) med automatisk opgradering fra `eforsyning-custom` samt officielle 2026/2027-takster (`0,50` / `0,575 kr./kWh` inkl. moms, fast afgift indenfor byskiltet 0–200 m² `22,38 kr./m²/år`, valgfrit måler- og administrationsgebyr `750,00 kr./år` og `±0,00625 kr./kWh/°C` motivationstarif under `30 °C` / over `35 °C`).
+- **Kortressource:** Opdateret cache-busting ressource-URL til `/kmd_easy_energy/kmd-easy-energy-card.js?v=1.3.7`.
+
 ## [1.3.6] - 2026-11-27
 
 ### Bekræftet & Forbedret

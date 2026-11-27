@@ -2,6 +2,13 @@
 
 Alle væsentlige ændringer i **Dansk Fjernvarme** (tidligere *Fjernvarme (KMD Easy Energy)*) dokumenteres her.
 
+## [1.3.15] - 2026-11-27
+
+### Bekræftet & Tilføjet
+- **Viborg Varme bekræftet live ([issue #61](https://github.com/DKAnord/fjernvarme-dk-ha/issues/61), tak til `@MadzDK`):** Markeret som ✅ **Bekræftet** E|Forsyning-værk (`viborg-varme`, `https://eforsyning.dk/viborg/`, verificeret med `kWh`, `m³` og `°C`), inkl. eksisterende officielle 2026/2027-takster (`0,79` / `0,809 kr./kWh` inkl. moms, fast bidrag `29,75` / `27,88 kr./m²/år`, abonnement `665,00 kr./år` og motivationstarif `±1,0 %/°C` maks. `±25 %`).
+- **Aalestrup-Nørager Energi a.m.b.a. bekræftet live + officiel 2026-takst ([issue #60](https://github.com/DKAnord/fjernvarme-dk-ha/issues/60), tak til `@lassealfastsen`):** Tilføjet som ✅ **Bekræftet** E|Forsyning-værk (`aalestrup-norager-energi`, `https://eforsyning.dk/an-energi-varme/`, verificeret med `kWh`, `m³` og `°C`, inkl. automatisk opgradering fra `eforsyning-custom` — nu **29** live-bekræftede værker og **69/69** forudfyldte værker) med officiel 2026-takst (`0,4775 kr./kWh` / `477,50 kr./MWh` inkl. moms, effektbidrag `20,63 kr./m²/år`, målerabonnement `725,00 kr./år` samt afkølingsbidrag `±1 %/°C`, maks. `±15 %`, med officielt fremløbsskema `55–82 °C → 39–25 °C`).
+- **Kortressource:** Opdateret cache-busting ressource-URL til `/kmd_easy_energy/kmd-easy-energy-card.js?v=1.3.15`.
+
 ## [1.3.14] - 2026-11-27
 
 ### Bekræftet & Forbedret

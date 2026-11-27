@@ -1343,6 +1343,149 @@
       ]
     },
     {
+      "id": "aalestrup-norager-energi",
+      "name": "Aalestrup-Nørager Energi a.m.b.a.",
+      "city": "Aalestrup / Nørager",
+      "portal_url": "https://eforsyning.dk/an-energi-varme/",
+      "status": "confirmed",
+      "tier": "confirmed",
+      "auth_method": "Forbrugernummer + webpinkode",
+      "backend": "eforsyning",
+      "eforsyning_supplier_id": "5AE1507E-D219-49F4-95FB-C87338FC67A0",
+      "latitude": 56.694,
+      "longitude": 9.496,
+      "notes": "E|Forsyning. forsyningid og AppServerUri (https://apiapp.dff-edb.dk/anenergi/) bekræftet live i issue #60 af @lassealfastsen (kWh, m3, °C). Login med forbrugernummer + webpinkode; daglige aflæsninger. Takstblad 2026: 477,50 kr./MWh inkl. moms (0,4775 kr./kWh; Rørbæk 540,00 kr./MWh = 0,54 kr./kWh), effektbidrag 20,63 kr./m²/år (0–1.800 m² BBR), årligt abonnementsbidrag 725,00 kr./år samt afkølingsbidrag ±1 %/°C (maks. ±15 %) mod fremløbsafhængigt afkølingsskema (55–82 °C → 39–25 °C).",
+      "tariffs": [
+        {
+          "year": 2026,
+          "effective_from": "2026-01-01",
+          "price_dkk_per_kwh": 0.4775,
+          "price_dkk_per_m3": null,
+          "fixed_fee_dkk_per_m2_year": 20.63,
+          "fixed_fee_dkk_per_year": 725.0,
+          "motivation_pct_per_k": 1.0,
+          "motivation_max_pct": 15.0,
+          "motivation_bonus": true,
+          "expected_return_by_forward_temp": [
+            [
+              55.0,
+              39.0
+            ],
+            [
+              56.0,
+              38.0
+            ],
+            [
+              57.0,
+              38.0
+            ],
+            [
+              58.0,
+              37.0
+            ],
+            [
+              59.0,
+              37.0
+            ],
+            [
+              60.0,
+              36.0
+            ],
+            [
+              61.0,
+              36.0
+            ],
+            [
+              62.0,
+              35.0
+            ],
+            [
+              63.0,
+              35.0
+            ],
+            [
+              64.0,
+              34.0
+            ],
+            [
+              65.0,
+              34.0
+            ],
+            [
+              66.0,
+              33.0
+            ],
+            [
+              67.0,
+              33.0
+            ],
+            [
+              68.0,
+              32.0
+            ],
+            [
+              69.0,
+              32.0
+            ],
+            [
+              70.0,
+              31.0
+            ],
+            [
+              71.0,
+              31.0
+            ],
+            [
+              72.0,
+              30.0
+            ],
+            [
+              73.0,
+              30.0
+            ],
+            [
+              74.0,
+              29.0
+            ],
+            [
+              75.0,
+              29.0
+            ],
+            [
+              76.0,
+              28.0
+            ],
+            [
+              77.0,
+              28.0
+            ],
+            [
+              78.0,
+              27.0
+            ],
+            [
+              79.0,
+              27.0
+            ],
+            [
+              80.0,
+              26.0
+            ],
+            [
+              81.0,
+              26.0
+            ],
+            [
+              82.0,
+              25.0
+            ]
+          ],
+          "source": "https://an-energi.dk/p/AN%20Energi/Varme/Filer/Priser/Takstblad-2026-AN-Energi.pdf",
+          "source_note": "Takstblad 2026 (Aalestrup-Nørager Energi a.m.b.a. / AN Energi, inkl. moms): Forbrugsbidrag 382,00 kr./MWh ekskl. / 477,50 kr./MWh inkl. moms (0,4775 kr./kWh; Rørbæk 432,00 ekskl. / 540,00 kr./MWh inkl. moms = 0,54 kr./kWh). Effektbidrag (0–1.800 m² BBR): 16,50 ekskl. / 20,63 kr./m²/år inkl. moms. Abonnementsbidrag: 580,00 ekskl. / 725,00 kr./år inkl. moms pr. varmemåler. Afkølingsbidrag: ±1 %/°C af forbrugsbidraget (maks. +15 % til -15 %) mod fremløbsafhængig forventet returtemperatur (55 °C → 39 °C ned til 82 °C → 25 °C jf. an-energi.dk/varme/afkoeling; E|Forsyning Forv_Retur bruges automatisk når leveret)."
+        }
+      ]
+    },
+    {
       "id": "solrod-fjernvarme",
       "name": "Solrød Fjernvarme",
       "city": "Solrød Strand",
@@ -1644,14 +1787,14 @@
       "name": "Viborg Varme",
       "city": "Viborg",
       "portal_url": "https://eforsyning.dk/viborg/",
-      "status": "pending_test",
-      "tier": "verified_portal",
+      "status": "confirmed",
+      "tier": "confirmed",
       "auth_method": "Forbrugernummer + webpinkode",
       "backend": "eforsyning",
       "eforsyning_supplier_id": "074B5C36-0756-4BFF-A6F3-E694532776BA",
       "latitude": 56.453,
       "longitude": 9.402,
-      "notes": "E|Forsyning (afventer 1. test). forsyningid og AppServerUri bekræftet live via GetVaerkSettings. Login med forbrugernummer + webpinkode.",
+      "notes": "E|Forsyning. forsyningid og AppServerUri bekræftet live i issue #61 af @MadzDK (kWh, m3, °C). Login med forbrugernummer + webpinkode. Officielle 2026- og 2027-takster indbygget.",
       "tariffs": [
         {
           "year": 2026,

@@ -833,14 +833,14 @@ def test_bundled_utilities_json_has_energi_ikast_2026_2027_tariffs_and_dynamic_c
     assert with_area_est["annual_fixed_fee_dkk"] == 4375.0
 
 
-def test_bundled_utilities_json_all_68_have_tariffs_and_spot_checks() -> None:
+def test_bundled_utilities_json_all_69_have_tariffs_and_spot_checks() -> None:
     from kmd_easy_energy.tariff import load_utilities
 
     utilities = load_utilities()
-    assert len(utilities) == 68
+    assert len(utilities) == 69
     with_tariffs = [u for u in utilities if u.get("tariffs")]
-    assert len(with_tariffs) == len(utilities) == 68
-    assert len({u["id"] for u in utilities}) == 68
+    assert len(with_tariffs) == len(utilities) == 69
+    assert len({u["id"] for u in utilities}) == 69
 
     backends = {}
     for u in utilities:
@@ -849,7 +849,7 @@ def test_bundled_utilities_json_all_68_have_tariffs_and_spot_checks() -> None:
         for t in u["tariffs"]:
             assert t["price_dkk_per_kwh"] > 0, u["id"]
             assert str(t.get("source", "")).startswith("https://"), u["id"]
-    assert backends == {"kmd": 16, "eforsyning": 48, "wattson": 4}
+    assert backends == {"kmd": 16, "eforsyning": 49, "wattson": 4}
 
     by_id = {u["id"]: u for u in utilities}
     assert "hoje-taastrup-fjernvarme" not in by_id
@@ -1660,3 +1660,99 @@ def test_greve_fjernvarme_confirmed_2026_and_2027_tariffs() -> None:
     assert resolved_2027.price_dkk_per_m3 == 6.85
     assert resolved_2027.fixed_fee_dkk_per_m2_year == 35.39
     assert resolved_2027.suggested_fixed_fee_dkk_per_year == 600.0
+
+
+def test_viborg_varme_and_aalestrup_norager_confirmed_tariffs() -> None:
+    from kmd_easy_energy.tariff import load_utilities, match_utility_for_entry
+
+    utilities = load_utilities()
+    by_id = {u["id"]: u for u in utilities}
+
+    viborg = by_id["viborg-varme"]
+    assert viborg["status"] == "confirmed"
+    assert viborg["tier"] == "confirmed"
+    assert viborg["eforsyning_supplier_id"] == "074B5C36-0756-4BFF-A6F3-E694532776BA"
+    assert viborg["portal_url"] == "https://eforsyning.dk/viborg/"
+
+    v26 = resolve_tariff(
+        _entry(data={"utility_id": "viborg-varme"}),
+        today=date(2026, 11, 27),
+        utilities=utilities,
+    )
+    assert v26.utility_id == "viborg-varme"
+    assert v26.price_dkk_per_kwh == 0.79
+    assert v26.fixed_fee_dkk_per_m2_year == 29.75
+    assert v26.suggested_fixed_fee_dkk_per_year == 665.0
+    assert v26.motivation_pct_per_k == 1.0
+    assert v26.motivation_max_pct == 25.0
+
+    v27 = resolve_tariff(
+        _entry(data={"utility_id": "viborg-varme"}),
+        today=date(2027, 2, 1),
+        utilities=utilities,
+    )
+    assert v27.utility_id == "viborg-varme"
+    assert v27.price_dkk_per_kwh == 0.809
+    assert v27.fixed_fee_dkk_per_m2_year == 27.88
+    assert v27.suggested_fixed_fee_dkk_per_year == 665.0
+    assert v27.motivation_pct_per_k == 1.0
+    assert v27.motivation_max_pct == 25.0
+
+    aalestrup = by_id["aalestrup-norager-energi"]
+    assert aalestrup["status"] == "confirmed"
+    assert aalestrup["tier"] == "confirmed"
+    assert aalestrup["eforsyning_supplier_id"] == "5AE1507E-D219-49F4-95FB-C87338FC67A0"
+    assert aalestrup["portal_url"] == "https://eforsyning.dk/an-energi-varme/"
+
+    by_supplier = match_utility_for_entry(
+        {
+            "utility_id": "eforsyning-custom",
+            "eforsyning_supplier_id": "5ae1507e-d219-49f4-95fb-c87338fc67a0",
+            "portal_url": "https://eforsyning.dk/",
+        },
+        utilities,
+    )
+    assert by_supplier is not None and by_supplier["id"] == "aalestrup-norager-energi"
+
+    by_portal = match_utility_for_entry(
+        {
+            "utility_id": "eforsyning-custom",
+            "portal_url": "https://eforsyning.dk/an-energi-varme",
+        },
+        utilities,
+    )
+    assert by_portal is not None and by_portal["id"] == "aalestrup-norager-energi"
+
+    a_70 = resolve_tariff(
+        _entry(data={"utility_id": "aalestrup-norager-energi"}),
+        today=date(2026, 11, 27),
+        utilities=utilities,
+        forward_temp=70.0,
+    )
+    assert a_70.utility_id == "aalestrup-norager-energi"
+    assert a_70.price_dkk_per_kwh == 0.4775
+    assert a_70.fixed_fee_dkk_per_m2_year == 20.63
+    assert a_70.suggested_fixed_fee_dkk_per_year == 725.0
+    assert a_70.motivation_pct_per_k == 1.0
+    assert a_70.motivation_max_pct == 15.0
+    assert a_70.motivation_bonus is True
+    assert a_70.bonus_temp == 31.0
+    assert a_70.penalty_temp == 31.0
+
+    a_55 = resolve_tariff(
+        _entry(data={"utility_id": "aalestrup-norager-energi"}),
+        today=date(2026, 11, 27),
+        utilities=utilities,
+        forward_temp=55.0,
+    )
+    assert a_55.bonus_temp == 39.0
+    assert a_55.penalty_temp == 39.0
+
+    a_82 = resolve_tariff(
+        _entry(data={"utility_id": "aalestrup-norager-energi"}),
+        today=date(2026, 11, 27),
+        utilities=utilities,
+        forward_temp=82.0,
+    )
+    assert a_82.bonus_temp == 25.0
+    assert a_82.penalty_temp == 25.0

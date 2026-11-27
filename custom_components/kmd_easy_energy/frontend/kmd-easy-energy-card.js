@@ -3,7 +3,7 @@
  * Zero external dependencies, Shadow DOM, responsive, interactive tooltips, DA/EN i18n.
  */
 (() => {
-  const VER = "1.3.2";
+  const VER = "1.3.3";
   const MONTHS = ["Jan", "Feb", "Mar", "Apr", "Maj", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Dec"];
   const DAYS_IN_MONTH = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
   const isLeapYear = (y) => (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0;
@@ -80,13 +80,19 @@
     { id: "galten-varmevaerk", name: "Galten Varmeværk", city: "Galten", url: "https://minvarme.kredslob.dk/", status: "pending_test" },
     { id: "energi-ikast", name: "Energi Ikast", city: "Ikast", url: "https://energi-ikast.dk/", status: "confirmed" },
     { id: "struer-energi", name: "Struer Energi", city: "Struer", url: "https://struerenergi.dk/selvbetjening/", status: "pending_test" },
-    { id: "envafors", name: "Envafors / SK Forsyning", city: "Slagelse / Næstved", url: "https://skenergi.dk/minforsyning/", status: "pending_test" },
+    { id: "envafors", name: "Envafors / SK Forsyning", city: "Slagelse / Korsør", url: "https://www.envafors.dk/slagelse/selvbetjening/min-side", status: "pending_test" },
     { id: "frederikshavn-forsyning", name: "Frederikshavn Forsyning", city: "Frederikshavn", url: "https://www.forsyningen.dk/selvbetjening", status: "confirmed" },
     { id: "vestforsyning", name: "Vestforsyning", city: "Holstebro", url: "https://www.vestforsyning.dk/selvbetjening/", status: "pending_test" },
     { id: "beof", name: "Bornholms Energi & Forsyning", city: "Bornholm", url: "https://minforsyning.beof.dk/", status: "confirmed" },
     { id: "kalundborg-forsyning", name: "Kalundborg Forsyning", city: "Kalundborg", url: "https://kalfor.dk/selvbetjening/min-forsyning", status: "confirmed" },
     { id: "albertslund-forsyning", name: "Albertslund Forsyning", city: "Albertslund", url: "https://forsyning.albertslund.dk/selvbetjening", status: "confirmed" },
-    { id: "nykobing-sj", name: "Nykøbing Sjælland Varmeværk", city: "Odsherred", url: "https://www.nsfv.dk/", status: "pending_test" },
+    { id: "frederiksberg-forsyning", name: "Frederiksberg Forsyning", city: "Frederiksberg", url: "https://www.frb-forsyning.dk/selvbetjening/", status: "pending_test" },
+    { id: "silkeborg-forsyning", name: "Silkeborg Forsyning", city: "Silkeborg", url: "https://www.silkeborgforsyning.dk/selvbetjening/", status: "pending_test" },
+    { id: "bronderslev-forsyning", name: "Brønderslev Forsyning", city: "Brønderslev", url: "https://www.bronderslevforsyning.dk/", status: "pending_test" },
+    { id: "lolland-forsyning", name: "Lolland Forsyning", city: "Nakskov / Lolland", url: "https://lollandforsyning.dk/kunde/varme/", status: "pending_test" },
+    { id: "halsnaes-forsyning", name: "Halsnæs Forsyning", city: "Frederiksværk / Halsnæs", url: "https://hnf.dk/selvbetjening/", status: "pending_test" },
+    { id: "kerteminde-forsyning", name: "Kerteminde Forsyning", city: "Kerteminde", url: "https://www.kertemindeforsyning.dk/minforsyning-forbrugsapp", status: "pending_test" },
+    { id: "nykobing-sj", name: "Nykøbing Sjælland Varmeværk", city: "Odsherred", url: "https://eforsyning.dk/nsfv/", status: "pending_test", backend: "eforsyning" },
     { id: "forsyning-helsingor", name: "Forsyning Helsingør", city: "Helsingør", url: "https://www.fh.dk/watts", status: "pending_test", backend: "wattson" },
     { id: "soroe-fjernvarme", name: "Sorø Fjernvarme", city: "Sorø", url: "https://eforsyning.dk/soroe/", status: "confirmed", backend: "eforsyning" },
     { id: "middelfart-fjernvarme", name: "Middelfart Fjernvarme", city: "Middelfart", url: "https://eforsyning.dk/middelfartfjernvarme/", status: "confirmed", backend: "eforsyning" },
@@ -736,6 +742,13 @@
       const curFixedM2 = tariffObj.fixed_fee_dkk_per_m2_year ?? "";
       const curAreaM2 = tariffObj.heated_area_m2 ?? "";
       const curFixedYear = tariffObj.fixed_fee_dkk_per_year ?? "";
+      const rawSuggestedFixed = tariffObj.suggested_fixed_fee_dkk_per_year;
+      const suggestedFixedYear = (
+        typeof rawSuggestedFixed === "number" && Number.isFinite(rawSuggestedFixed) && rawSuggestedFixed > 0
+      ) ? rawSuggestedFixed : null;
+      const stdFixedTxt = suggestedFixedYear !== null
+        ? fmtDec(suggestedFixedYear, suggestedFixedYear % 1 === 0 ? 0 : 2)
+        : null;
       const efExpectedRt = typeof a.expected_return_temp === "number" ? a.expected_return_temp : null;
       const singleReturnTarget = !allowBonus || Math.abs(bonusT - penaltyT) < 0.05;
 
@@ -1039,9 +1052,11 @@
                   <label class="ob-field">Boligareal (m²)
                     <input id="efAreaM2Input" type="number" step="1" value="${esc(wizEfAreaM2)}" placeholder="f.eks. 162" />
                   </label>
-                  <label class="ob-field">Fast årsabonnement / målerbidrag (kr./år)
-                    <input id="efFixedYearInput" type="number" step="1" value="${esc(wizEfFixedYear)}" placeholder="f.eks. 787.5 (0 = ingen)" />
-                  </label>
+                  <div class="ob-field">
+                    <label for="efFixedYearInput">Fast årsabonnement / målerbidrag (kr./år)</label>
+                    <input id="efFixedYearInput" type="number" step="0.01" value="${esc(wizEfFixedYear)}" placeholder="${stdFixedTxt !== null ? `Standard ${stdFixedTxt} kr./år (valgfri)` : "f.eks. 787.5 (0 = ingen)"}" />
+                    ${(suggestedFixedYear !== null && !(Number(curFixedYear) > 0)) ? `<button type="button" class="link-btn" id="useEfStdFixedYearBtn" style="align-self:flex-start;font-size:11px">↳ Brug standard (${esc(stdFixedTxt)} kr./år)</button>` : ""}
+                  </div>
                 </div>
                 <div class="tb-actions">
                   <button class="btn" id="saveTariffBtn">💾 Gem pris &amp; returkrav</button>
@@ -1381,9 +1396,11 @@
                     <input id="areaM2Input" type="number" step="1" value="${esc(wizAreaM2)}" placeholder="m²" aria-label="Boligareal (m²)" />
                   </div>
                 </div>
-                <label class="ob-field">Fast årsabonnement / målerbidrag (kr./år)
-                  <input id="fixedYearInput" type="number" step="1" value="${esc(wizFixedYear)}" placeholder="kr./år (valgfri)" />
-                </label>
+                <div class="ob-field">
+                  <label for="fixedYearInput">Fast årsabonnement / målerbidrag (kr./år)</label>
+                  <input id="fixedYearInput" type="number" step="0.01" value="${esc(wizFixedYear)}" placeholder="${stdFixedTxt !== null ? `Standard ${stdFixedTxt} kr./år (valgfri)` : "kr./år (valgfri)"}" />
+                  ${(suggestedFixedYear !== null && !(Number(curFixedYear) > 0)) ? `<button type="button" class="link-btn" id="useStdFixedYearBtn" style="align-self:flex-start;font-size:11px">↳ Brug standard (${esc(stdFixedTxt)} kr./år)</button>` : ""}
+                </div>
               </div>
             </details>
             <div class="ob-step">2. Forbind med 1-klik MitID-synkronisering (Anbefalet — 100% i Home Assistant)</div>
@@ -1788,6 +1805,20 @@
       ].forEach(([id, prop]) => {
         const el = this.shadowRoot.getElementById(id);
         if (el) el.addEventListener("input", (e) => { this[prop] = e.target.value; });
+      });
+      [
+        ["useStdFixedYearBtn", "fixedYearInput", "_wizFixedYear"],
+        ["useEfStdFixedYearBtn", "efFixedYearInput", "_wizEfFixedYear"],
+      ].forEach(([btnId, inputId, prop]) => {
+        const btn = this.shadowRoot.getElementById(btnId);
+        if (btn && suggestedFixedYear !== null) {
+          btn.addEventListener("click", () => {
+            const valStr = String(suggestedFixedYear);
+            this[prop] = valStr;
+            const inp = this.shadowRoot.getElementById(inputId);
+            if (inp) inp.value = valStr;
+          });
+        }
       });
       const saveTariffBtn = this.shadowRoot.getElementById("saveTariffBtn");
       if (saveTariffBtn && this._hass) {

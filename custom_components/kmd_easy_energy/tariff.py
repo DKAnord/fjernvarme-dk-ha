@@ -60,6 +60,11 @@ class ResolvedTariff:
     heated_area_m2: float | None = None
     fixed_fee_dkk_per_year: float | None = None
     annual_fixed_fee_dkk: float = 0.0
+    motivation_bonus_dkk_per_kwh_per_k: float | None = None
+    motivation_penalty_dkk_per_kwh_per_k: float | None = None
+    motivation_bonus_pct_per_k: float | None = None
+    motivation_penalty_pct_per_k: float | None = None
+    suggested_fixed_fee_dkk_per_year: float | None = None
 
 
 def _parse_forward_curve(raw: Any) -> list[list[float]] | None:
@@ -184,17 +189,41 @@ def match_utility_for_entry(
     return next((u for u in utilities if u.get("id") == utility_id), None)
 
 
+def _tariff_effective_date(tariff: Mapping[str, Any]) -> date:
+    """Return effective start date for a bundled tariff entry."""
+    raw = tariff.get("effective_from")
+    if isinstance(raw, str) and raw.strip():
+        try:
+            return date.fromisoformat(raw.strip()[:10])
+        except ValueError:
+            pass
+    try:
+        yr = int(tariff.get("year") or 1970)
+    except (TypeError, ValueError):
+        yr = 1970
+    return date(yr, 1, 1)
+
+
 def published_tariff(
     utility_id: str,
     year: int,
     utilities: list[dict[str, Any]] | None = None,
+    *,
+    on_date: date | None = None,
 ) -> dict[str, Any] | None:
-    """Return the bundled tariff dict for utility/year, if one was published."""
+    """Return the bundled tariff dict for utility/year (or specific date)."""
     utilities = utilities if utilities is not None else load_utilities()
     match = next((u for u in utilities if u.get("id") == utility_id), None)
     if not match:
         return None
     tariffs = match.get("tariffs") or []
+    if on_date is not None:
+        active = [t for t in tariffs if _tariff_effective_date(t) <= on_date]
+        if active:
+            return max(
+                active,
+                key=lambda t: (_tariff_effective_date(t), int(t.get("year") or 0)),
+            )
     exact = next((t for t in tariffs if int(t.get("year") or 0) == year), None)
     if exact:
         return exact
@@ -232,7 +261,7 @@ def resolve_tariff(
     utility_id = str(
         (matched or {}).get("id") or entry.data.get(CONF_UTILITY_ID) or "kredslob"
     )
-    published = published_tariff(utility_id, today.year, utilities)
+    published = published_tariff(utility_id, today.year, utilities, on_date=today)
 
     def _published_pos(key: str) -> float | None:
         if published and published.get(key) is not None:
@@ -329,11 +358,37 @@ def resolve_tariff(
 
     motivation_max_pct = _published_pos("motivation_max_pct")
 
+    def _resolve_side(side: str) -> tuple[float | None, float | None]:
+        side_pct = _published_pos(f"motivation_{side}_pct_per_k")
+        eff_pct = side_pct if side_pct is not None else motivation_pct
+        side_rate = _published_pos(f"motivation_{side}_dkk_per_kwh_per_k")
+        if side_rate is None:
+            if side_pct is not None and price is not None:
+                side_rate = round(price * (side_pct / 100.0), 6)
+            else:
+                side_rate = motivation_rate
+        return side_rate, eff_pct
+
+    has_user_motiv_override = (
+        opt_motiv_rate is not None and opt_motiv_rate > 0
+    ) or (opt_motiv_pct is not None)
+    if has_user_motiv_override:
+        bonus_rate = motivation_rate
+        penalty_rate = motivation_rate
+        bonus_pct = opt_motiv_pct
+        penalty_pct = opt_motiv_pct
+    else:
+        bonus_rate, bonus_pct = _resolve_side("bonus")
+        penalty_rate, penalty_pct = _resolve_side("penalty")
+        if motivation_rate is None:
+            motivation_rate = penalty_rate if penalty_rate is not None else bonus_rate
+
     fixed_fee_per_m2 = _pick(CONF_FIXED_FEE_DKK_PER_M2_YEAR, "fixed_fee_dkk_per_m2_year")
     opt_area = _opt_float(entry, CONF_HEATED_AREA_M2, None)
     heated_area = opt_area if (opt_area is not None and opt_area > 0) else None
     opt_flat_fixed = _opt_float(entry, CONF_FIXED_FEE_DKK_PER_YEAR, None)
     fixed_fee_year = opt_flat_fixed if (opt_flat_fixed is not None and opt_flat_fixed > 0) else None
+    suggested_fixed_fee_year = _published_pos("fixed_fee_dkk_per_year")
     annual_area_fee = (
         round(fixed_fee_per_m2 * heated_area, 2)
         if (fixed_fee_per_m2 is not None and heated_area is not None)
@@ -362,4 +417,9 @@ def resolve_tariff(
         heated_area_m2=heated_area,
         fixed_fee_dkk_per_year=fixed_fee_year,
         annual_fixed_fee_dkk=annual_fixed_fee,
+        motivation_bonus_dkk_per_kwh_per_k=bonus_rate,
+        motivation_penalty_dkk_per_kwh_per_k=penalty_rate,
+        motivation_bonus_pct_per_k=bonus_pct,
+        motivation_penalty_pct_per_k=penalty_pct,
+        suggested_fixed_fee_dkk_per_year=suggested_fixed_fee_year,
     )

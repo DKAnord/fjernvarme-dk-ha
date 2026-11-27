@@ -831,3 +831,326 @@ def test_bundled_utilities_json_has_energi_ikast_2026_2027_tariffs_and_dynamic_c
     )
     assert with_area_est["excludes_fixed_fees"] is False
     assert with_area_est["annual_fixed_fee_dkk"] == 4375.0
+
+
+def test_bundled_utilities_json_all_63_have_tariffs_and_spot_checks() -> None:
+    from kmd_easy_energy.tariff import load_utilities
+
+    utilities = load_utilities()
+    assert len(utilities) == 63
+    with_tariffs = [u for u in utilities if u.get("tariffs")]
+    assert len(with_tariffs) == len(utilities) == 63
+    assert len({u["id"] for u in utilities}) == 63
+
+    backends = {}
+    for u in utilities:
+        b = u.get("backend")
+        backends[b] = backends.get(b, 0) + 1
+        for t in u["tariffs"]:
+            assert t["price_dkk_per_kwh"] > 0, u["id"]
+            assert str(t.get("source", "")).startswith("https://"), u["id"]
+    assert backends == {"kmd": 16, "eforsyning": 43, "wattson": 4}
+
+    by_id = {u["id"]: u for u in utilities}
+    assert by_id["envafors"]["portal_url"] == "https://www.envafors.dk/slagelse/selvbetjening/min-side"
+
+    # nykobing-sj migrated from kmd candidate to verified eforsyning
+    ny = by_id["nykobing-sj"]
+    assert ny["backend"] == "eforsyning"
+    assert ny["portal_url"] == "https://eforsyning.dk/nsfv/"
+    assert ny["eforsyning_supplier_id"] == "17086977-7E29-4199-917D-1A76641671BC"
+
+    enva = resolve_tariff(
+        _entry(data={"utility_id": "envafors"}),
+        today=date(2026, 11, 27),
+        utilities=utilities,
+    )
+    assert enva.price_dkk_per_kwh == 0.67125
+    assert enva.price_dkk_per_m3 == 4.0
+    assert enva.fixed_fee_dkk_per_m2_year == 27.13
+    assert enva.suggested_fixed_fee_dkk_per_year == 828.75
+
+    sonfor_26 = resolve_tariff(
+        _entry(data={"utility_id": "sonfor-varme"}),
+        today=date(2026, 11, 27),
+        utilities=utilities,
+    )
+    assert sonfor_26.price_dkk_per_kwh == 0.845
+    assert sonfor_26.fixed_fee_dkk_per_m2_year == 55.0
+
+    sonfor_27 = resolve_tariff(
+        _entry(data={"utility_id": "sonfor-varme"}),
+        today=date(2027, 2, 1),
+        utilities=utilities,
+    )
+    assert sonfor_27.price_dkk_per_kwh == 0.8875
+    assert sonfor_27.fixed_fee_dkk_per_m2_year == 56.38
+
+    koge_26 = resolve_tariff(
+        _entry(data={"utility_id": "koge-fjernvarme"}),
+        today=date(2026, 11, 27),
+        utilities=utilities,
+    )
+    assert koge_26.price_dkk_per_kwh == 0.87417
+    assert koge_26.fixed_fee_dkk_per_m2_year == 37.83
+
+    koge_27 = resolve_tariff(
+        _entry(data={"utility_id": "koge-fjernvarme"}),
+        today=date(2027, 2, 1),
+        utilities=utilities,
+    )
+    assert koge_27.price_dkk_per_kwh == 0.95841
+    assert koge_27.fixed_fee_dkk_per_m2_year == 40.45
+
+    htf_26 = resolve_tariff(
+        _entry(data={"utility_id": "hoje-taastrup-fjernvarme"}),
+        today=date(2026, 11, 27),
+        utilities=utilities,
+    )
+    assert htf_26.price_dkk_per_kwh == 0.6925
+    assert htf_26.fixed_fee_dkk_per_m2_year == 36.52
+    assert htf_26.motivation_dkk_per_kwh_per_k == 0.01076
+    assert htf_26.motivation_bonus_dkk_per_kwh_per_k == 0.00538
+    assert htf_26.motivation_penalty_dkk_per_kwh_per_k == 0.01076
+    assert htf_26.bonus_temp == 41.0
+    assert htf_26.penalty_temp == 41.0
+    assert htf_26.motivation_bonus is True
+
+    htf_27 = resolve_tariff(
+        _entry(data={"utility_id": "hoje-taastrup-fjernvarme"}),
+        today=date(2027, 2, 1),
+        utilities=utilities,
+    )
+    assert htf_27.price_dkk_per_kwh == 0.71625
+    assert htf_27.fixed_fee_dkk_per_m2_year == 37.71
+    assert htf_27.motivation_dkk_per_kwh_per_k == 0.01113
+    assert htf_27.motivation_bonus is False
+    assert htf_27.bonus_temp == 0.0
+    assert htf_27.penalty_temp == 41.0
+
+    # 4 new 2027 additions (+ soroe 2026 fixed m2)
+    beof_27 = resolve_tariff(
+        _entry(data={"utility_id": "beof"}), today=date(2027, 2, 1), utilities=utilities
+    )
+    assert beof_27.price_dkk_per_kwh == 0.7421
+    assert beof_27.fixed_fee_dkk_per_m2_year == 52.3
+    assert beof_27.suggested_fixed_fee_dkk_per_year == 2897.0
+
+    soroe_26 = resolve_tariff(
+        _entry(data={"utility_id": "soroe-fjernvarme"}), today=date(2026, 11, 27), utilities=utilities
+    )
+    assert soroe_26.fixed_fee_dkk_per_m2_year == 35.96
+    soroe_27 = resolve_tariff(
+        _entry(data={"utility_id": "soroe-fjernvarme"}), today=date(2027, 2, 1), utilities=utilities
+    )
+    assert soroe_27.price_dkk_per_kwh == 0.94875
+    assert soroe_27.fixed_fee_dkk_per_m2_year == 46.82
+
+    frh_27 = resolve_tariff(
+        _entry(data={"utility_id": "frederikshavn-forsyning"}),
+        today=date(2027, 2, 1),
+        utilities=utilities,
+    )
+    assert frh_27.price_dkk_per_kwh == 0.9625
+
+    hadsund_27 = resolve_tariff(
+        _entry(data={"utility_id": "hadsund-fjernvarme"}),
+        today=date(2027, 2, 1),
+        utilities=utilities,
+    )
+    assert hadsund_27.price_dkk_per_kwh == 0.69
+
+    # Spot-check all 22 newly added utilities
+    expected_new_2026 = {
+        "frederiksberg-forsyning": 0.62426,
+        "silkeborg-forsyning": 0.855,
+        "bronderslev-forsyning": 0.75825,
+        "lolland-forsyning": 0.445,
+        "halsnaes-forsyning": 0.83,
+        "kerteminde-forsyning": 0.642,
+        "viborg-varme": 0.79,
+        "naestved-fjernvarme": 0.69938,
+        "svendborg-fjernvarme": 0.735,
+        "gentofte-fjernvarme": 0.33436,
+        "gladsaxe-fjernvarme": 0.37745,
+        "norfors-fjernvarme": 0.93758,
+        "greve-fjernvarme": 0.3375,
+        "rodovre-fjernvarme": 0.78,
+        "brondby-fjernvarme": 0.488,
+        "taarnby-forsyning": 0.47813,
+        "skive-fjernvarme": 0.785,
+        "haderslev-fjernvarme": 0.66575,
+        "aabenraa-fjernvarme": 0.511,
+        "skanderborg-horning-fjernvarme": 0.5825,
+        "vordingborg-fjernvarme": 0.96,
+        "hobro-varmevaerk": 0.79144,
+    }
+    for uid, exp_price in expected_new_2026.items():
+        res = resolve_tariff(
+            _entry(data={"utility_id": uid}),
+            today=date(2026, 11, 27),
+            utilities=utilities,
+        )
+        assert res.price_dkk_per_kwh == exp_price, uid
+
+    # Specific rules on new utilities
+    frb = resolve_tariff(
+        _entry(data={"utility_id": "frederiksberg-forsyning"}),
+        today=date(2026, 11, 27),
+        utilities=utilities,
+    )
+    assert frb.motivation_bonus is False
+    assert frb.penalty_temp == 50.0
+
+    hnf = resolve_tariff(
+        _entry(data={"utility_id": "halsnaes-forsyning"}),
+        today=date(2026, 11, 27),
+        utilities=utilities,
+    )
+    assert hnf.motivation_bonus is False
+    assert hnf.penalty_temp == 40.0
+    assert hnf.expected_return_by_forward_temp and [65.0, 40.0] in hnf.expected_return_by_forward_temp
+
+    silk_jan27 = resolve_tariff(
+        _entry(data={"utility_id": "silkeborg-forsyning"}),
+        today=date(2027, 1, 15),
+        utilities=utilities,
+    )
+    assert silk_jan27.price_dkk_per_kwh == 0.855
+    silk_feb27 = resolve_tariff(
+        _entry(data={"utility_id": "silkeborg-forsyning"}),
+        today=date(2027, 2, 1),
+        utilities=utilities,
+    )
+    assert silk_feb27.price_dkk_per_kwh == 1.04
+
+    ny_feb27 = resolve_tariff(
+        _entry(data={"utility_id": "nykobing-sj"}),
+        today=date(2027, 2, 15),
+        utilities=utilities,
+    )
+    assert ny_feb27.price_dkk_per_kwh == 0.56
+    ny_mar27 = resolve_tariff(
+        _entry(data={"utility_id": "nykobing-sj"}),
+        today=date(2027, 3, 1),
+        utilities=utilities,
+    )
+    assert ny_mar27.price_dkk_per_kwh == 0.94
+
+    vib_27 = resolve_tariff(
+        _entry(data={"utility_id": "viborg-varme"}),
+        today=date(2027, 2, 1),
+        utilities=utilities,
+    )
+    assert vib_27.price_dkk_per_kwh == 0.809
+    assert vib_27.motivation_max_pct == 25.0
+
+
+def test_asymmetric_motivation_rates_and_suggested_fixed_fee_year() -> None:
+    from kmd_easy_energy.const import (
+        CONF_FIXED_FEE_DKK_PER_YEAR,
+        CONF_MOTIVATION_DKK_PER_KWH_PER_K,
+        CONF_MOTIVATION_PCT_PER_K,
+        CONF_PRICE_DKK_PER_KWH,
+    )
+    from kmd_easy_energy.insights import estimate_variable_costs, motivation_dkk_per_kwh
+    from kmd_easy_energy.tariff import load_utilities
+
+    utilities = load_utilities()
+
+    # 1. Fixed DKK/kWh/K asymmetry: Høje Taastrup 2026 (-0.00538 bonus / +0.01076 penalty)
+    htf = resolve_tariff(
+        _entry(data={"utility_id": "hoje-taastrup-fjernvarme"}),
+        today=date(2026, 11, 27),
+        utilities=utilities,
+    )
+    assert htf.suggested_fixed_fee_dkk_per_year == 1567.5
+    assert htf.fixed_fee_dkk_per_year is None
+    assert htf.annual_fixed_fee_dkk == 0.0
+
+    bonus_adj = motivation_dkk_per_kwh(
+        39.0,
+        htf.bonus_temp,
+        htf.penalty_temp,
+        htf.motivation_dkk_per_kwh_per_k,
+        bonus_rate=htf.motivation_bonus_dkk_per_kwh_per_k,
+        penalty_rate=htf.motivation_penalty_dkk_per_kwh_per_k,
+    )
+    penalty_adj = motivation_dkk_per_kwh(
+        43.0,
+        htf.bonus_temp,
+        htf.penalty_temp,
+        htf.motivation_dkk_per_kwh_per_k,
+        bonus_rate=htf.motivation_bonus_dkk_per_kwh_per_k,
+        penalty_rate=htf.motivation_penalty_dkk_per_kwh_per_k,
+    )
+    assert bonus_adj == -0.01076
+    assert penalty_adj == 0.02152
+
+    # User motivation override forces symmetric rates and clears asymmetric split
+    htf_ovr = resolve_tariff(
+        _entry(
+            data={"utility_id": "hoje-taastrup-fjernvarme"},
+            options={
+                CONF_MOTIVATION_DKK_PER_KWH_PER_K: 0.02,
+                CONF_FIXED_FEE_DKK_PER_YEAR: 1567.5,
+            },
+        ),
+        today=date(2026, 11, 27),
+        utilities=utilities,
+    )
+    assert htf_ovr.motivation_bonus_dkk_per_kwh_per_k == 0.02
+    assert htf_ovr.motivation_penalty_dkk_per_kwh_per_k == 0.02
+    assert htf_ovr.annual_fixed_fee_dkk == 1567.5
+
+    # 2. Percentage asymmetry + price scaling: Sønderborg (-1% bonus / +0.5% penalty)
+    sond_scaled = resolve_tariff(
+        _entry(
+            data={"utility_id": "sonderborg-varme"},
+            options={CONF_PRICE_DKK_PER_KWH: 1.0},
+        ),
+        today=date(2026, 11, 27),
+        utilities=utilities,
+    )
+    assert sond_scaled.motivation_bonus_pct_per_k == 1.0
+    assert sond_scaled.motivation_penalty_pct_per_k == 0.5
+    assert sond_scaled.motivation_bonus_dkk_per_kwh_per_k == 0.01
+    assert sond_scaled.motivation_penalty_dkk_per_kwh_per_k == 0.005
+
+    sond_pct_ovr = resolve_tariff(
+        _entry(
+            data={"utility_id": "sonderborg-varme"},
+            options={CONF_PRICE_DKK_PER_KWH: 1.0, CONF_MOTIVATION_PCT_PER_K: 2.0},
+        ),
+        today=date(2026, 11, 27),
+        utilities=utilities,
+    )
+    assert sond_pct_ovr.motivation_bonus_pct_per_k == 2.0
+    assert sond_pct_ovr.motivation_penalty_pct_per_k == 2.0
+    assert sond_pct_ovr.motivation_bonus_dkk_per_kwh_per_k == 0.02
+    assert sond_pct_ovr.motivation_penalty_dkk_per_kwh_per_k == 0.02
+
+    # 3. Hvide Sande (-3% bonus / +12% penalty) in estimate_variable_costs
+    hs = resolve_tariff(
+        _entry(data={"utility_id": "hvide-sande-fjernvarme"}),
+        today=date(2026, 11, 27),
+        utilities=utilities,
+    )
+    assert hs.motivation_bonus_pct_per_k == 3.0
+    assert hs.motivation_penalty_pct_per_k == 12.0
+    est = estimate_variable_costs(
+        price_dkk_per_kwh=hs.price_dkk_per_kwh,
+        bonus_temp=35.0,
+        penalty_temp=40.0,
+        motivation_rate=hs.motivation_dkk_per_kwh_per_k,
+        current_return_temp=42.0,
+        daily=None,
+        monthly_cur_year={"Jan": 1000.0},
+        return_temp_monthly={"Jan": 42.0},
+        today=date(2026, 11, 27),
+        bonus_rate=hs.motivation_bonus_dkk_per_kwh_per_k,
+        penalty_rate=hs.motivation_penalty_dkk_per_kwh_per_k,
+    )
+    # Base 0.0125 + 2 °C * (12% * 0.0125 = 0.0015) = 0.0155 DKK/kWh -> 1000 * 0.0155 = 16 kr
+    assert est["effective_price_dkk_per_kwh"] == 0.0155
+    assert est["monthly_dkk"]["Jan"] == 16

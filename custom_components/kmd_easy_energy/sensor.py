@@ -403,6 +403,7 @@ class KMDEnergyPriceSensor(KMDBaseSensor):
             "fixed_fee_dkk_per_m2_year": tariff.get("fixed_fee_dkk_per_m2_year"),
             "heated_area_m2": tariff.get("heated_area_m2"),
             "fixed_fee_dkk_per_year": tariff.get("fixed_fee_dkk_per_year"),
+            "suggested_fixed_fee_dkk_per_year": tariff.get("suggested_fixed_fee_dkk_per_year"),
             "annual_fixed_fee_dkk": tariff.get("annual_fixed_fee_dkk", 0.0),
         }
 
@@ -556,6 +557,8 @@ class KMDMotivationStatusSensor(KMDBaseSensor):
             "bonus_temp": tariff.get("bonus_temp", data.get("bonus_temp")),
             "penalty_temp": tariff.get("penalty_temp", data.get("penalty_temp")),
             "motivation_bonus": tariff.get("motivation_bonus", True),
+            "motivation_bonus_dkk_per_kwh_per_k": tariff.get("motivation_bonus_dkk_per_kwh_per_k"),
+            "motivation_penalty_dkk_per_kwh_per_k": tariff.get("motivation_penalty_dkk_per_kwh_per_k"),
             "expected_return_temp": data.get("expected_return_temp"),
             "forward_temp": data.get("forward_temp"),
             "adjustment_dkk_per_kwh": data.get("motivation_dkk_per_kwh"),

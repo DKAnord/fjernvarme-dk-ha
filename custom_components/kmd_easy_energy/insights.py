@@ -184,20 +184,33 @@ def motivation_dkk_per_kwh(
     *,
     max_dkk_per_kwh: float | None = None,
     allow_bonus: bool = True,
+    bonus_rate: float | None = None,
+    penalty_rate: float | None = None,
 ) -> float | None:
     """Variable motivation adjustment in DKK/kWh (negative is a bonus)."""
-    if return_temp is None or rate is None or rate < 0:
+    if return_temp is None:
         return None
     status = motivation_status(
         return_temp, bonus_temp, penalty_temp, allow_bonus=allow_bonus
     )
     if status is None:
         return None
+    eff_bonus_rate = bonus_rate if bonus_rate is not None else rate
+    eff_penalty_rate = penalty_rate if penalty_rate is not None else rate
     if status == STATUS_BONUS:
-        raw = -(bonus_temp - return_temp) * rate
+        if eff_bonus_rate is None or eff_bonus_rate < 0:
+            return None
+        raw = -(bonus_temp - return_temp) * eff_bonus_rate
     elif status == STATUS_PENALTY:
-        raw = (return_temp - penalty_temp) * rate
+        if eff_penalty_rate is None or eff_penalty_rate < 0:
+            return None
+        raw = (return_temp - penalty_temp) * eff_penalty_rate
     else:
+        fallback_rate = rate if rate is not None else (
+            eff_penalty_rate if eff_penalty_rate is not None else eff_bonus_rate
+        )
+        if fallback_rate is None or fallback_rate < 0:
+            return None
         raw = 0.0
     if max_dkk_per_kwh is not None and max_dkk_per_kwh > 0:
         cap = float(max_dkk_per_kwh)
@@ -429,6 +442,8 @@ def estimate_variable_costs(
     allow_bonus: bool = True,
     annual_fixed_fee_dkk: float = 0.0,
     forecast_annual_kwh: float | None = None,
+    bonus_rate: float | None = None,
+    penalty_rate: float | None = None,
 ) -> dict[str, Any]:
     """Estimate heating cost in DKK (variable + optional prorated fixed fees)."""
     if price_dkk_per_kwh is None or price_dkk_per_kwh <= 0:
@@ -444,6 +459,8 @@ def estimate_variable_costs(
             motivation_rate,
             max_dkk_per_kwh=max_adj,
             allow_bonus=allow_bonus,
+            bonus_rate=bonus_rate,
+            penalty_rate=penalty_rate,
         )
         or 0.0
     )
@@ -524,6 +541,8 @@ def estimate_variable_costs(
                 motivation_rate,
                 max_dkk_per_kwh=max_adj,
                 allow_bonus=allow_bonus,
+                bonus_rate=bonus_rate,
+                penalty_rate=penalty_rate,
             )
             or 0.0
         )

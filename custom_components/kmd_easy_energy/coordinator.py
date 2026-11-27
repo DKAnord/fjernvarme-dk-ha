@@ -1649,6 +1649,8 @@ class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             tariff.motivation_dkk_per_kwh_per_k,
             max_dkk_per_kwh=max_adj,
             allow_bonus=tariff.motivation_bonus,
+            bonus_rate=tariff.motivation_bonus_dkk_per_kwh_per_k,
+            penalty_rate=tariff.motivation_penalty_dkk_per_kwh_per_k,
         )
 
         daily_kwh = daily_kwh_from_history(
@@ -1698,6 +1700,8 @@ class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             allow_bonus=tariff.motivation_bonus,
             annual_fixed_fee_dkk=tariff.annual_fixed_fee_dkk,
             forecast_annual_kwh=forecast_kwh,
+            bonus_rate=tariff.motivation_bonus_dkk_per_kwh_per_k,
+            penalty_rate=tariff.motivation_penalty_dkk_per_kwh_per_k,
         )
         if state["cost_estimate"].get("forecast_annual_dkk") is not None:
             state["degree_day"]["forecast_annual_dkk"] = float(

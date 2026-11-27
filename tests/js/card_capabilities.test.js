@@ -615,4 +615,75 @@ savedPayload = calls.pop();
 assert.strictEqual(savedPayload[2].heated_area_m2, 155);
 assert.ok(!("bonus_temp" in savedPayload[2]) && !("penalty_temp" in savedPayload[2]), "untouched pre-filled bonus/penalty values do not overwrite dynamic curve");
 
+// 20) Suggested annual meter subscription button + placeholder (opt-in helper, E|Forsyning + KMD)
+calls = [];
+const efStdFeeCard = render({
+  backend: "eforsyning",
+  utility: "Hedensted Fjernvarme",
+  utility_id: "hedensted-fjernvarme",
+  initial_setup_complete: true,
+  tariff: {
+    price_dkk_per_kwh: 0.93125,
+    fixed_fee_dkk_per_m2_year: 33.75,
+    suggested_fixed_fee_dkk_per_year: 787.5,
+    annual_fixed_fee_dkk: 0,
+  },
+  capabilities: ["cost", "daily", "monthly"],
+  cost_estimate: { effective_price_dkk_per_kwh: 0.9312, excludes_fixed_fees: true },
+}, calls);
+efStdFeeCard.shadowRoot.getElementById("openSetupBtn").listeners.click();
+const efFeeHtml = efStdFeeCard.shadowRoot.innerHTML;
+assert.ok(efFeeHtml.includes('placeholder="Standard 787,50 kr./år (valgfri)"'), "E|Forsyning fixedYear placeholder shows suggested annual fee");
+const useEfBtn = efStdFeeCard.shadowRoot.getElementById("useEfStdFixedYearBtn");
+assert.ok(useEfBtn, "shows 1-click button for suggested annual meter fee when unset");
+useEfBtn.listeners.click();
+assert.strictEqual(efStdFeeCard.shadowRoot.getElementById("efFixedYearInput").value, "787.5");
+assert.strictEqual(efStdFeeCard._wizEfFixedYear, "787.5");
+efStdFeeCard.shadowRoot.getElementById("saveTariffBtn").listeners.click();
+savedPayload = calls.pop();
+assert.strictEqual(savedPayload[2].fixed_fee_dkk_per_year, 787.5);
+
+// Already set fixed_fee_dkk_per_year hides the 1-click helper button
+const efAlreadySetCard = render({
+  backend: "eforsyning",
+  utility: "Hedensted Fjernvarme",
+  utility_id: "hedensted-fjernvarme",
+  initial_setup_complete: true,
+  tariff: {
+    price_dkk_per_kwh: 0.93125,
+    fixed_fee_dkk_per_year: 787.5,
+    suggested_fixed_fee_dkk_per_year: 787.5,
+    annual_fixed_fee_dkk: 787.5,
+  },
+  capabilities: ["cost", "daily", "monthly"],
+  cost_estimate: { effective_price_dkk_per_kwh: 0.9312 },
+}, []);
+efAlreadySetCard.shadowRoot.getElementById("openSetupBtn").listeners.click();
+assert.strictEqual(efAlreadySetCard.shadowRoot.getElementById("useEfStdFixedYearBtn"), null);
+
+// KMD setup panel also renders #useStdFixedYearBtn + placeholder and saves on click
+calls = [];
+const kmdStdFeeCard = render({
+  backend: "kmd",
+  utility: "Brønderslev Forsyning",
+  utility_id: "bronderslev-forsyning",
+  initial_setup_complete: true,
+  tariff: {
+    price_dkk_per_kwh: 0.75825,
+    fixed_fee_dkk_per_m2_year: 18.35,
+    suggested_fixed_fee_dkk_per_year: 918.75,
+    annual_fixed_fee_dkk: 0,
+  },
+  capabilities: ["cost", "daily", "monthly", "mitid"],
+  cost_estimate: { effective_price_dkk_per_kwh: 0.7582, excludes_fixed_fees: true },
+}, calls);
+kmdStdFeeCard.shadowRoot.getElementById("openSetupBtn").listeners.click();
+assert.ok(kmdStdFeeCard.shadowRoot.innerHTML.includes('placeholder="Standard 918,75 kr./år (valgfri)"'), "KMD fixedYear placeholder shows suggested annual fee");
+kmdStdFeeCard.shadowRoot.getElementById("useStdFixedYearBtn").listeners.click();
+assert.strictEqual(kmdStdFeeCard.shadowRoot.getElementById("fixedYearInput").value, "918.75");
+assert.strictEqual(kmdStdFeeCard._wizFixedYear, "918.75");
+kmdStdFeeCard.shadowRoot.getElementById("completeNowBtn").listeners.click();
+savedPayload = calls.pop();
+assert.strictEqual(savedPayload[2].fixed_fee_dkk_per_year, 918.75);
+
 console.log("card_capabilities.test.js: OK");

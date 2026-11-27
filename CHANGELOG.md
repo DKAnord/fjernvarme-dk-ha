@@ -2,6 +2,15 @@
 
 Alle væsentlige ændringer i **Dansk Fjernvarme** (tidligere *Fjernvarme (KMD Easy Energy)*) dokumenteres her.
 
+## [1.3.3] - 2026-11-27
+
+### Tilføjet & Forbedret
+- **63/63 forudfyldte værker med officielle 2026/2027-takster (`utilities.json`):** Færdiggjort de sidste 4 eksisterende værker (`envafors` inkl. rettet portal-URL, `sonfor-varme`, `koge-fjernvarme`, `hoje-taastrup-fjernvarme`), tilføjet 22 nye live-verificerede værker (6 KMD Min Forsyning 2 + 16 E|Forsyning), tilføjet officielle 2027-takster på `beof`, `soroe-fjernvarme` (inkl. 2026-arealbidrag), `frederikshavn-forsyning` og `hadsund-fjernvarme` (nu 30 værker med 2027-takster), samt flyttet `nykobing-sj` (Nykøbing Sjælland Varmeværk) fra KMD til verificeret E|Forsyning (`17086977-7E29-4199-917D-1A76641671BC`, `https://eforsyning.dk/nsfv/`).
+- **Ikrafttrædelsesdato (`effective_from`) i `tariff.py`:** `published_tariff()` / `resolve_tariff()` respekterer nu `effective_from`, så varslede midtårs-prisændringer (f.eks. Silkeborg `2027-02-01` og Nykøbing Sj. `2027-03-01`) først træder i kraft på selve datoen.
+- **Asymmetriske motivationstariffer (`tariff.py`, `insights.py`, `coordinator.py`, `sensor.py`):** Understøtter separate bonus- og gebyrsatser (`motivation_bonus_*` / `motivation_penalty_*`), aktiveret for Høje Taastrup Fjernvarme (2026), Sønderborg Varme og Hvide Sande Fjernvarme.
+- **Valgfrit standard målerabonnement (`kr./år`) med 1-kliks knap (`tariff.py`, `sensor.py`, `kmd-easy-energy-card.js`):** 47 værker har indbygget officielt målerabonnement udstillet som `suggested_fixed_fee_dkk_per_year` med placeholder og 1-kliks `↳ Brug standard (...)`-knap i ⚙️ (forbliver opt-in).
+- **Kortressource:** Opdateret cache-busting ressource-URL til `/kmd_easy_energy/kmd-easy-energy-card.js?v=1.3.3`.
+
 ## [1.3.2] - 2026-11-27
 
 ### Tilføjet & Forbedret

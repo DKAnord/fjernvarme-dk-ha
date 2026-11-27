@@ -457,6 +457,11 @@ def test_utilities_json_backend_field_and_hjorring() -> None:
     assert grenaa["tier"] == "confirmed"
     assert grenaa["eforsyning_supplier_id"] == "BE112409-C45D-4E63-BFF6-1C4E8F9ED990"
     assert grenaa["portal_url"] == "https://eforsyning.dk/grenaa-varmevaerk/"
+    sonderborg = by_id["sonderborg-varme"]
+    assert sonderborg["status"] == "confirmed"
+    assert sonderborg["tier"] == "confirmed"
+    assert sonderborg["eforsyning_supplier_id"] == "0DA4BF5F-2857-44FA-9CA3-F90A3C04B01F"
+    assert sonderborg["portal_url"] == "https://www.sonderborg-varme.dk/eforsyning/"
     for uid in eforsyning:
         u = by_id[uid]
         assert is_uuid(u["eforsyning_supplier_id"]), uid

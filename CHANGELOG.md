@@ -2,6 +2,12 @@
 
 Alle væsentlige ændringer i **Dansk Fjernvarme** (tidligere *Fjernvarme (KMD Easy Energy)*) dokumenteres her.
 
+## [1.3.6] - 2026-11-27
+
+### Bekræftet & Forbedret
+- **Sønderborg Varme bekræftet live ([issue #45](https://github.com/DKAnord/fjernvarme-dk-ha/issues/45), tak til `@CarstenLeonhardt`):** Markeret som ✅ **Bekræftet** E|Forsyning-værk (`sonderborg-varme`, `https://www.sonderborg-varme.dk/eforsyning/`, verificeret med `kWh`, `m³` og `°C` — nu **18** live-bekræftede værker), inkl. eksisterende officielle 2026/2027-takster (`0,58` / `0,6615 kr./kWh` inkl. moms, fast bidrag `27,50 kr./m²/år`, valgfrit målerabonnement `687,50 kr./år` og asymmetrisk motivationstarif `-1,0 %/°C` bonus / `+0,5 %/°C` tillæg).
+- **Kortressource:** Opdateret cache-busting ressource-URL til `/kmd_easy_energy/kmd-easy-energy-card.js?v=1.3.6`.
+
 ## [1.3.5] - 2026-11-27
 
 ### Rettet & Forbedret

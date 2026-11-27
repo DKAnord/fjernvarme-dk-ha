@@ -810,14 +810,14 @@
       "name": "Sønderborg Varme",
       "city": "Sønderborg",
       "portal_url": "https://www.sonderborg-varme.dk/eforsyning/",
-      "status": "pending_test",
-      "tier": "verified_portal",
+      "status": "confirmed",
+      "tier": "confirmed",
       "auth_method": "Forbrugernummer + webpinkode",
       "backend": "eforsyning",
       "eforsyning_supplier_id": "0DA4BF5F-2857-44FA-9CA3-F90A3C04B01F",
       "latitude": 54.909,
       "longitude": 9.792,
-      "notes": "E|Forsyning (afventer 1. test). forsyningid og AppServerUri bekræftet offentligt via GetVaerkSettings. Login med forbrugernummer + webpinkode fra regningen; daglige aflæsninger.",
+      "notes": "E|Forsyning. forsyningid og AppServerUri bekræftet live i issue #45 af @CarstenLeonhardt (kWh, m3, °C). Login med forbrugernummer + webpinkode fra regningen; daglige aflæsninger.",
       "tariffs": [
         {
           "year": 2026,

@@ -41,7 +41,7 @@ def test_manifest_and_hacs_versions() -> None:
     manifest = json.loads((ROOT / "custom_components/kmd_easy_energy/manifest.json").read_text())
     hacs = json.loads((ROOT / "hacs.json").read_text())
     assert manifest["domain"] == DOMAIN
-    assert manifest["version"] == "1.3.5"
+    assert manifest["version"] == "1.3.6"
     assert manifest["config_flow"] is True
     assert manifest["iot_class"] == "cloud_polling"
     assert not any(r.startswith("requests") for r in manifest["requirements"])

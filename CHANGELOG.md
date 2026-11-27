@@ -2,6 +2,16 @@
 
 Alle væsentlige ændringer i **Dansk Fjernvarme** (tidligere *Fjernvarme (KMD Easy Energy)*) dokumenteres her.
 
+## [1.3.2] - 2026-11-27
+
+### Tilføjet & Forbedret
+- **Energi Ikast — officielle 2026/2027-takster (`utilities.json`):** Bundled officielle forbrugsafgifter fra Energi Ikasts takstblade for Ikast/Bording (`0,59625 kr./kWh` inkl. moms i 2026 og `0,57375 kr./kWh` i 2027), fast arealbidrag `25,00 kr./m²/år` (valgfrit ved indtastning af boligareal; `875,00 kr./år` målerabonnement kan indtastes som fast årsbidrag) samt den officielle fremløbsafhængige gebyr-only motivationstarif (`+3,75 kr./°C/MWh` inkl. moms over fremløbskurven `50→42 °C` til `70→32 °C`, maks. `+10 %`). Engesvang-kunder kan overstyre kWh-prisen i ⚙️ (`0,765` / `0,66375 kr./kWh` inkl. moms). Nu 37/41 værker med forudfyldte takster.
+- **KMD `/api/cooling/getcoolinginfo` (returtemperatur, fremløbstemperatur & flow i m³):** Ved KMD / Min Forsyning 2-synkronisering hentes månedlige og daglige afkølingsdata best-effort fra `/api/cooling/getcoolinginfo` (`DegreesOut` til returtemperatur, `DegreesIn` til fremløbstemperatur og `Flow` som fallback for `m³` når måleren kun udstiller `kWh`-enheden i `customerActiveMeters`), samt aggregering fra `hourly_temp` når kun time-temperaturer findes.
+- **Ingen blanke kort i dashboardet (`kmd-easy-energy-card.js`):** KPI-kort, grafer (måned, returtemperatur, timeprofil, MTD vs. YTD, daglig) og indsigtskort vises kun, når der faktisk findes reelle data — ikke blot ud fra statiske backend-kapabiliteter (skjuler også tomme `–` eller `0 kr.`-kort samt tomme temperaturakser/signaturer).
+- **Lille note til manuel indtastning, som kan skjules (`dismiss`):** Når valgfrie felter (varmepris, manuel fremløbstemperatur til dynamisk kurve, eller boligareal til faste bidrag) kan låse flere tal op, vises en diskret note øverst med genvej til ⚙️ og en `✕`-knap, der huskes lokalt i browseren (`localStorage`, samt mulighed for at skjule helt i kortredigeringen).
+- **KMD-indstillinger:** Tilføjet manuelt `Fremløbstemperatur (°C)`-felt for værker med dynamisk afkølingskurve, tydeligere `💾 Gem indstillinger`-knap og beskyttelse mod utilsigtet overskrivning af dynamiske returgrænser.
+- **Kortressource:** Opdateret cache-busting ressource-URL til `/kmd_easy_energy/kmd-easy-energy-card.js?v=1.3.2`.
+
 ## [1.3.1] - 2026-11-26
 
 ### Tilføjet & Bekræftet

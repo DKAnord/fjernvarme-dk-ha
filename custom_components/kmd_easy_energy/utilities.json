@@ -77,7 +77,57 @@
       "backend": "kmd",
       "latitude": 56.139,
       "longitude": 9.158,
-      "notes": "Min Forsyning 2 (minforsyning-2.kmd.dk, plant 464). Uses the shared MF2 OIDC client, not Kredsløb's plugin client. Confirmed live in issue #19 by @BenzDK."
+      "notes": "Min Forsyning 2 (minforsyning-2.kmd.dk, plant 464). Uses the shared MF2 OIDC client, not Kredsløb's plugin client. Confirmed live in issue #19 by @BenzDK. Official 2026/2027 Ikast/Bording tariffs bundled (596,25 / 573,75 kr./MWh inkl. moms, 25,00 kr./m²/år, 875,00 kr./år abonnement, dynamisk gebyr-only motivationstarif 3,75 kr./°C/MWh maks. 10 %); Engesvang zone customers can override kWh price in ⚙️ (2026: 0,765 kr./kWh, 2027: 0,66375 kr./kWh inkl. moms).",
+      "tariffs": [
+        {
+          "year": 2026,
+          "effective_from": "2026-01-01",
+          "price_dkk_per_kwh": 0.59625,
+          "price_dkk_per_m3": null,
+          "fixed_fee_dkk_per_m2_year": 25.0,
+          "motivation_dkk_per_kwh_per_k": 0.00375,
+          "motivation_max_pct": 10.0,
+          "motivation_bonus": false,
+          "bonus_temp": 0.0,
+          "penalty_temp": 37.0,
+          "expected_return_by_forward_temp": [
+            [
+              50.0,
+              42.0
+            ],
+            [
+              70.0,
+              32.0
+            ]
+          ],
+          "source": "https://energi-ikast.dk/wp-content/uploads/2026/01/Takstblad.-Varmeforbrug-1.-januar-2026-Ikast-Bording.pdf",
+          "source_note": "Takstblad 2026 (Ikast/Bording): Forbrugspris 477,00 kr./MWh ekskl. moms / 596,25 kr./MWh inkl. moms (0,59625 kr./kWh inkl. moms). Arealafgift 20,00 ekskl. / 25,00 kr./m²/år inkl. moms samt fast målerabonnement 700,00 ekskl. / 875,00 kr./år inkl. moms. Motivationstarif (kun tillæg, ingen bonus): +3,00 kr. ekskl. / +3,75 kr. inkl. moms pr. °C/MWh (0,00375 kr./°C/kWh) over fremløbsafhængigt loft (42 °C ved ≤50 °C fremløb faldende 0,5 °C pr. °C til 32 °C ved ≥70 °C fremløb; 37 °C ved 60 °C som fallback), maks. +10 % af årets MWh-betaling. Engesvang-zonen 2026: 765,00 kr./MWh = 0,765 kr./kWh inkl. moms (kan overstyres under ⚙️)."
+        },
+        {
+          "year": 2027,
+          "effective_from": "2027-01-01",
+          "price_dkk_per_kwh": 0.57375,
+          "price_dkk_per_m3": null,
+          "fixed_fee_dkk_per_m2_year": 25.0,
+          "motivation_dkk_per_kwh_per_k": 0.00375,
+          "motivation_max_pct": 10.0,
+          "motivation_bonus": false,
+          "bonus_temp": 0.0,
+          "penalty_temp": 37.0,
+          "expected_return_by_forward_temp": [
+            [
+              50.0,
+              42.0
+            ],
+            [
+              70.0,
+              32.0
+            ]
+          ],
+          "source": "https://energi-ikast.dk/wp-content/uploads/2026/10/Takstblad.-Varmeforbrug-1.-januar-2027-Ikast-Bording.pdf",
+          "source_note": "Takstblad 2027 (Ikast/Bording, gældende fra 2027-01-01): Forbrugspris 459,00 kr./MWh ekskl. moms / 573,75 kr./MWh inkl. moms (0,57375 kr./kWh inkl. moms). Arealafgift 25,00 kr./m²/år og fast målerabonnement 875,00 kr./år inkl. moms. Samme dynamiske motivationstarif (+3,75 kr./°C/MWh inkl. moms, kun tillæg, maks. +10 %). Engesvang-zonen 2027: 663,75 kr./MWh = 0,66375 kr./kWh inkl. moms."
+        }
+      ]
     },
     {
       "id": "struer-energi",
@@ -1169,5 +1219,5 @@
       ]
     }
   ],
-  "last_updated": "2026-11-25"
+  "last_updated": "2026-11-27"
 }

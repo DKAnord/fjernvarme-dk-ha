@@ -45,6 +45,12 @@ function mkHass(attrs, calls) {
 
 
 const ALL_KMD = ["billing", "cost", "daily", "forecast", "hourly", "mitid", "monthly", "reminder", "temperatures", "volume"];
+const KMD_FULL_DATA = {
+  hourly: { kwh: Array(24).fill(1), ret_temp: Array(24).fill(33) },
+  return_temp: { annual: { "2026": 34.5 }, monthly_2026: { Jan: 34.5 } },
+  billing: { total_2026_kr: 8500, saldo_kr: -120 },
+  forecast: { expected_kwh: 12000, budget_kwh: 13000 },
+};
 const EF_ATTRS = {
   backend: "eforsyning", data_source: "E|Forsyning", utility: "Hjørring Varmeforsyning",
   utility_id: "hjorring-varmeforsyning", portal_url: "https://eforsyning.dk/hjvarme/",
@@ -57,7 +63,7 @@ const sections = (html) => (html.match(/data-section="([^"]+)"/g) || []).map((m)
 
 // 1) KMD with all capabilities: every section present, MitID wording available.
 let calls = [];
-let card = render({ capabilities: ALL_KMD, backend: "kmd", hourly: { kwh: Array(24).fill(1) } }, calls);
+let card = render(Object.assign({ capabilities: ALL_KMD, backend: "kmd" }, KMD_FULL_DATA), calls);
 let html = card.shadowRoot.innerHTML;
 for (const s of ["monthly", "return-temp", "hourly", "mtd-ytd", "daily", "ins-hourly", "ins-temp"]) {
   assert.ok(sections(html).includes(s), `KMD shows ${s}`);
@@ -101,7 +107,7 @@ assert.deepStrictEqual(calls.pop()[1], "sync");
 
 // 5) Legacy attributes without capabilities -> everything shown (backwards compatible).
 calls = [];
-card = render({ hourly: { kwh: Array(24).fill(1) } }, calls);
+card = render(Object.assign({}, KMD_FULL_DATA), calls);
 html = card.shadowRoot.innerHTML;
 assert.ok(sections(html).includes("hourly") && html.includes("Saldo"), "legacy: all sections");
 card.shadowRoot.getElementById("syncBtn").listeners.click();
@@ -254,7 +260,7 @@ for (const entityId of ["sensor.hadsund_fjernvarme_overblik", "sensor.hadsund_fj
 
 // 13) Desktop layout proportions, unified chart grid, theme contrast, and keyboard accessibility.
 calls = [];
-const kmdWide = render({ capabilities: ALL_KMD, backend: "kmd", hourly: { kwh: Array(24).fill(1) } }, calls);
+const kmdWide = render(Object.assign({ capabilities: ALL_KMD, backend: "kmd" }, KMD_FULL_DATA), calls);
 const kmdHtml = kmdWide.shadowRoot.innerHTML;
 assert.strictEqual((kmdHtml.match(/<div class="grid2">/g) || []).length, 1, "all chart panels share a single .grid2 container");
 assert.ok(kmdHtml.includes('data-section="daily"') && kmdHtml.includes('viewBox="0 0 960 220"'), "5-chart desktop daily chart uses wide 960x220 viewBox");
@@ -270,7 +276,7 @@ assert.deepStrictEqual(calls.pop(), ["kmd_easy_energy", "sync", { entry_id: "e1"
 const kmdNarrow = new Card();
 kmdNarrow.clientWidth = 390;
 kmdNarrow.setConfig({});
-kmdNarrow.hass = mkHass({ capabilities: ALL_KMD, backend: "kmd", hourly: { kwh: Array(24).fill(1) } }, []);
+kmdNarrow.hass = mkHass(Object.assign({ capabilities: ALL_KMD, backend: "kmd" }, KMD_FULL_DATA), []);
 assert.ok(kmdNarrow.shadowRoot.innerHTML.includes('viewBox="0 0 540 220"') && !kmdNarrow.shadowRoot.innerHTML.includes('viewBox="0 0 960 220"'), "narrow viewport keeps 540x220 daily viewBox");
 
 // 4-chart E|Forsyning layout uses 2x2 grid (540x220 daily chart even on desktop).
@@ -435,5 +441,178 @@ assert.deepStrictEqual(calls.pop(), [
     fixed_fee_dkk_per_year: 787.5,
   },
 ]);
+
+// 17) Strict zero-blank-cards: empty/missing data hides KPIs, charts & insights even if stale capabilities list them.
+calls = [];
+const emptyRichCard = render({
+  capabilities: ALL_KMD,
+  backend: "kmd",
+  annual: { "2026": 1200 },
+  monthly: { "2026": { Jan: 1200 } },
+  return_temp: {},
+  hourly: {},
+  daily: {},
+  billing: {},
+  forecast: {},
+  insights: {},
+  weather: {},
+  cost_estimate: {},
+}, calls);
+const emptyHtml = emptyRichCard.shadowRoot.innerHTML;
+const emptySecs = sections(emptyHtml);
+assert.ok(emptySecs.includes("monthly"), "monthly chart with real Jan value renders");
+for (const hiddenSec of ["return-temp", "hourly", "daily", "mtd-ytd", "insights", "cost-estimate"]) {
+  assert.ok(!emptySecs.includes(hiddenSec), `zero blank panels: ${hiddenSec} hidden without data`);
+}
+assert.ok(!emptyHtml.includes("– °C") && !emptyHtml.includes("– kWh"), "no placeholder dash KPIs rendered");
+assert.ok(!emptyHtml.includes("0 kr."), "no fake 0 kr. billing KPI rendered");
+assert.ok(!emptyHtml.includes("kl. 00:00") && !emptyHtml.includes("0,00 kWh/t"), "no empty peak hour insight rendered");
+assert.ok(!emptyHtml.includes("Ude °C"), "monthly chart hides outdoor temperature legend when monthly_temp is missing");
+
+// Saldo-only billing shows actual Saldo instead of fake 0 kr.
+const saldoOnlyCard = render({
+  capabilities: ["monthly", "billing", "mitid"],
+  backend: "kmd",
+  annual: { "2026": 1200 },
+  monthly: { "2026": { Jan: 1200 } },
+  billing: { saldo_kr: -345.5 },
+}, []);
+const saldoHtml = saldoOnlyCard.shadowRoot.innerHTML;
+assert.ok(saldoHtml.includes("-345,50 kr.") && saldoHtml.includes("Aktuel saldo"), "Saldo-only billing shows Saldo");
+assert.ok(!saldoHtml.includes(">0 kr.<"), "Saldo-only billing does not render fake 0 kr.");
+
+// Hourly kWh without ret_temp hides Retur °C legend on hourly chart.
+const hourlyNoRetCard = render({
+  capabilities: ["hourly", "monthly", "mitid"],
+  backend: "kmd",
+  annual: { "2026": 1200 },
+  monthly: { "2026": { Jan: 1200 } },
+  hourly: { kwh: Array(24).fill(1.5), period: "nov-2026 MTD" },
+}, []);
+const hourlySectionHtml = hourlyNoRetCard.shadowRoot.innerHTML.split('data-section="hourly"')[1].split("</svg>")[0];
+assert.ok(!hourlySectionHtml.includes("Retur °C"), "hourly chart hides Retur °C legend when hourly ret_temp is missing");
+
+// 18) Dismissible manual-entry note + localStorage persistence + editor opt-out + non-admin visibility.
+const prevLocalStorage = global.localStorage;
+const lsStore = new Map();
+global.localStorage = {
+  getItem: (k) => (lsStore.has(k) ? lsStore.get(k) : null),
+  setItem: (k, v) => { lsStore.set(k, String(v)); },
+  removeItem: (k) => { lsStore.delete(k); },
+};
+try {
+  // Case A: cost hint -> open settings & dismiss + persist across fresh Card instances
+  const cardCostA = render({
+    entry_id: "e-hint-a",
+    utility_id: "custom-a",
+    capabilities: ["daily", "monthly", "mitid"],
+    cost_estimate: {},
+  }, []);
+  assert.ok(cardCostA.shadowRoot.innerHTML.includes('data-section="manual-hint" data-hint-key="cost"'), "shows cost manual hint");
+  assert.ok(cardCostA.shadowRoot.innerHTML.includes('id="costHintSetupBtn"') && cardCostA.shadowRoot.innerHTML.includes('id="dismissManualHintBtn"'), "shows setup & dismiss buttons");
+  cardCostA.shadowRoot.getElementById("costHintSetupBtn").listeners.click();
+  assert.strictEqual(cardCostA._setupOpen, true, "costHintSetupBtn opens setup");
+  cardCostA._setupOpen = false;
+  cardCostA._render();
+  cardCostA.shadowRoot.getElementById("dismissManualHintBtn").listeners.click();
+  assert.ok(!cardCostA.shadowRoot.innerHTML.includes('data-section="manual-hint"'), "dismiss hides cost hint immediately");
+
+  const cardCostReopened = render({
+    entry_id: "e-hint-a",
+    utility_id: "custom-a",
+    capabilities: ["daily", "monthly", "mitid"],
+    cost_estimate: {},
+  }, []);
+  assert.ok(!cardCostReopened.shadowRoot.innerHTML.includes('data-section="manual-hint"'), "dismissed cost hint persists via localStorage");
+
+  // Case B: Energi Ikast forward_temp hint -> dismissing stays hidden without popping up fixed_fee immediately
+  const ikastFwdBase = {
+    entry_id: "e-ikast-b",
+    utility_id: "energi-ikast",
+    utility: "Energi Ikast",
+    capabilities: ["cost", "daily", "monthly", "temperatures", "mitid"],
+    return_temp: { annual: { "2026": 36.0 }, monthly_2026: { Jan: 36.0 } },
+    forward_temp: null,
+    tariff: {
+      price_dkk_per_kwh: 0.59625,
+      fixed_fee_dkk_per_m2_year: 25.0,
+      expected_return_by_forward_temp: [[50, 42], [70, 32]],
+    },
+    cost_estimate: { effective_price_dkk_per_kwh: 0.5962, excludes_fixed_fees: true },
+  };
+  const cardFwdB = render(ikastFwdBase, []);
+  assert.ok(cardFwdB.shadowRoot.innerHTML.includes('data-section="manual-hint" data-hint-key="forward_temp"'), "shows forward_temp manual hint for dynamic curve missing supply temp");
+  cardFwdB.shadowRoot.getElementById("dismissManualHintBtn").listeners.click();
+  assert.ok(!cardFwdB.shadowRoot.innerHTML.includes('data-section="manual-hint"'), "dismissing forward_temp hint does not immediately show fixed_fee hint");
+
+  // Case C: fixed_fee hint when cost & forward_temp present (or no return temp) and excludes_fixed_fees
+  const cardFeeC = render(Object.assign({}, ikastFwdBase, {
+    entry_id: "e-ikast-c",
+    forward_temp: 62.0,
+    forward_temp_source: "meter",
+  }), []);
+  assert.ok(cardFeeC.shadowRoot.innerHTML.includes('data-section="manual-hint" data-hint-key="fixed_fee"'), "shows fixed_fee manual hint");
+  cardFeeC.shadowRoot.getElementById("dismissManualHintBtn").listeners.click();
+  assert.ok(!cardFeeC.shadowRoot.innerHTML.includes('data-section="manual-hint"'), "dismiss hides fixed_fee hint");
+
+  // Case D: hide_manual_hints config option hides hint
+  const cardOptOut = new Card();
+  cardOptOut.setConfig({ hide_manual_hints: true });
+  cardOptOut.hass = mkHass({ entry_id: "e-fresh-d", capabilities: ["daily", "monthly", "mitid"], cost_estimate: {} }, []);
+  assert.ok(!cardOptOut.shadowRoot.innerHTML.includes('data-section="manual-hint"'), "hide_manual_hints config hides hint");
+
+  // Case E: non-admin hides hint
+  const cardNonAdmin = new Card();
+  cardNonAdmin.setConfig({});
+  const nonAdminHass = mkHass({ entry_id: "e-fresh-e", capabilities: ["daily", "monthly", "mitid"], cost_estimate: {} }, []);
+  nonAdminHass.user = { is_admin: false };
+  cardNonAdmin.hass = nonAdminHass;
+  assert.ok(!cardNonAdmin.shadowRoot.innerHTML.includes('data-section="manual-hint"'), "non-admin hides manual hint");
+} finally {
+  global.localStorage = prevLocalStorage;
+}
+
+// 19) KMD Energi Ikast settings panel: forwardInput, save label, and non-destructive curve save.
+calls = [];
+const ikastSettingsCard = render({
+  backend: "kmd",
+  utility: "Energi Ikast",
+  utility_id: "energi-ikast",
+  portal_url: "https://energi-ikast.dk/",
+  initial_setup_complete: true,
+  bonus_temp: 0,
+  penalty_temp: 37,
+  tariff: {
+    price_dkk_per_kwh: 0.59625,
+    motivation_bonus: false,
+    bonus_temp: 0,
+    penalty_temp: 37,
+    expected_return_by_forward_temp: [[50, 42], [70, 32]],
+  },
+  capabilities: ["cost", "daily", "monthly", "mitid"],
+  cost_estimate: { effective_price_dkk_per_kwh: 0.5962, excludes_fixed_fees: true },
+}, calls);
+ikastSettingsCard.shadowRoot.getElementById("openSetupBtn").listeners.click();
+const ikastWizHtml = ikastSettingsCard.shadowRoot.innerHTML;
+assert.ok(ikastWizHtml.includes('id="forwardInput"'), "KMD Energi Ikast settings panel renders forwardInput");
+assert.ok(ikastWizHtml.includes('id="completeNowBtn">💾 Gem indstillinger</button>'), "settings panel labels save button Gem indstillinger");
+ikastSettingsCard.shadowRoot.getElementById("areaM2Input").value = "140";
+ikastSettingsCard.shadowRoot.getElementById("completeNowBtn").listeners.click();
+let savedPayload = calls.pop();
+assert.strictEqual(savedPayload[0], "kmd_easy_energy");
+assert.strictEqual(savedPayload[1], "configure_utility");
+assert.strictEqual(savedPayload[2].heated_area_m2, 140);
+assert.strictEqual(savedPayload[2].complete_setup, true);
+assert.ok(!("bonus_temp" in savedPayload[2]) && !("penalty_temp" in savedPayload[2]), "untouched empty inputs do not overwrite dynamic curve");
+
+// Also verify pre-populated DOM defaults (0 / 37) do not overwrite dynamic curve when untouched.
+ikastSettingsCard.shadowRoot.getElementById("openSetupBtn").listeners.click();
+ikastSettingsCard.shadowRoot.getElementById("bonusInput").value = "0";
+ikastSettingsCard.shadowRoot.getElementById("penaltyInput").value = "37";
+ikastSettingsCard.shadowRoot.getElementById("areaM2Input").value = "155";
+ikastSettingsCard.shadowRoot.getElementById("completeNowBtn").listeners.click();
+savedPayload = calls.pop();
+assert.strictEqual(savedPayload[2].heated_area_m2, 155);
+assert.ok(!("bonus_temp" in savedPayload[2]) && !("penalty_temp" in savedPayload[2]), "untouched pre-filled bonus/penalty values do not overwrite dynamic curve");
 
 console.log("card_capabilities.test.js: OK");

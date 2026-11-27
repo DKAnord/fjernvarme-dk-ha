@@ -276,3 +276,57 @@ async def test_discover_accounts_falls_back_to_default_when_customers_empty() ->
     assert len(accounts) == 1
     assert accounts[0]["customer_id"] is None
     assert accounts[0]["meters"][0]["MeasurementPointId"] == "mp-beof-1"
+
+
+@pytest.mark.asyncio
+async def test_get_cooling_info_payload_shape() -> None:
+    session = FakeSession()
+    session.set(
+        "POST",
+        "/api/cooling/getcoolinginfo",
+        FakeResp(
+            200,
+            {
+                "CoolingData": [
+                    {
+                        "DateFrom": "2026-01-01T00:00:00Z",
+                        "DegreesIn": 64.2,
+                        "DegreesOut": 34.8,
+                        "Degrees": 29.4,
+                        "Flow": 18.5,
+                        "Energy": 620.0,
+                    }
+                ]
+            },
+        ),
+    )
+    client = KMDClient(
+        session,
+        "tok",
+        customer_id="cust-1",
+        customer_number="cn-1",
+        referer="https://minforsyning-2.kmd.dk/",
+    )
+    res = await client.get_cooling_info(
+        "mp-1", "10", 2, datetime(2026, 1, 1), datetime(2026, 12, 31)
+    )
+    assert len(res["CoolingData"]) == 1
+    method, url, kwargs = session.calls[0]
+    assert method == "POST"
+    assert url == f"{KMD_API_BASE}/api/cooling/getcoolinginfo"
+    assert kwargs["headers"]["Authorization"] == "Bearer tok"
+    assert kwargs["headers"]["Customer-Id"] == "cust-1"
+    assert kwargs["headers"]["Customer-Number"] == "cn-1"
+    payload = kwargs["json"]
+    assert payload["MeasurementPointId"] == "mp-1"
+    assert payload["MetertypeId"] == "10"
+    assert payload["ZoomLevel"] == 2
+    assert payload["DateFrom"] == "2026-01-01T00:00:00.000Z"
+    assert payload["DateTo"] == "2026-12-31T23:59:59.000Z"
+
+    await client.get_cooling_info(
+        "mp-1", None, 3, datetime(2026, 11, 1), datetime(2026, 11, 30)
+    )
+    payload_no_mt = session.calls[1][2]["json"]
+    assert "MetertypeId" not in payload_no_mt
+    assert payload_no_mt["ZoomLevel"] == 3

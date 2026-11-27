@@ -3,7 +3,7 @@
  * Zero external dependencies, Shadow DOM, responsive, interactive tooltips, DA/EN i18n.
  */
 (() => {
-  const VER = "1.3.1";
+  const VER = "1.3.2";
   const MONTHS = ["Jan", "Feb", "Mar", "Apr", "Maj", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Dec"];
   const DAYS_IN_MONTH = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
   const isLeapYear = (y) => (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0;
@@ -320,14 +320,49 @@
       else if (unsub && typeof unsub.then === "function") unsub.then((fn) => fn && fn()).catch(() => {});
     }
 
+    _hintStorageKey(entryId, utilId) {
+      return `kmd_easy_energy_dismissed_hints_${entryId || utilId || "default"}`;
+    }
+
+    _getDismissedHints(entryId, utilId) {
+      const storageKey = this._hintStorageKey(entryId, utilId);
+      const mem = (this._dismissedHintsByKey && this._dismissedHintsByKey[storageKey]) || [];
+      const set = new Set(Array.isArray(mem) ? mem : []);
+      try {
+        if (typeof localStorage !== "undefined" && localStorage && typeof localStorage.getItem === "function") {
+          const raw = localStorage.getItem(storageKey);
+          if (raw) {
+            const parsed = JSON.parse(raw);
+            if (Array.isArray(parsed)) parsed.forEach((k) => set.add(String(k)));
+          }
+        }
+      } catch (_) { /* ignore storage errors */ }
+      return set;
+    }
+
+    _dismissHint(entryId, utilId, hintKey) {
+      if (!hintKey) return;
+      const storageKey = this._hintStorageKey(entryId, utilId);
+      const set = this._getDismissedHints(entryId, utilId);
+      set.add(String(hintKey));
+      this._dismissedHintsByKey = this._dismissedHintsByKey || {};
+      this._dismissedHintsByKey[storageKey] = [...set];
+      try {
+        if (typeof localStorage !== "undefined" && localStorage && typeof localStorage.setItem === "function") {
+          localStorage.setItem(storageKey, JSON.stringify([...set]));
+        }
+      } catch (_) { /* ignore storage errors */ }
+    }
+
     set hass(hass) {
       this._hass = hass;
       this._subscribeMitid(hass);
       const st = this._resolveEntity();
       const statusEnt = this._config?.status_entity;
       const syncSt = statusEnt ? (hass?.states?.[statusEnt]?.state || "") : "";
+      const capsSig = Array.isArray(st?.attributes?.capabilities) ? st.attributes.capabilities.join(",") : "";
       const sig = st
-        ? `${st.entity_id}|${st.state}|${st.attributes?.updated || ""}|${st.attributes?.hourly?.days_averaged || ""}|${st.attributes?.daily?.latest_complete}|${st.attributes?.last_sync || ""}|${st.attributes?.sync_reminder}|${st.attributes?.days_since_sync}|${st.attributes?.initial_setup_complete}|${st.attributes?.utility_id || ""}|${st.attributes?.entry_id || ""}|${st.attributes?.sync_state || ""}|${st.attributes?.sync_message || ""}|${this._mitidOtp || ""}|${Boolean(this._mitidQr)}|${syncSt}`
+        ? `${st.entity_id}|${st.state}|${st.attributes?.updated || ""}|${st.attributes?.hourly?.days_averaged || ""}|${st.attributes?.daily?.latest_complete}|${st.attributes?.last_sync || ""}|${st.attributes?.sync_reminder}|${st.attributes?.days_since_sync}|${st.attributes?.initial_setup_complete}|${st.attributes?.utility_id || ""}|${st.attributes?.entry_id || ""}|${st.attributes?.sync_state || ""}|${st.attributes?.sync_message || ""}|${st.attributes?.energy_price_dkk_per_kwh ?? ""}|${st.attributes?.tariff?.annual_fixed_fee_dkk ?? ""}|${st.attributes?.forward_temp ?? ""}|${st.attributes?.penalty_temp ?? ""}|${capsSig}|${this._mitidOtp || ""}|${Boolean(this._mitidQr)}|${syncSt}`
         : "none";
       if (sig === this._lastSig) return;
       this._lastSig = sig;
@@ -347,24 +382,27 @@
       const vals = MONTHS.flatMap((m) => [mCur[m], mPrev[m]]).filter((v) => typeof v === "number");
       const maxKwh = Math.max(3000, ...vals, 1);
       const temps = MONTHS.map((_, i) => mTemp[`${curYr}-${String(i + 1).padStart(2, "0")}`]).filter((v) => typeof v === "number");
+      const hasMonthlyTemps = temps.length > 0;
       const minT = Math.min(-2, ...temps), maxT = Math.max(20, ...temps);
       const xStep = cw / 12;
       const yKwh = (v) => pad.t + ch - (v / maxKwh) * ch;
       const yTmp = (v) => pad.t + ch - ((v - minT) / Math.max(1, maxT - minT)) * ch;
 
-      let grid = `<text x="${pad.l - 6}" y="13" text-anchor="end" class="ax-unit">kWh</text><text x="${W - pad.r + 6}" y="13" text-anchor="start" class="ax-unit">°C</text>`;
+      let grid = `<text x="${pad.l - 6}" y="13" text-anchor="end" class="ax-unit">kWh</text>${hasMonthlyTemps ? `<text x="${W - pad.r + 6}" y="13" text-anchor="start" class="ax-unit">°C</text>` : ""}`;
       for (let i = 0; i <= 4; i++) {
         const kv = Math.round((maxKwh / 4) * i);
         const y = yKwh(kv);
         grid += `<line x1="${pad.l}" y1="${y}" x2="${W - pad.r}" y2="${y}" stroke="rgba(148,163,184,0.22)" stroke-dasharray="3,3"/>`;
         grid += `<text x="${pad.l - 6}" y="${y + 4}" text-anchor="end" class="ax">${fmtInt(kv)}</text>`;
       }
-      [0, 10, 20].forEach((tv) => {
-        if (tv >= minT && tv <= maxT) {
-          const y = yTmp(tv);
-          grid += `<text x="${W - pad.r + 6}" y="${y + 4}" text-anchor="start" class="ax-t">${tv}°</text>`;
-        }
-      });
+      if (hasMonthlyTemps) {
+        [0, 10, 20].forEach((tv) => {
+          if (tv >= minT && tv <= maxT) {
+            const y = yTmp(tv);
+            grid += `<text x="${W - pad.r + 6}" y="${y + 4}" text-anchor="start" class="ax-t">${tv}°</text>`;
+          }
+        });
+      }
 
       let bars = "";
       const pts = [];
@@ -483,13 +521,14 @@
       const rawMaxK = validK.length ? Math.max(...validK) * 1.18 : 3.2;
       const maxK = Math.max(rawMaxK < 1.5 ? 1.5 : 3.2, rawMaxK);
       const validT = rt.filter((v) => typeof v === "number" && Number.isFinite(v));
+      const hasTemp = validT.length > 0;
       const minT = Math.min(25, ...validT, bonusT - 2);
       const maxT = Math.max(36, ...validT, bonusT + 4);
       const xStep = cw / 24;
       const yK = (v) => pad.t + ch - (v / maxK) * ch;
       const yT = (t) => pad.t + ch - ((t - minT) / Math.max(1, maxT - minT)) * ch;
 
-      let grid = `<text x="${pad.l - 6}" y="13" text-anchor="end" class="ax-unit">kWh/t</text><text x="${W - pad.r + 6}" y="13" text-anchor="start" class="ax-unit">°C</text>`;
+      let grid = `<text x="${pad.l - 6}" y="13" text-anchor="end" class="ax-unit">kWh/t</text>${hasTemp ? `<text x="${W - pad.r + 6}" y="13" text-anchor="start" class="ax-unit">°C</text>` : ""}`;
       const kStep = maxK <= 1.8 ? 0.5 : (maxK <= 5 ? 1 : niceStep(maxK, 4));
       for (let kv = kStep; kv <= maxK + 1e-6; kv += kStep) {
         const y = yK(kv);
@@ -498,15 +537,17 @@
           grid += `<text x="${pad.l - 6}" y="${y + 4}" text-anchor="end" class="ax">${kStep < 1 ? fmtDec(kv, 1) : Math.round(kv)}</text>`;
         }
       }
-      if (bonusT >= minT && bonusT <= maxT) {
-        grid += `<line x1="${pad.l}" y1="${yT(bonusT)}" x2="${W - pad.r}" y2="${yT(bonusT)}" stroke="rgba(34,197,94,0.65)" stroke-dasharray="4,4"/>`;
-        grid += `<text x="${W - pad.r + 6}" y="${yT(bonusT) + 4}" class="ax-bonus">${bonusT}°</text>`;
-      }
-      [Math.round(minT), Math.round(maxT)].forEach((tv) => {
-        if (Math.abs(tv - bonusT) >= 3) {
-          grid += `<text x="${W - pad.r + 6}" y="${yT(tv) + 4}" class="ax-t">${tv}°</text>`;
+      if (hasTemp) {
+        if (bonusT > 0 && bonusT >= minT && bonusT <= maxT) {
+          grid += `<line x1="${pad.l}" y1="${yT(bonusT)}" x2="${W - pad.r}" y2="${yT(bonusT)}" stroke="rgba(34,197,94,0.65)" stroke-dasharray="4,4"/>`;
+          grid += `<text x="${W - pad.r + 6}" y="${yT(bonusT) + 4}" class="ax-bonus">${bonusT}°</text>`;
         }
-      });
+        [Math.round(minT), Math.round(maxT)].forEach((tv) => {
+          if (bonusT <= 0 || Math.abs(tv - bonusT) >= 3) {
+            grid += `<text x="${W - pad.r + 6}" y="${yT(tv) + 4}" class="ax-t">${tv}°</text>`;
+          }
+        });
+      }
 
       const info = peakInfo || identifyPeakHours(kwh);
       let bars = "";
@@ -541,9 +582,9 @@
       return `<svg viewBox="0 0 ${W} ${H}" class="svg">${grid}${bars}${line}</svg>`;
     }
 
-    _renderMtdVsYtdSvg(ann, mPrev, dy, curYr, prevYr) {
+    _computeMtdYtdBars(ann, mPrev, dy, curYr, prevYr) {
       const days = dy?.days || {};
-      const entries = Object.keys(days).map((k) => [parseInt(k, 10), days[k]]).sort((a, b) => a[0] - b[0]);
+      const entries = Object.keys(days).map((k) => [parseInt(k, 10), days[k]]).filter(([d, v]) => !Number.isNaN(d) && typeof v === "number" && Number.isFinite(v)).sort((a, b) => a[0] - b[0]);
       const hasTrailingPartial = entries.length > 2 && (dy?.latest_complete === false || entries[entries.length - 1][1] < 10);
       const trailingPartialVal = hasTrailingPartial ? Number(entries[entries.length - 1][1] || 0) : 0;
       const cleanDays = hasTrailingPartial ? entries.slice(0, -1) : entries;
@@ -567,12 +608,25 @@
       const prevYrDays = isLeapYear(prevYr) ? 366 : 365;
       const prevYrAvg = Number(ann[String(prevYr)] || 0) / prevYrDays;
 
-      const barsData = [
+      return [
         { lbl: `${curMonthName} MTD`, sub: `${cleanDays.length} dage`, val: mtdAvg, col: "#f97316" },
         { lbl: `${curMonthName} ${prevYr}`, sub: `${fmtInt(prevYearSameMonthTotal)} kWh`, val: prevYearSameMonthAvg, col: "#94a3b8" },
         { lbl: `${curYr} ÅTD snit`, sub: `${daysElapsed} dage`, val: ytdAvg, col: "#38bdf8" },
         { lbl: `${prevYr} årssnit`, sub: `${prevYrDays} dage`, val: prevYrAvg, col: "#64748b" },
       ].filter((b) => b.val > 0);
+    }
+
+    _cleanDailyEntries(daily) {
+      const days = daily?.days || {};
+      const entries = Object.keys(days)
+        .map((k) => [parseInt(k, 10), days[k]])
+        .filter(([d, v]) => !Number.isNaN(d) && typeof v === "number" && Number.isFinite(v))
+        .sort((a, b) => a[0] - b[0]);
+      return entries.filter(([, v], idx) => !(idx === entries.length - 1 && entries.length > 2 && (daily?.latest_complete === false || v < 10)));
+    }
+
+    _renderMtdVsYtdSvg(ann, mPrev, dy, curYr, prevYr, precomputedBars = null) {
+      const barsData = precomputedBars || this._computeMtdYtdBars(ann, mPrev, dy, curYr, prevYr);
 
       const W = 540, H = 235, pad = { l: 44, r: 16, t: 30, b: 48 };
       const cw = W - pad.l - pad.r, ch = H - pad.t - pad.b;
@@ -601,10 +655,8 @@
       return `<svg viewBox="0 0 ${W} ${H}" class="svg">${grid}${bars}</svg>`;
     }
 
-    _renderDailySvg(daily, dailyTemp, t, wide = false) {
-      const days = daily?.days || {};
-      const entries = Object.keys(days).map((k) => [parseInt(k, 10), days[k]]).sort((a, b) => a[0] - b[0]);
-      const clean = entries.filter(([, v], idx) => !(idx === entries.length - 1 && entries.length > 2 && (daily?.latest_complete === false || v < 10)));
+    _renderDailySvg(daily, dailyTemp, t, wide = false, precomputedClean = null) {
+      const clean = precomputedClean || this._cleanDailyEntries(daily);
       if (clean.length === 0) return `<div class="empty">${esc(t.no_daily)}</div>`;
 
       const ymPrefix = (daily?.latest_date || new Date().toISOString().slice(0, 7)).slice(0, 7);
@@ -612,13 +664,14 @@
       const cw = W - pad.l - pad.r, ch = H - pad.t - pad.b;
       const topK = Math.max(70, ...clean.map((x) => x[1] * 1.08));
       const tVals = clean.map(([d]) => dailyTemp[`${ymPrefix}-${String(d).padStart(2, "0")}`]).filter((v) => typeof v === "number");
+      const hasDailyTemps = tVals.length > 0;
       const minT = Math.floor(Math.min(0, ...tVals));
       const maxT = Math.ceil(Math.max(12, ...tVals));
       const xStep = cw / clean.length;
       const yK = (v) => pad.t + ch - (v / topK) * ch;
       const yT = (v) => pad.t + ch - ((v - minT) / Math.max(1, maxT - minT)) * ch;
 
-      let grid = `<text x="${pad.l - 6}" y="13" text-anchor="end" class="ax-unit">kWh</text><text x="${W - pad.r + 6}" y="13" text-anchor="start" class="ax-unit">°C</text>`;
+      let grid = `<text x="${pad.l - 6}" y="13" text-anchor="end" class="ax-unit">kWh</text>${hasDailyTemps ? `<text x="${W - pad.r + 6}" y="13" text-anchor="start" class="ax-unit">°C</text>` : ""}`;
       const kStep = niceStep(topK, 3);
       for (let kv = kStep; kv <= topK; kv += kStep) {
         const y = yK(kv);
@@ -722,14 +775,26 @@
       const loginHow = backend === "wattson"
         ? "Login med din Watts On-konto (browser-login, din adgangskode gemmes ikke)"
         : "Login med forbrugernummer og webpinkode";
-      const yCur = Number(ann[String(curYr)] ?? st?.state ?? 0);
+      const rawStateNum = st && st.state !== "unknown" && st.state !== "unavailable" && st.state !== "" && st.state !== null && st.state !== undefined
+        ? Number(st.state)
+        : NaN;
+      const annCurRaw = ann[String(curYr)];
+      const yCur = (typeof annCurRaw === "number" && Number.isFinite(annCurRaw) && annCurRaw > 0)
+        ? annCurRaw
+        : (Number.isFinite(rawStateNum) && rawStateNum > 0 ? rawStateNum : 0);
       const yPrev = Number(ann[String(prevYr)] ?? 0);
-      const rtCur = Number(rtA[String(curYr)] ?? rtA["2026"] ?? 0);
+      const rtMList = MONTHS.map((m) => rtM[m]).filter((v) => typeof v === "number" && Number.isFinite(v) && v > 0);
+      const rtAnnVal = Number(rtA[String(curYr)] ?? rtA["2026"] ?? 0);
+      const rtCur = (Number.isFinite(rtAnnVal) && rtAnnVal > 0)
+        ? rtAnnVal
+        : (rtMList.length ? rtMList.reduce((s, v) => s + v, 0) / rtMList.length : 0);
       const expK = Number(fc.expected_kwh ?? 0);
       const budK = Number(fc.budget_kwh ?? 0);
       const fcPct = budK > 0 ? Math.round(((expK - budK) / budK) * 100) : 0;
       const hddMap = ins.kwh_per_hdd || {};
       const hrArr = Array.isArray(hr.kwh) ? hr.kwh : [];
+      const hasHourlyKwh = hrArr.some((v) => typeof v === "number" && Number.isFinite(v) && v > 0);
+      const hasHourlyRetTemp = Array.isArray(hr.ret_temp) && hr.ret_temp.some((v) => typeof v === "number" && Number.isFinite(v));
       const peakInfo = identifyPeakHours(hrArr);
       const peakHourVal = peakInfo.maxVal || (hrArr.length ? Math.max(...hrArr) : 0);
       const peakHourIdx = peakInfo.maxIdx || (hrArr.length ? hrArr.indexOf(peakHourVal) : 0);
@@ -831,14 +896,44 @@
       const isAdmin = this._hass?.user?.is_admin !== false;
       const isInitialSetup = !hasData || a.initial_setup_complete === false;
       const showOnboarding = isInitialSetup || (isAdmin && Boolean(this._setupOpen));
-      const chartCount = [has("monthly"), has("temperatures"), has("hourly"), has("daily"), has("daily")].filter(Boolean).length;
+
+      const showYtdKpi = yCur > 0 || (typeof annCurRaw === "number" && Number.isFinite(annCurRaw) && annCurRaw >= 0);
+      const showReturnTempKpi = has("temperatures") && rtCur > 0;
+      const showForecastKpi = has("forecast") && Number.isFinite(expK) && expK > 0;
+      const billTotalRaw = bl[`total_${curYr}_kr`] ?? bl.total_2026_kr;
+      const hasBillTotal = typeof billTotalRaw === "number" && Number.isFinite(billTotalRaw);
+      const hasSaldo = typeof bl.saldo_kr === "number" && Number.isFinite(bl.saldo_kr);
+      const showBillingKpi = has("billing") && (hasBillTotal || hasSaldo);
+      const showKpisRow = showYtdKpi || showReturnTempKpi || showForecastKpi || showBillingKpi;
+
+      const showMonthlyChart = has("monthly") && MONTHS.some((m) => typeof mCur[m] === "number" || typeof mPrev[m] === "number");
+      const mCurHasTemp = MONTHS.some((_, i) => typeof (wx.monthly_temp || {})[`${curYr}-${String(i + 1).padStart(2, "0")}`] === "number");
+      const showReturnTempChart = has("temperatures") && rtMList.length > 0;
+      const showHourlyChart = has("hourly") && hasHourlyKwh;
+      const dailyCleanEntries = has("daily") ? this._cleanDailyEntries(dy) : [];
+      const showDailyChart = has("daily") && dailyCleanEntries.length > 0;
+      const hasDailyMtd = dailyCleanEntries.length > 0 || (typeof dy?.gennemsnit === "number" && Number.isFinite(dy.gennemsnit) && dy.gennemsnit > 0);
+      const mtdYtdBars = (has("daily") && hasDailyMtd) ? this._computeMtdYtdBars(ann, mPrev, dy, curYr, prevYr) : [];
+      const showMtdYtdChart = has("daily") && hasDailyMtd && mtdYtdBars.length > 0;
+      const dailyYmPrefix = (dy?.latest_date || new Date().toISOString().slice(0, 7)).slice(0, 7);
+      const dCurHasTemp = dailyCleanEntries.some(([d]) => typeof (wx.daily_temp || {})[`${dailyYmPrefix}-${String(d).padStart(2, "0")}`] === "number");
+
+      const chartCount = [showMonthlyChart, showReturnTempChart, showHourlyChart, showMtdYtdChart, showDailyChart].filter(Boolean).length;
       const isDesktopWide = this._isDesktopWide();
       this._lastDesktopWide = isDesktopWide;
       const wideDaily = chartCount % 2 === 1 && isDesktopWide;
+
+      const showInsTempCorr = ins.temp_r2_pct != null || ins.baseload_kwh_mo != null;
+      const showInsHourly = showHourlyChart;
+      const showInsReturnTemp = showReturnTempKpi;
+      const showInsHdd = hddEntries.length > 0;
+      const showInsightsPanel = showInsTempCorr || showInsHourly || showInsReturnTemp || showInsHdd;
+
       const wizPortalUrl = this._wizPortalUrl ?? activePortalUrl;
       const wizLocation = this._wizLocation ?? locName;
       const wizBonus = this._wizBonus ?? bonusT;
       const wizPenalty = this._wizPenalty ?? penaltyT;
+      const wizForward = this._wizForward ?? (fwdSrc === "manual" && fwdTemp !== null ? fwdTemp : "");
       const wizPrice = this._wizPrice ?? (curPrice !== "" && curPrice !== null ? curPrice : "");
       const wizMotivPct = this._wizMotivPct ?? (curMotivPct !== "" && curMotivPct !== null ? curMotivPct : "");
       const wizFixedM2 = this._wizFixedM2 ?? (curFixedM2 !== "" && curFixedM2 !== null ? curFixedM2 : "");
@@ -957,8 +1052,47 @@
       const syncNudge = (syncReminder && !hasSyncMsg && syncReminderMsg)
         ? `<div class="sync-nudge" role="status"><span aria-hidden="true">💧</span><span>${esc(syncReminderMsg)}</span></div>`
         : "";
-      const costHint = (!has("cost") && hasData && !isInitialSetup && isAdmin)
-        ? `<div class="src-note" data-section="cost-hint">💰 Har du din kWh-pris? <button class="link-btn" id="costHintSetupBtn">Tilføj pris &amp; returkrav ⚙️</button></div>`
+      const dismissedHints = this._getDismissedHints(a.entry_id, activeUtilId);
+      const isEn = lang === "en";
+      let manualHint = null;
+      if (hasData && !isInitialSetup && isAdmin && cfg.hide_manual_hints !== true) {
+        if (!has("cost")) {
+          manualHint = {
+            key: "cost",
+            text: isEn
+              ? "Estimated cost is hidden because no heat price is set — enter your heat price (DKK/kWh) manually to show costs."
+              : "Estimeret udgift er skjult, fordi varmeprisen ikke er kendt endnu — indtast varmepris (kr./kWh) manuelt for at få udgifter vist.",
+            btn: isEn ? "Enter price ⚙️" : "Indtast pris ⚙️",
+          };
+        } else if (hasDynamicCurve && showReturnTempKpi && fwdTemp === null) {
+          manualHint = {
+            key: "forward_temp",
+            text: isEn
+              ? "Supply temperature is not reported by your utility — enter average supply temperature (°C) manually for an exact cooling limit."
+              : "Fremløbstemperatur mangler fra værket — indtast evt. fremløbstemperatur (°C) manuelt for mere præcist afkølingskrav.",
+            btn: isEn ? "Enter supply temp ⚙️" : "Indtast fremløb ⚙️",
+          };
+        } else if (
+          has("cost")
+          && costEst.excludes_fixed_fees !== false
+          && typeof tariffObj.fixed_fee_dkk_per_m2_year === "number"
+          && tariffObj.fixed_fee_dkk_per_m2_year > 0
+        ) {
+          manualHint = {
+            key: "fixed_fee",
+            text: isEn
+              ? "Fixed fees are not included yet — enter heated area (m²) (and optional annual fee) manually to show total annual cost."
+              : "Faste bidrag er ikke medregnet endnu — indtast boligareal (m²) (og evt. årsabonnement) manuelt for at se samlet årsudgift.",
+            btn: isEn ? "Enter area ⚙️" : "Indtast areal ⚙️",
+          };
+        }
+      }
+      const activeManualHint = (manualHint && !dismissedHints.has(manualHint.key)) ? manualHint : null;
+      const costHint = activeManualHint
+        ? `<div class="manual-hint" data-section="manual-hint" data-hint-key="${esc(activeManualHint.key)}" role="note">
+            <span class="mh-txt">💡 ${esc(activeManualHint.text)} <button class="link-btn" id="costHintSetupBtn">${esc(activeManualHint.btn)}</button></span>
+            <button class="mh-close" id="dismissManualHintBtn" type="button" title="${isEn ? "Dismiss note" : "Skjul note"}" aria-label="${isEn ? "Dismiss note" : "Skjul note"}">✕</button>
+          </div>`
         : "";
 
       this.shadowRoot.innerHTML = `
@@ -987,7 +1121,7 @@
           }
           button.btn.login { background: rgba(14,165,233,0.18); border-color: rgba(14,165,233,0.4); }
           button.btn:hover { opacity: 0.85; }
-          button.btn:focus-visible, .link-btn:focus-visible, .bn-main:focus-visible, .ob-field input:focus-visible, .ob-field select:focus-visible, details.ob-manual summary:focus-visible, rect[data-tip]:focus-visible, circle[data-tip]:focus-visible {
+          button.btn:focus-visible, .link-btn:focus-visible, .mh-close:focus-visible, .bn-main:focus-visible, .ob-field input:focus-visible, .ob-field select:focus-visible, details.ob-manual summary:focus-visible, rect[data-tip]:focus-visible, circle[data-tip]:focus-visible {
             outline: 2px solid var(--primary-color, #0284c7);
             outline-offset: 2px;
           }
@@ -1070,6 +1204,19 @@
             background: rgba(245,158,11,0.16); border: 1px solid rgba(245,158,11,0.3);
           }
           .src-note { font-size: 12px; color: var(--secondary-text-color); margin-top: -6px; padding: 0 4px; }
+          .manual-hint {
+            display: flex; align-items: center; justify-content: space-between; gap: 10px;
+            margin-top: -4px; padding: 8px 12px; border-radius: 12px;
+            font-size: 12px; line-height: 1.4; color: var(--secondary-text-color);
+            background: rgba(148,163,184,0.10); border: 1px solid rgba(148,163,184,0.24);
+          }
+          .mh-txt { flex: 1 1 auto; min-width: 0; }
+          .mh-close {
+            flex-shrink: 0; background: none; border: none; padding: 2px 6px; border-radius: 6px;
+            font-size: 13px; line-height: 1; font-weight: 700; color: var(--secondary-text-color);
+            cursor: pointer; opacity: 0.78;
+          }
+          .mh-close:hover { opacity: 1; background: rgba(148,163,184,0.18); }
           .link-btn { background: none; border: none; padding: 0; font: inherit; font-weight: 700; color: #0284c7; cursor: pointer; text-decoration: underline; }
           .sync-nudge {
             display: flex; align-items: center; gap: 8px; margin-top: -6px;
@@ -1219,6 +1366,9 @@
                     <input id="penaltyInput" type="number" step="0.5" value="${esc(wizPenalty)}" aria-label="Retur Gebyr (°C)" />
                   </div>
                 </div>
+                ${(hasDynamicCurve || fwdTemp !== null) ? `<label class="ob-field">Fremløbstemperatur (°C, 0 = auto)
+                  <input id="forwardInput" type="number" step="0.5" value="${esc(wizForward)}" placeholder="${fwdTemp !== null && fwdSrc === "meter" ? `Auto (${fmtDec(fwdTemp)} °C fra måler)` : "f.eks. 60 (0 = auto)"}" />
+                </label>` : ""}
                 <div class="ob-field"><span>Varmepris (kr./kWh) &amp; Motivation (%/°C)</span>
                   <div class="ob-pair">
                     <input id="priceInput" type="number" step="0.001" value="${esc(wizPrice)}" placeholder="kr./kWh" aria-label="Varmepris (kr./kWh)" />
@@ -1250,7 +1400,7 @@
             ${mitidLiveBox}
             <div class="tb-actions">
               <button class="btn primary" id="startMitidBtn" ${this._startingSync ? "disabled" : ""}>🚀 Gem &amp; Start MitID-synkronisering</button>
-              ${hasData ? `<button class="btn" id="completeNowBtn">⚡ Hurtig-test: Vis dashboard med eksisterende data</button>` : ""}
+              ${hasData ? `<button class="btn" id="completeNowBtn">${isInitialSetup ? "⚡ Hurtig-test: Vis dashboard med eksisterende data" : "💾 Gem indstillinger"}</button>` : ""}
             </div>
             <details class="ob-manual">
               <summary>📲 Kun hvis du opsætter på samme telefon som MitID-appen: Slå 4-cifret engangskode til</summary>
@@ -1316,28 +1466,28 @@
 
           ${isInitialSetup ? "" : `
 
-          <div class="kpis">
-            <div class="kpi">
+          ${showKpisRow ? `<div class="kpis">
+            ${showYtdKpi ? `<div class="kpi">
               <div class="k-lbl">${esc(t.kpi_ytd)} ${curYr} (ÅTD)</div>
               <div class="k-val">${fmtInt(yCur)} kWh</div>
               <div class="k-sub">${yPrev > 0 ? `${prevYr} hele år: ${fmtInt(yPrev)} kWh` : (lang === "en" ? "Year-to-date" : "År-til-dato")}</div>
-            </div>
-            ${has("temperatures") ? `<div class="kpi">
+            </div>` : ""}
+            ${showReturnTempKpi ? `<div class="kpi">
               <div class="k-lbl">${esc(t.kpi_ret)} ${curYr}</div>
-              <div class="k-val ${rtCur > 0 ? (!allowBonus ? (rtCur <= penaltyT ? "good" : "bad") : (rtCur < bonusT ? "good" : (rtCur <= penaltyT ? "warn" : "bad"))) : ""}">${rtCur > 0 ? `${fmtDec(rtCur)} °C` : "–"}</div>
-              <div class="k-sub">${!allowBonus ? `${rtCur > 0 ? (rtCur <= penaltyT ? `🟢 OK (≤${penaltyT} °C)` : `+${fmtDec(rtCur - penaltyT)} °C over krav (${penaltyT} °C)`) : `Krav: ≤${penaltyT} °C`}${fwdTemp !== null ? ` · frem ${fmtDec(fwdTemp)} °C` : ""}` : (singleReturnTarget ? (rtCur > 0 ? (rtCur < bonusT ? `🟢 Under krav (<${bonusT} °C)` : (rtCur > penaltyT ? `+${fmtDec(rtCur - penaltyT)} °C over krav (${penaltyT} °C)` : `På forventet retur (${bonusT} °C)`)) : `Forventet retur: ${bonusT} °C`) : (rtCur > 0 ? (rtCur < bonusT ? `🟢 Bonus-zone (<${bonusT} °C)` : `${fmtDec(rtCur - bonusT)} °C til bonus (<${bonusT} °C)`) : `Grænser: <${bonusT}° bonus / >${penaltyT}° gebyr`))}</div>
+              <div class="k-val ${!allowBonus ? (rtCur <= penaltyT ? "good" : "bad") : (rtCur < bonusT ? "good" : (rtCur <= penaltyT ? "warn" : "bad"))}">${fmtDec(rtCur)} °C</div>
+              <div class="k-sub">${!allowBonus ? `${rtCur <= penaltyT ? `🟢 OK (≤${penaltyT} °C)` : `+${fmtDec(rtCur - penaltyT)} °C over krav (${penaltyT} °C)`}${fwdTemp !== null ? ` · frem ${fmtDec(fwdTemp)} °C` : ""}` : (singleReturnTarget ? (rtCur < bonusT ? `🟢 Under krav (<${bonusT} °C)` : (rtCur > penaltyT ? `+${fmtDec(rtCur - penaltyT)} °C over krav (${penaltyT} °C)` : `På forventet retur (${bonusT} °C)`)) : (rtCur < bonusT ? `🟢 Bonus-zone (<${bonusT} °C)` : `${fmtDec(rtCur - bonusT)} °C til bonus (<${bonusT} °C)`))}</div>
             </div>` : ""}
-            ${has("forecast") ? `<div class="kpi">
+            ${showForecastKpi ? `<div class="kpi">
               <div class="k-lbl">${esc(t.kpi_fc)}</div>
-              <div class="k-val good">${expK > 0 ? `${fmtInt(expK)} kWh` : "–"}</div>
-              <div class="k-sub">${budK > 0 ? `${fcPct}% mod budget (${fmtInt(budK)} kWh)` : esc(fc.period || "–")}</div>
+              <div class="k-val good">${fmtInt(expK)} kWh</div>
+              <div class="k-sub">${budK > 0 ? `${fcPct}% mod budget (${fmtInt(budK)} kWh)` : esc(fc.period || (lang === "en" ? "Current period" : "Aktuel periode"))}</div>
             </div>` : ""}
-            ${has("billing") ? `<div class="kpi">
+            ${showBillingKpi ? `<div class="kpi">
               <div class="k-lbl">${esc(t.kpi_bill)} ${curYr}</div>
-              <div class="k-val">${fmtInt(bl[`total_${curYr}_kr`] ?? bl.total_2026_kr ?? 0)} kr.</div>
-              <div class="k-sub">Saldo ${fmtDec(bl.saldo_kr ?? 0, 2)} kr.${bl.last_bill_date ? ` · ${esc(bl.last_bill_date)}` : ""}</div>
+              <div class="k-val">${hasBillTotal ? `${fmtInt(billTotalRaw)} kr.` : `${fmtDec(bl.saldo_kr, 2)} kr.`}</div>
+              <div class="k-sub">${hasBillTotal ? `${hasSaldo ? `Saldo ${fmtDec(bl.saldo_kr, 2)} kr.` : (lang === "en" ? "Billed this year" : "Faktureret i år")}` : (lang === "en" ? "Current balance" : "Aktuel saldo")}${bl.last_bill_date ? ` · ${esc(bl.last_bill_date)}` : ""}</div>
             </div>` : ""}
-          </div>
+          </div>` : ""}
 
           ${(has("cost") && (
             typeof costEst.latest_day_dkk === "number"
@@ -1409,20 +1559,20 @@
             </div>`;
           })() : ""}
 
-          ${(has("monthly") || has("temperatures") || has("hourly") || has("daily")) ? `<div class="grid2">
-            ${has("monthly") ? `<div class="panel" data-section="monthly">
+          ${chartCount > 0 ? `<div class="grid2">
+            ${showMonthlyChart ? `<div class="panel" data-section="monthly">
               <div class="p-head">
-                <div class="p-title">📊 Månedligt forbrug: ${curYr} vs. ${prevYr} &amp; Udetemp</div>
+                <div class="p-title">📊 Månedligt forbrug: ${curYr} vs. ${prevYr}${mCurHasTemp ? " &amp; Udetemp" : ""}</div>
                 <div class="p-leg">
                   <span><i class="dot" style="background:#f97316"></i>${curYr} kWh</span>
                   <span><i class="dot" style="background:rgba(148,163,184,0.6)"></i>${prevYr} kWh</span>
-                  <span><i class="dot" style="background:#38bdf8"></i>${esc(t.outdoor)} °C</span>
+                  ${mCurHasTemp ? `<span><i class="dot" style="background:#38bdf8"></i>${esc(t.outdoor)} °C</span>` : ""}
                 </div>
               </div>
               ${this._renderMonthlySvg(mCur, mPrev, wx.monthly_temp || {}, curYr, prevYr, t, costEst.monthly_dkk || {})}
             </div>` : ""}
 
-            ${has("temperatures") ? `<div class="panel" data-section="return-temp">
+            ${showReturnTempChart ? `<div class="panel" data-section="return-temp">
               <div class="p-head">
                 <div class="p-title">${(singleReturnTarget || hasExpMonthly) ? `🎯 Returtemperatur ${curYr} (°C) vs. ${!allowBonus ? "Afkølingskrav" : "Forventet retur"} (${expRangeTxt})${hasDynamicCurve ? " · Dynamisk (fremløb)" : (fwdSrc === "manual" ? " · Manuel fremløb" : ((efExpectedRt !== null || hasExpMonthly) ? " · E|Forsyning" : ""))}` : `🎯 Returtemperatur ${curYr} (°C) vs. Bonus (${bonusT}°) &amp; Gebyr (${penaltyT}°)`}</div>
                 <div class="p-leg">
@@ -1433,44 +1583,44 @@
               ${this._renderReturnTempSvg(rtM, bonusT, penaltyT, curYr, rtExpM, allowBonus)}
             </div>` : ""}
 
-            ${has("hourly") ? `<div class="panel" data-section="hourly">
+            ${showHourlyChart ? `<div class="panel" data-section="hourly">
               <div class="p-head">
                 <div class="p-title">🚿 Timeprofil · ${esc(hr.period || `${curYr} MTD`)} (snit pr. time)</div>
                 <div class="p-leg">
                   <span><i class="dot" style="background:#ec4899"></i>${esc(peakLegendTxt)}</span>
-                  <span><i class="dot" style="background:#38bdf8"></i>Retur °C</span>
+                  ${hasHourlyRetTemp ? `<span><i class="dot" style="background:#38bdf8"></i>Retur °C</span>` : ""}
                 </div>
               </div>
               ${this._renderHourlyAvgSvg(hr, allowBonus ? bonusT : penaltyT, peakInfo)}
             </div>` : ""}
 
-            ${has("daily") ? `<div class="panel" data-section="mtd-ytd">
+            ${showMtdYtdChart ? `<div class="panel" data-section="mtd-ytd">
               <div class="p-head">
                 <div class="p-title">⚖️ Døgnforbrug: Måned-til-dato (MTD) vs. År-til-dato (YTD)</div>
                 <div class="p-leg"><span>Gennemsnit pr. dag (${esc(t.avg_day)})</span></div>
               </div>
-              ${this._renderMtdVsYtdSvg(ann, mPrev, dy, curYr, prevYr)}
+              ${this._renderMtdVsYtdSvg(ann, mPrev, dy, curYr, prevYr, mtdYtdBars)}
             </div>` : ""}
 
-            ${has("daily") ? `<div class="panel" data-section="daily">
+            ${showDailyChart ? `<div class="panel" data-section="daily">
               <div class="p-head">
-                <div class="p-title">📅 ${esc(dy.month || `${curYr}`)}: Dagligt forbrug (kWh) &amp; Udetemp</div>
+                <div class="p-title">📅 ${esc(dy.month || `${curYr}`)}: Dagligt forbrug (kWh)${dCurHasTemp ? " &amp; Udetemp" : ""}</div>
                 <div class="p-leg">
                   <span>Snit ${fmtDec(dy.gennemsnit || 0)} ${esc(t.avg_day)}</span>
-                  <span><i class="dot" style="background:#38bdf8"></i>${esc(t.outdoor)} °C</span>
+                  ${dCurHasTemp ? `<span><i class="dot" style="background:#38bdf8"></i>${esc(t.outdoor)} °C</span>` : ""}
                 </div>
               </div>
-              ${this._renderDailySvg(dy, wx.daily_temp || {}, t, wideDaily)}
+              ${this._renderDailySvg(dy, wx.daily_temp || {}, t, wideDaily, dailyCleanEntries)}
             </div>` : ""}
           </div>` : ""}
 
-          <div class="panel">
+          ${showInsightsPanel ? `<div class="panel" data-section="insights">
             <div class="p-head">
               <div class="p-title">🧠 Indsigter &amp; Udvikling (${esc(locName)} vejrkorreleret)</div>
               <div class="p-leg"><span class="fresh-pill${isToday ? " today" : ""}">${isToday ? "🟢 " : ""}${esc(freshText)}</span></div>
             </div>
             <div class="insights">
-              ${ins.temp_r2_pct != null || ins.baseload_kwh_mo != null ? `<div class="ins">
+              ${showInsTempCorr ? `<div class="ins">
                 <div class="ins-title">🌡️ ${ins.temp_r2_reliable ? `${esc(ins.temp_r2_pct)}% styret af udetemperaturen` : (ins.temp_r2_pct != null ? `Kun ${esc(ins.temp_r2_pct)}% samvariation med udetemperaturen` : "Udetemperatur-sammenhæng")}</div>
                 ${ins.temp_r2_reliable
                   ? `Månedligt forbrug følger ${esc(locName)}-temperaturen tæt (R² = ${esc(ins.temp_r2_pct)}%).`
@@ -1479,15 +1629,15 @@
                     : `Ikke nok komplette måneder til at beregne sammenhængen med udetemperaturen.`)}
                 ${ins.baseload_kwh_mo != null ? ` Grundlast til varmt brugsvand + tomgang er <b>~${fmtDec(ins.baseload_kwh_mo, 0)} kWh/md</b> (~${fmtDec(baseDayKwh, 1)} kWh/dag om sommeren).` : ""}
               </div>` : ""}
-              ${has("hourly") ? `<div class="ins" data-section="ins-hourly">
+              ${showInsHourly ? `<div class="ins" data-section="ins-hourly">
                 <div class="ins-title">🚿 Døgnrytme (${esc(hr.days_averaged || Object.keys(dy.days || {}).length)}-dages MTD)</div>
                 Højeste spidstime er kl. <b>${String(peakHourIdx).padStart(2, "0")}:00</b> med <b>${fmtDec(peakHourVal, 2)} kWh/t</b>${esc(peakInsightSub)}, mens bundniveauet ligger på ~${fmtDec(minHourVal, 2)} kWh/t.
               </div>` : ""}
-              ${has("temperatures") ? `<div class="ins" data-section="ins-temp">
+              ${showInsReturnTemp ? `<div class="ins" data-section="ins-temp">
                 <div class="ins-title">⚡ Returtemperatur &amp; Afkøling</div>
-                Aktuelt års-snit er <b>${rtCur > 0 ? `${fmtDec(rtCur)} °C` : "–"}</b>${!allowBonus ? `${rtCur > 0 ? (rtCur <= penaltyT ? ` (🟢 under krav ≤<b>${penaltyT} °C</b> — intet gebyr)` : ` (<b>+${fmtDec(rtCur - penaltyT, 1)} °C</b> over krav <b>${penaltyT} °C</b>)`) : ` (krav: ≤<b>${penaltyT} °C</b>)`}${fwdTemp !== null ? ` ved fremløb <b>${fmtDec(fwdTemp)} °C</b>` : ""}` : (singleReturnTarget ? (rtCur > 0 ? (rtDist < 0 ? ` (🟢 under forventet retur <b>${bonusT} °C</b>)` : (rtCur > penaltyT ? ` (<b>+${fmtDec(rtCur - penaltyT, 1)} °C</b> over forventet retur <b>${penaltyT} °C</b>)` : ` (på forventet retur <b>${bonusT} °C</b>)`)) : ` (forventet retur: <b>${bonusT} °C</b>)`) : (rtCur > 0 ? (rtDist < 0 ? ` (🟢 i bonus-zone under <b>${bonusT} °C</b>)` : ` (<b>${fmtDec(rtDist, 1)} °C</b> fra bonus under <b>${bonusT} °C</b>, gebyr over <b>${penaltyT} °C</b>)`) : ` (bonus under <b>${bonusT} °C</b>, gebyr over <b>${penaltyT} °C</b>)`))}.
+                Aktuelt års-snit er <b>${fmtDec(rtCur)} °C</b>${!allowBonus ? `${rtCur <= penaltyT ? ` (🟢 under krav ≤<b>${penaltyT} °C</b> — intet gebyr)` : ` (<b>+${fmtDec(rtCur - penaltyT, 1)} °C</b> over krav <b>${penaltyT} °C</b>)`}${fwdTemp !== null ? ` ved fremløb <b>${fmtDec(fwdTemp)} °C</b>` : ""}` : (singleReturnTarget ? (rtDist < 0 ? ` (🟢 under forventet retur <b>${bonusT} °C</b>)` : (rtCur > penaltyT ? ` (<b>+${fmtDec(rtCur - penaltyT, 1)} °C</b> over forventet retur <b>${penaltyT} °C</b>)` : ` (på forventet retur <b>${bonusT} °C</b>)`)) : (rtDist < 0 ? ` (🟢 i bonus-zone under <b>${bonusT} °C</b>)` : ` (<b>${fmtDec(rtDist, 1)} °C</b> fra bonus under <b>${bonusT} °C</b>, gebyr over <b>${penaltyT} °C</b>)`))}.
               </div>` : ""}
-              ${hddEntries.length ? `<div class="ins">
+              ${showInsHdd ? `<div class="ins">
                 <div class="ins-title">📈 Effektivitet pr. graddag (kWh / HDD17)</div>
                 ${esc(hddSummary)}
                 <div class="hdd-row">
@@ -1496,7 +1646,7 @@
               </div>` : ""}
             </div>
             <div class="tip" id="tip">${esc(t.tip_hint)}</div>
-          </div>`}
+          </div>` : (chartCount > 0 ? `<div class="tip" id="tip">${esc(t.tip_hint)}</div>` : "")}`}
           <div class="float-tip" id="floatTip" role="tooltip" aria-hidden="true"></div>
         </div>
       `;
@@ -1572,12 +1722,22 @@
           utility_id: this._selectedUtilId || activeUtilId,
           portal_url: this.shadowRoot.getElementById("portalUrlInput")?.value?.trim() || wizPortalUrl,
           location_name: this.shadowRoot.getElementById("locInput")?.value?.trim() ?? wizLocation,
-          bonus_temp: Number(this.shadowRoot.getElementById("bonusInput")?.value ?? wizBonus),
-          penalty_temp: Number(this.shadowRoot.getElementById("penaltyInput")?.value ?? wizPenalty),
           notify_service: notifyVal,
           start_sync: startSync,
           complete_setup: completeSetup,
         };
+        const bonusEl = this.shadowRoot.getElementById("bonusInput");
+        if (this._wizBonus !== undefined || (bonusEl && String(bonusEl.value ?? "").trim() !== String(bonusT))) {
+          const bVal = numOrNull("bonusInput");
+          if (bVal !== null) p.bonus_temp = bVal;
+        }
+        const penaltyEl = this.shadowRoot.getElementById("penaltyInput");
+        if (this._wizPenalty !== undefined || (penaltyEl && String(penaltyEl.value ?? "").trim() !== String(penaltyT))) {
+          const penVal = numOrNull("penaltyInput");
+          if (penVal !== null) p.penalty_temp = penVal;
+        }
+        const fwdVal = numOrNull("forwardInput");
+        if (fwdVal !== null) p.forward_temp = fwdVal;
         const priceVal = numOrNull("priceInput");
         if (priceVal !== null) p.price_dkk_per_kwh = priceVal;
         const motivVal = numOrNull("motivPctInput");
@@ -1610,6 +1770,7 @@
         ["locInput", "_wizLocation"],
         ["bonusInput", "_wizBonus"],
         ["penaltyInput", "_wizPenalty"],
+        ["forwardInput", "_wizForward"],
         ["priceInput", "_wizPrice"],
         ["motivPctInput", "_wizMotivPct"],
         ["fixedM2Input", "_wizFixedM2"],
@@ -1686,6 +1847,7 @@
         completeNowBtn.addEventListener("click", () => {
           this._setupOpen = false;
           this._hass.callService("kmd_easy_energy", "configure_utility", readWizPayload(false, true));
+          this._render();
         });
       }
       const saveTokenBtn = this.shadowRoot.getElementById("saveTokenBtn");
@@ -1771,6 +1933,13 @@
       const costHintSetupBtn = this.shadowRoot.getElementById("costHintSetupBtn");
       if (costHintSetupBtn) {
         costHintSetupBtn.addEventListener("click", () => { this._setupOpen = true; this._render(); });
+      }
+      const dismissManualHintBtn = this.shadowRoot.getElementById("dismissManualHintBtn");
+      if (dismissManualHintBtn && activeManualHint) {
+        dismissManualHintBtn.addEventListener("click", () => {
+          this._dismissHint(a.entry_id, activeUtilId, activeManualHint.key);
+          this._render();
+        });
       }
       const closeSetupBtn = this.shadowRoot.getElementById("closeSetupBtn");
       if (closeSetupBtn) {
@@ -1911,6 +2080,10 @@
             <input id="show_sync_bar" type="checkbox" ${c.show_sync_bar !== false ? "checked" : ""} />
             Show top login &amp; sync bar
           </label>
+          <label class="chk">
+            <input id="hide_manual_hints" type="checkbox" ${c.hide_manual_hints === true ? "checked" : ""} />
+            Hide manual input hints
+          </label>
         </div>
       `;
       ["entity", "utility_id", "language", "location"].forEach((id) => {
@@ -1923,6 +2096,7 @@
         });
       });
       this.shadowRoot.getElementById("show_sync_bar").addEventListener("change", (e) => this._emit({ show_sync_bar: e.target.checked }));
+      this.shadowRoot.getElementById("hide_manual_hints").addEventListener("change", (e) => this._emit({ hide_manual_hints: e.target.checked }));
     }
   }
 

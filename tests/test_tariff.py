@@ -703,3 +703,131 @@ def test_bundled_utilities_json_has_kongerslev_2026_2027_tariff_and_custom_match
     assert resolved.motivation_dkk_per_kwh_per_k == round(0.6875 * 0.03, 6)
     assert resolved.bonus_temp == 30.0
     assert resolved.penalty_temp == 37.0
+
+
+def test_bundled_utilities_json_has_energi_ikast_2026_2027_tariffs_and_dynamic_curve() -> None:
+    from kmd_easy_energy.const import CONF_FIXED_FEE_DKK_PER_YEAR, CONF_HEATED_AREA_M2
+    from kmd_easy_energy.insights import estimate_variable_costs
+    from kmd_easy_energy.tariff import load_utilities
+
+    utilities = load_utilities()
+    by_id = {u["id"]: u for u in utilities}
+    ikast = by_id["energi-ikast"]
+    assert ikast["status"] == "confirmed"
+    assert ikast["tier"] == "confirmed"
+    assert ikast["backend"] == "kmd"
+
+    t26 = resolve_tariff(
+        _entry(data={"utility_id": "energi-ikast"}),
+        today=date(2026, 6, 1),
+        utilities=utilities,
+    )
+    assert t26.price_dkk_per_kwh == 0.59625
+    assert t26.fixed_fee_dkk_per_m2_year == 25.0
+    assert t26.motivation_dkk_per_kwh_per_k == 0.00375
+    assert t26.motivation_max_pct == 10.0
+    assert t26.motivation_bonus is False
+    assert t26.bonus_temp == 0.0
+    assert t26.penalty_temp == 37.0
+    assert t26.expected_return_by_forward_temp == [[50.0, 42.0], [70.0, 32.0]]
+    assert t26.annual_fixed_fee_dkk == 0.0
+
+    t27 = resolve_tariff(
+        _entry(data={"utility_id": "energi-ikast"}),
+        today=date(2027, 6, 1),
+        utilities=utilities,
+    )
+    assert t27.price_dkk_per_kwh == 0.57375
+    assert t27.fixed_fee_dkk_per_m2_year == 25.0
+    assert t27.motivation_dkk_per_kwh_per_k == 0.00375
+    assert t27.motivation_max_pct == 10.0
+    assert t27.motivation_bonus is False
+    assert t27.expected_return_by_forward_temp == [[50.0, 42.0], [70.0, 32.0]]
+
+    # Dynamic supply-temp curve interpolation and clamping
+    curve = t26.expected_return_by_forward_temp
+    assert expected_return_from_forward_temp(45.0, curve) == 42.0
+    assert expected_return_from_forward_temp(50.0, curve) == 42.0
+    assert expected_return_from_forward_temp(60.0, curve) == 37.0
+    assert expected_return_from_forward_temp(64.0, curve) == 35.0
+    assert expected_return_from_forward_temp(70.0, curve) == 32.0
+    assert expected_return_from_forward_temp(80.0, curve) == 32.0
+
+    # Penalty-only + 10% max cap via estimate_variable_costs
+    below_target = estimate_variable_costs(
+        price_dkk_per_kwh=t26.price_dkk_per_kwh,
+        bonus_temp=t26.bonus_temp,
+        penalty_temp=t26.penalty_temp,
+        motivation_rate=t26.motivation_dkk_per_kwh_per_k,
+        current_return_temp=33.0,
+        daily={"days": {"1": 50.0}, "latest_complete": True, "month": "Jun"},
+        monthly_cur_year={"Jun": 50.0},
+        return_temp_monthly={"Jun": 33.0},
+        today=date(2026, 6, 15),
+        max_pct=t26.motivation_max_pct,
+        allow_bonus=t26.motivation_bonus,
+        annual_fixed_fee_dkk=t26.annual_fixed_fee_dkk,
+    )
+    assert below_target["adjustment_pct"] == 0.0
+    assert below_target["excludes_fixed_fees"] is True
+
+    moderate_penalty = estimate_variable_costs(
+        price_dkk_per_kwh=t26.price_dkk_per_kwh,
+        bonus_temp=t26.bonus_temp,
+        penalty_temp=t26.penalty_temp,
+        motivation_rate=t26.motivation_dkk_per_kwh_per_k,
+        current_return_temp=41.0,  # +4 °C * 0.00375 = +0.015 kr./kWh
+        daily={"days": {"1": 50.0}, "latest_complete": True, "month": "Jun"},
+        monthly_cur_year={"Jun": 50.0},
+        return_temp_monthly={"Jun": 41.0},
+        today=date(2026, 6, 15),
+        max_pct=t26.motivation_max_pct,
+        allow_bonus=t26.motivation_bonus,
+    )
+    assert moderate_penalty["effective_price_dkk_per_kwh"] == round(0.59625 + 4 * 0.00375, 4)
+    assert moderate_penalty["adjustment_pct"] > 0.0
+
+    capped_penalty = estimate_variable_costs(
+        price_dkk_per_kwh=t26.price_dkk_per_kwh,
+        bonus_temp=t26.bonus_temp,
+        penalty_temp=t26.penalty_temp,
+        motivation_rate=t26.motivation_dkk_per_kwh_per_k,
+        current_return_temp=65.0,  # +28 °C would exceed 10 % cap
+        daily={"days": {"1": 50.0}, "latest_complete": True, "month": "Jun"},
+        monthly_cur_year={"Jun": 50.0},
+        return_temp_monthly={"Jun": 65.0},
+        today=date(2026, 6, 15),
+        max_pct=t26.motivation_max_pct,
+        allow_bonus=t26.motivation_bonus,
+    )
+    assert capped_penalty["adjustment_pct"] == 10.0
+
+    # Opt-in heated area + meter fee resolution
+    with_area = resolve_tariff(
+        _entry(
+            options={
+                CONF_HEATED_AREA_M2: 140.0,
+                CONF_FIXED_FEE_DKK_PER_YEAR: 875.0,
+            },
+            data={"utility_id": "energi-ikast"},
+        ),
+        today=date(2026, 6, 1),
+        utilities=utilities,
+    )
+    assert with_area.annual_fixed_fee_dkk == 4375.0
+    with_area_est = estimate_variable_costs(
+        price_dkk_per_kwh=with_area.price_dkk_per_kwh,
+        bonus_temp=with_area.bonus_temp,
+        penalty_temp=with_area.penalty_temp,
+        motivation_rate=with_area.motivation_dkk_per_kwh_per_k,
+        current_return_temp=33.0,
+        daily={"days": {"1": 50.0}, "latest_complete": True, "month": "Jun"},
+        monthly_cur_year={"Jun": 50.0},
+        return_temp_monthly={"Jun": 33.0},
+        today=date(2026, 6, 15),
+        max_pct=with_area.motivation_max_pct,
+        allow_bonus=with_area.motivation_bonus,
+        annual_fixed_fee_dkk=with_area.annual_fixed_fee_dkk,
+    )
+    assert with_area_est["excludes_fixed_fees"] is False
+    assert with_area_est["annual_fixed_fee_dkk"] == 4375.0

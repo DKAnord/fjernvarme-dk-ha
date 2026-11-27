@@ -7,6 +7,7 @@ import calendar
 import datetime as dt_mod
 import logging
 import math
+import re
 from collections.abc import Callable
 from datetime import datetime, timedelta
 from typing import Any
@@ -105,6 +106,7 @@ from .kmd_supply import (
     supply_key,
 )
 from .insights import (
+    DK_TZ,
     compact_hourly_point,
     copenhagen_today,
     daily_hdd_from_temps,
@@ -344,6 +346,7 @@ _CONSUMPTION_CACHE_KEYS = (
     "kmd_energy_factor",
     "kmd_energy_unit",
     "kmd_unscaled_migrated",
+    "kmd_cooling",
 )
 
 
@@ -577,6 +580,356 @@ def date_offset_months(day: dt_mod.date, months: int) -> dt_mod.date:
         month -= 12
         year += 1
     return dt_mod.date(year, month, 1)
+
+
+_COOLING_MONTH_NAMES: dict[str, str] = {
+    "jan": "Jan",
+    "januar": "Jan",
+    "january": "Jan",
+    "feb": "Feb",
+    "februar": "Feb",
+    "february": "Feb",
+    "mar": "Mar",
+    "marts": "Mar",
+    "march": "Mar",
+    "apr": "Apr",
+    "april": "Apr",
+    "maj": "Maj",
+    "may": "Maj",
+    "jun": "Jun",
+    "juni": "Jun",
+    "june": "Jun",
+    "jul": "Jul",
+    "juli": "Jul",
+    "july": "Jul",
+    "aug": "Aug",
+    "august": "Aug",
+    "sep": "Sep",
+    "sept": "Sep",
+    "september": "Sep",
+    "okt": "Okt",
+    "oktober": "Okt",
+    "oct": "Okt",
+    "october": "Okt",
+    "nov": "Nov",
+    "november": "Nov",
+    "dec": "Dec",
+    "december": "Dec",
+}
+
+
+def _cooling_float(val: Any) -> float | None:
+    if val is None or isinstance(val, bool):
+        return None
+    try:
+        num = float(val)
+    except (TypeError, ValueError):
+        return None
+    return num if math.isfinite(num) else None
+
+
+def _parse_cooling_month_key(row: dict[str, Any]) -> str | None:
+    """Resolve M_KEYS ('Jan'..'Dec') from a KMD CoolingData row."""
+    for key in ("DateFrom", "Date"):
+        raw = str(row.get(key) or "").strip()
+        if not raw:
+            continue
+        parsed = parse_iso_dt(raw)
+        if parsed is not None:
+            return M_KEYS[parsed.astimezone(DK_TZ).month - 1]
+        m = re.match(r"^\d{4}-(\d{1,2})\b", raw)
+        if m:
+            mo = int(m.group(1))
+            if 1 <= mo <= 12:
+                return M_KEYS[mo - 1]
+
+    period = str(row.get("Period") or "").strip().lower()
+    if not period:
+        return None
+    if period.isdigit():
+        mo = int(period)
+        return M_KEYS[mo - 1] if 1 <= mo <= 12 else None
+    m_ym = re.match(r"^\d{4}[-/](\d{1,2})\b", period)
+    if m_ym:
+        mo = int(m_ym.group(1))
+        if 1 <= mo <= 12:
+            return M_KEYS[mo - 1]
+    m_my = re.match(r"^(\d{1,2})[-/]\d{4}$", period)
+    if m_my:
+        mo = int(m_my.group(1))
+        if 1 <= mo <= 12:
+            return M_KEYS[mo - 1]
+    for tok in re.findall(r"[a-zæøå]+", period):
+        if tok in _COOLING_MONTH_NAMES:
+            return _COOLING_MONTH_NAMES[tok]
+        if len(tok) >= 3 and tok[:3] in _COOLING_MONTH_NAMES:
+            return _COOLING_MONTH_NAMES[tok[:3]]
+    return None
+
+
+def _parse_cooling_day_iso(row: dict[str, Any], yr: int, mo: int) -> str | None:
+    """Resolve YYYY-MM-DD in Copenhagen local time from a daily KMD CoolingData row."""
+    for key in ("DateFrom", "Date"):
+        raw = str(row.get(key) or "").strip()
+        if not raw:
+            continue
+        parsed = parse_iso_dt(raw)
+        if parsed is not None:
+            return parsed.astimezone(DK_TZ).date().isoformat()
+        m_iso = re.match(r"^(\d{4})-(\d{2})-(\d{2})\b", raw)
+        if m_iso:
+            try:
+                return dt_mod.date(
+                    int(m_iso.group(1)), int(m_iso.group(2)), int(m_iso.group(3))
+                ).isoformat()
+            except ValueError:
+                pass
+
+    period = str(row.get("Period") or "").strip()
+    if not period:
+        return None
+    m_iso = re.match(r"^(\d{4})-(\d{1,2})-(\d{1,2})\b", period)
+    if m_iso:
+        try:
+            return dt_mod.date(
+                int(m_iso.group(1)), int(m_iso.group(2)), int(m_iso.group(3))
+            ).isoformat()
+        except ValueError:
+            return None
+    m_dmy = re.match(r"^(\d{1,2})[./-](\d{1,2})[./-](\d{4})\b", period)
+    if m_dmy:
+        try:
+            return dt_mod.date(
+                int(m_dmy.group(3)), int(m_dmy.group(2)), int(m_dmy.group(1))
+            ).isoformat()
+        except ValueError:
+            return None
+    m_dm = re.match(r"^(\d{1,2})[./](\d{1,2})\.?$", period)
+    if m_dm:
+        try:
+            return dt_mod.date(yr, int(m_dm.group(2)), int(m_dm.group(1))).isoformat()
+        except ValueError:
+            return None
+    m_day = re.match(r"^(\d{1,2})\.?$", period)
+    if m_day:
+        try:
+            return dt_mod.date(yr, mo, int(m_day.group(1))).isoformat()
+        except ValueError:
+            return None
+    return None
+
+
+def _weighted_cooling_avg(
+    month_vals: dict[str, float],
+    flow_w: dict[str, float],
+    energy_w: dict[str, float],
+) -> float | None:
+    if not month_vals:
+        return None
+    for weights in (flow_w, energy_w):
+        if all(weights.get(mk, 0.0) > 0.0 for mk in month_vals):
+            total_w = sum(weights[mk] for mk in month_vals)
+            return round(sum(val * weights[mk] for mk, val in month_vals.items()) / total_w, 1)
+    for weights in (flow_w, energy_w):
+        paired = [(val, weights[mk]) for mk, val in month_vals.items() if weights.get(mk, 0.0) > 0.0]
+        if paired:
+            total_w = sum(w for _, w in paired)
+            return round(sum(v * w for v, w in paired) / total_w, 1)
+    return round(sum(month_vals.values()) / len(month_vals), 1)
+
+
+def _apply_kmd_cooling_monthly(
+    state: dict[str, Any], yr: int, mo: int, payload: dict[str, Any] | None
+) -> dict[str, int]:
+    """Extract monthly DegreesOut (return °C), DegreesIn (supply °C) & Flow (m³)."""
+    rows = (payload or {}).get("CoolingData") or []
+    if not isinstance(rows, list):
+        return {"monthly_rt": 0, "monthly_fwd": 0, "monthly_flow": 0}
+
+    rt_monthly: dict[str, float] = {}
+    fwd_monthly: dict[str, float] = {}
+    flow_monthly: dict[str, float] = {}
+    energy_monthly: dict[str, float] = {}
+
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        mk = _parse_cooling_month_key(row)
+        if not mk:
+            continue
+        deg_out = _cooling_float(row.get("DegreesOut"))
+        if deg_out is not None and 5.0 <= deg_out <= 95.0:
+            rt_monthly[mk] = round(deg_out, 1)
+        deg_in = _cooling_float(row.get("DegreesIn"))
+        if (
+            deg_in is not None
+            and 20.0 <= deg_in <= 130.0
+            and (deg_out is None or not (5.0 <= deg_out <= 95.0) or deg_in > deg_out)
+        ):
+            fwd_monthly[mk] = round(deg_in, 1)
+        flow = _cooling_float(row.get("Flow"))
+        if flow is not None and flow > 0.0:
+            flow_monthly[mk] = round(flow, 2)
+        energy = _cooling_float(row.get("Energy"))
+        if energy is not None and energy > 0.0:
+            energy_monthly[mk] = energy
+
+    yr_s = str(yr)
+    rt_dict = dict(state.get("return_temp") or {})
+    if rt_monthly:
+        rt_dict[f"monthly_{yr_s}"] = rt_monthly
+        ann_rt = _weighted_cooling_avg(rt_monthly, flow_monthly, energy_monthly)
+        if ann_rt is not None:
+            ann_map = dict(rt_dict.get("annual") or {})
+            ann_map[yr_s] = ann_rt
+            rt_dict["annual"] = ann_map
+    if fwd_monthly:
+        rt_dict[f"forward_monthly_{yr_s}"] = fwd_monthly
+        ann_fwd = _weighted_cooling_avg(fwd_monthly, flow_monthly, energy_monthly)
+        if ann_fwd is not None:
+            fwd_map = dict(rt_dict.get("forward_annual") or {})
+            fwd_map[yr_s] = ann_fwd
+            rt_dict["forward_annual"] = fwd_map
+    if rt_monthly or fwd_monthly:
+        state["return_temp"] = rt_dict
+
+    cur_mk = M_KEYS[mo - 1]
+    if (
+        cur_mk in flow_monthly
+        and not state.get("hourly_m3")
+        and (
+            not state.get("daily_m3_history")
+            or (state.get("daily_m3") or {}).get("source") == "kmd_cooling"
+        )
+    ):
+        state["daily_m3"] = {
+            "month": f"{M_FULL[mo - 1]} {yr}",
+            "total": round(flow_monthly[cur_mk], 2),
+            "source": "kmd_cooling",
+        }
+
+    return {
+        "monthly_rt": len(rt_monthly),
+        "monthly_fwd": len(fwd_monthly),
+        "monthly_flow": len(flow_monthly),
+    }
+
+
+def _apply_kmd_cooling_daily(
+    state: dict[str, Any],
+    yr: int,
+    mo: int,
+    payload: dict[str, Any] | None,
+    *,
+    populate_m3: bool,
+) -> int:
+    """Extract daily DegreesOut, DegreesIn and optional Flow (m³) for the current month."""
+    rows = (payload or {}).get("CoolingData") or []
+    if not isinstance(rows, list):
+        return 0
+
+    daily_rt = dict(state.get("daily_return_temp") or {})
+    daily_fwd = dict(state.get("daily_forward_temp") or {})
+    daily_m3 = dict(state.get("daily_m3_history") or {})
+    month_prefix = f"{yr:04d}-{mo:02d}-"
+    cur_month_flows: dict[str, float] = {}
+    latest_day: str | None = None
+    latest_rt: float | None = None
+    latest_fwd: float | None = None
+    count = 0
+
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        day_iso = _parse_cooling_day_iso(row, yr, mo)
+        if not day_iso:
+            continue
+        row_used = False
+        deg_out = _cooling_float(row.get("DegreesOut"))
+        valid_out = deg_out is not None and 5.0 <= deg_out <= 95.0
+        if valid_out:
+            daily_rt[day_iso] = round(deg_out, 1)
+            row_used = True
+        deg_in = _cooling_float(row.get("DegreesIn"))
+        valid_in = (
+            deg_in is not None
+            and 20.0 <= deg_in <= 130.0
+            and (not valid_out or deg_in > deg_out)
+        )
+        if valid_in:
+            daily_fwd[day_iso] = round(deg_in, 1)
+            row_used = True
+        if populate_m3:
+            flow = _cooling_float(row.get("Flow"))
+            if flow is not None and flow > 0.0:
+                flow_v = round(flow, 3)
+                daily_m3[day_iso] = flow_v
+                if day_iso.startswith(month_prefix):
+                    cur_month_flows[day_iso] = flow_v
+                row_used = True
+        if row_used:
+            count += 1
+            if (valid_out or valid_in) and (latest_day is None or day_iso >= latest_day):
+                latest_day = day_iso
+                if valid_out:
+                    latest_rt = round(deg_out, 1)
+                if valid_in:
+                    latest_fwd = round(deg_in, 1)
+
+    if daily_rt:
+        state["daily_return_temp"] = daily_rt
+    if daily_fwd:
+        state["daily_forward_temp"] = daily_fwd
+    if populate_m3 and daily_m3:
+        state["daily_m3_history"] = daily_m3
+        if cur_month_flows:
+            state["daily_m3"] = {
+                "month": f"{M_FULL[mo - 1]} {yr}",
+                "total": round(sum(cur_month_flows.values()), 2),
+                "source": "kmd_cooling",
+            }
+    if latest_day is not None and (latest_rt is not None or latest_fwd is not None):
+        latest_obj = dict(state.get("latest_reading") or {})
+        latest_obj["date"] = latest_day
+        if latest_rt is not None:
+            latest_obj["temp_return"] = latest_rt
+        if latest_fwd is not None:
+            latest_obj["temp_forward"] = latest_fwd
+        state["latest_reading"] = latest_obj
+
+    return count
+
+
+def _populate_return_temp_from_hourly(state: dict[str, Any], yr: int) -> None:
+    """Aggregate complete KMD hourly_temp points into monthly/annual return_temp."""
+    series = state.get("hourly_temp") or []
+    if not isinstance(series, list) or not series:
+        return
+    by_month: dict[str, list[float]] = {}
+    for pt in series:
+        if not isinstance(pt, dict) or not pt.get("IsComplete"):
+            continue
+        val = _cooling_float(pt.get("Value"))
+        if val is None or not (5.0 <= val <= 95.0):
+            continue
+        parsed = parse_iso_dt(str(pt.get("DateFrom") or ""))
+        if parsed is None:
+            continue
+        loc = hour_start_local(parsed)
+        if loc.year != yr:
+            continue
+        by_month.setdefault(M_KEYS[loc.month - 1], []).append(val)
+    if not by_month:
+        return
+    yr_s = str(yr)
+    rt_monthly = {mk: round(sum(vs) / len(vs), 1) for mk, vs in by_month.items()}
+    all_vals = [v for vs in by_month.values() for v in vs]
+    rt_dict = dict(state.get("return_temp") or {})
+    rt_dict[f"monthly_{yr_s}"] = rt_monthly
+    ann_map = dict(rt_dict.get("annual") or {})
+    ann_map[yr_s] = round(sum(all_vals) / len(all_vals), 1)
+    rt_dict["annual"] = ann_map
+    state["return_temp"] = rt_dict
 
 
 
@@ -1907,6 +2260,47 @@ class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     mp["InstallationId"], mp["MeasurementPointId"], temp_unit, start_mo, datetime(yr, mo, last_dom) + timedelta(days=1)
                 )
 
+            # 3b. Optional cooling endpoint (return/supply temps + m³ flow when meter omits units)
+            get_cooling_fn = getattr(self.client, "get_cooling_info", None)
+            if get_cooling_fn and mp.get("MeasurementPointId"):
+                try:
+                    c_mon = await get_cooling_fn(
+                        mp["MeasurementPointId"],
+                        mp.get("MeterTypeId"),
+                        2,
+                        datetime(yr, 1, 1),
+                        datetime(yr, 12, 31),
+                    )
+                    mon_counts = _apply_kmd_cooling_monthly(state, yr, mo, c_mon)
+                    daily_rows = 0
+                    if isinstance(c_mon, dict) and (c_mon.get("CoolingData") or []):
+                        try:
+                            c_day = await get_cooling_fn(
+                                mp["MeasurementPointId"],
+                                mp.get("MeterTypeId"),
+                                3,
+                                datetime(yr, mo, 1),
+                                datetime(yr, mo, last_dom),
+                            )
+                            daily_rows = _apply_kmd_cooling_daily(
+                                state,
+                                yr,
+                                mo,
+                                c_day,
+                                populate_m3=not bool(m3_unit),
+                            )
+                        except Exception as err:  # noqa: BLE001
+                            _LOGGER.debug("Optional KMD daily cooling fetch failed: %s", err)
+                    cooling_summary = {**mon_counts, "daily_rows": daily_rows}
+                    state["kmd_cooling"] = cooling_summary
+                    if any(cooling_summary.values()):
+                        _LOGGER.info("KMD cooling summary: %s", cooling_summary)
+                except Exception as err:  # noqa: BLE001
+                    _LOGGER.debug("Optional KMD cooling fetch failed: %s", err)
+
+            if state.get("hourly_temp") and not (state.get("return_temp") or {}).get(f"monthly_{yr}"):
+                _populate_return_temp_from_hourly(state, yr)
+
             # 4. Settlement period + Forecast overview
             try:
                 sp = await self.client.get_current_settlement_period()
@@ -1935,7 +2329,7 @@ class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 bal = await self.client.get_balance()
                 state["balance"] = bal
                 bl_obj = state.setdefault("billing", {})
-                if isinstance(bal, dict) and "Balance" in bal:
+                if isinstance(bal, dict) and bal.get("Balance") is not None:
                     bl_obj["saldo_kr"] = round(float(bal["Balance"]), 2)
                 stmt = await self.client.get_balance_statement(0, 10)
                 invs = [x for x in stmt if x.get("Type") == "2" and (x.get("Amount") or 0) > 0]

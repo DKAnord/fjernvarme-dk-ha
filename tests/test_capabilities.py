@@ -116,3 +116,18 @@ def test_coordinator_publishes_capabilities_in_state(tmp_path) -> None:
     coord._enrich_derived(state)
     assert set(state["capabilities"]) == BACKEND_CAPABILITIES["kmd"]
     assert state["backend_capabilities"] == sorted(BACKEND_CAPABILITIES["kmd"])
+
+
+def test_tightened_capability_predicates() -> None:
+    # Balance: None (without invoice totals) does NOT claim billing capability
+    assert "billing" not in data_capabilities({"balance": {"Balance": None}, "billing": {}})
+    # Forecast with 0 expected_kwh does NOT claim forecast capability
+    assert "forecast" not in data_capabilities({"forecast": {"expected_kwh": 0, "budget_kwh": 0}})
+    # Forward-only return_temp dict (no actual return temperature) does NOT claim temperatures
+    assert "temperatures" not in data_capabilities(
+        {"return_temp": {"forward_annual": {"2026": 65.0}, "forward_monthly_2026": {"Jan": 65.0}}}
+    )
+    # Cooling-derived daily_m3 total claims volume capability
+    assert "volume" in data_capabilities(
+        {"daily_m3": {"month": "November 2026", "total": 42.5, "source": "kmd_cooling"}}
+    )

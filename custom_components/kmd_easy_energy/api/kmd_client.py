@@ -396,6 +396,29 @@ class KMDClient:
             data = await resp.json()
             return data if isinstance(data, list) else []
 
+    async def get_cooling_info(
+        self,
+        measurement_point_id: str,
+        meter_type_id: Any,
+        zoom_level: int,
+        date_from: datetime,
+        date_to: datetime,
+    ) -> dict[str, Any]:
+        """POST /api/cooling/getcoolinginfo (return/supply temps and volume flow)."""
+        url = f"{KMD_API_BASE}/api/cooling/getcoolinginfo"
+        payload: dict[str, Any] = {
+            "MeasurementPointId": measurement_point_id,
+            "DateFrom": date_from.strftime("%Y-%m-%dT00:00:00.000Z"),
+            "DateTo": date_to.strftime("%Y-%m-%dT23:59:59.000Z"),
+            "ZoomLevel": zoom_level,
+        }
+        if meter_type_id is not None:
+            payload["MetertypeId"] = meter_type_id
+        async with self._session.post(url, headers=self._headers(), json=payload) as resp:
+            resp.raise_for_status()
+            data = await resp.json()
+            return data if isinstance(data, dict) else {}
+
     @staticmethod
     def find_unit(units: list[dict[str, Any]], name: str = "kWh") -> dict[str, Any] | None:
         """Return first unit matching Name (case-insensitive)."""

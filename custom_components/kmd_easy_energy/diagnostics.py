@@ -164,6 +164,7 @@ def _summarize_coordinator(data: dict[str, Any] | None) -> dict[str, Any]:
         "hourly_kwh_points": data.get("hourly_kwh_points") or _series_len(data.get("hourly_kwh")),
         "hourly_m3_points": _series_len(data.get("hourly_m3")),
         "hourly_temp_points": _series_len(data.get("hourly_temp")),
+        "kmd_cooling": data.get("kmd_cooling"),
         "meter_count": _series_len(data.get("meters")),
         "kmd_supplies": diagnostics_supplies(data.get("kmd_supplies")),
         "has_selected_supply": bool(data.get("selected_supply_key")),

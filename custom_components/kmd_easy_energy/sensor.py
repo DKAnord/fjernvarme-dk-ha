@@ -353,7 +353,7 @@ class KMDBalanceSensor(KMDBaseSensor):
     def native_value(self) -> float | None:
         data = self.coordinator.data or {}
         bal = data.get("balance") or {}
-        if "Balance" in bal:
+        if bal.get("Balance") is not None:
             return bal["Balance"]
         return (data.get("billing") or {}).get("saldo_kr")
 

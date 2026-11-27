@@ -116,6 +116,34 @@ def _has(value: Any) -> bool:
     return bool(value)
 
 
+def _has_positive_num(value: Any) -> bool:
+    if isinstance(value, dict):
+        return any(_has_positive_num(v) for v in value.values())
+    if isinstance(value, (list, tuple)):
+        return any(_has_positive_num(v) for v in value)
+    return isinstance(value, (int, float)) and not isinstance(value, bool) and float(value) > 0
+
+
+def _has_return_temp(state: dict[str, Any]) -> bool:
+    rt = state.get("return_temp")
+    if isinstance(rt, dict):
+        if _has_positive_num(rt.get("annual")):
+            return True
+        for key, val in rt.items():
+            if str(key).startswith("monthly_") and _has_positive_num(val):
+                return True
+    hourly_temp = state.get("hourly_temp")
+    if isinstance(hourly_temp, list) and any(
+        isinstance(pt, dict)
+        and isinstance(pt.get("Value"), (int, float))
+        and not isinstance(pt.get("Value"), bool)
+        for pt in hourly_temp
+    ):
+        return True
+    latest_rt = (state.get("latest_reading") or {}).get("temp_return")
+    return isinstance(latest_rt, (int, float)) and not isinstance(latest_rt, bool) and float(latest_rt) > 0
+
+
 def data_capabilities(state: dict[str, Any] | None) -> set[str]:
     """Data capabilities actually present in a coordinator state/cache."""
     s = state or {}
@@ -126,19 +154,22 @@ def data_capabilities(state: dict[str, Any] | None) -> set[str]:
         caps.add(CAP_DAILY)
     if _has(s.get("monthly")):
         caps.add(CAP_MONTHLY)
-    if (
-        _has(s.get("return_temp"))
-        or _has(s.get("hourly_temp"))
-        or _has((s.get("latest_reading") or {}).get("temp_return"))
-    ):
+    if _has_return_temp(s):
         caps.add(CAP_TEMPERATURES)
-    if _has(s.get("hourly_m3")) or _has(s.get("daily_m3_history")):
+    if (
+        _has(s.get("hourly_m3"))
+        or _has(s.get("daily_m3_history"))
+        or ((s.get("daily_m3") or {}).get("total") is not None)
+    ):
         caps.add(CAP_VOLUME)
     if s.get("energy_price_dkk_per_kwh"):
         caps.add(CAP_COST)
-    if _has(s.get("billing")) or "Balance" in (s.get("balance") or {}):
+    bal_val = (s.get("balance") or {}).get("Balance")
+    has_bal = isinstance(bal_val, (int, float)) and not isinstance(bal_val, bool)
+    if _has(s.get("billing")) or has_bal:
         caps.add(CAP_BILLING)
-    if _has((s.get("forecast") or {}).get("expected_kwh")):
+    exp_kwh = (s.get("forecast") or {}).get("expected_kwh")
+    if isinstance(exp_kwh, (int, float)) and not isinstance(exp_kwh, bool) and float(exp_kwh) > 0:
         caps.add(CAP_FORECAST)
     return caps
 

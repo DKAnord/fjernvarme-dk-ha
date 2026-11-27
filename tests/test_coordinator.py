@@ -916,3 +916,291 @@ async def test_hedensted_coordinator_fixed_fee_and_annual_forecast_cost(
     )
     assert state["cost_estimate"]["forecast_annual_dkk"] == expected_total
     assert state["degree_day"]["forecast_annual_dkk"] == float(expected_total)
+
+
+def _make_ikast_kmd_client(*, extra_units=None, cooling_side_effect=None, balance_val=None):
+    import datetime as dt
+
+    kwh_unit = {"Id": "u-kwh", "Name": "kWh", "Description": "Kilowatttimer", "Decimals": 0, "Order": 1}
+    units = [kwh_unit, *(extra_units or [])]
+    fake_client = MagicMock()
+    fake_client.discover_accounts = AsyncMock(
+        return_value=[
+            {
+                "customer": {"CustomerId": "c1", "CustomerNumber": "cn1"},
+                "customer_index": 1,
+                "customer_id": "c1",
+                "customer_number": "cn1",
+                "meters": [
+                    {
+                        "InstallationId": "inst1",
+                        "MeasurementPointId": "mp-ikast-1",
+                        "MeterTypeId": 10,
+                        "ConsumptionType": 5,
+                        "Units": units,
+                    }
+                ],
+            }
+        ]
+    )
+    fake_client.set_customer = MagicMock()
+
+    async def fake_ts(inst, mp, unit, zoom, d_from, d_to):
+        if unit.get("Name") == "kWh" and zoom == 1 and d_from.year == 2026:
+            return {
+                "Series": [
+                    {
+                        "Data": [
+                            {"DateFrom": "2026-01-01T00:00:00", "Value": 1400},
+                            {"DateFrom": "2026-11-01T00:00:00", "Value": 600},
+                        ]
+                    }
+                ]
+            }
+        if unit.get("Name") == "kWh" and zoom == 2 and d_from == dt.datetime(2026, 11, 1):
+            return {
+                "Series": [
+                    {
+                        "Data": [
+                            {"DateFrom": "2026-11-22T00:00:00", "Value": 40, "IsComplete": True},
+                            {"DateFrom": "2026-11-23T00:00:00", "Value": 42, "IsComplete": True},
+                        ]
+                    }
+                ]
+            }
+        return {"Series": []}
+
+    fake_client.get_consumption_timeseries = AsyncMock(side_effect=fake_ts)
+    fake_client.get_hourly_with_fallback = AsyncMock(return_value=[])
+    if cooling_side_effect is not None:
+        fake_client.get_cooling_info = AsyncMock(side_effect=cooling_side_effect)
+    else:
+        fake_client.get_cooling_info = AsyncMock(return_value={"CoolingData": []})
+    fake_client.get_current_settlement_period = AsyncMock(
+        return_value={"DateFrom": "2026-01-01T00:00:00Z", "DateTo": "2026-12-31T00:00:00Z"}
+    )
+    fake_client.get_consumption_overview = AsyncMock(return_value={})
+    fake_client.get_balance = AsyncMock(return_value=balance_val if balance_val is not None else {})
+    fake_client.get_balance_statement = AsyncMock(return_value=[])
+    return fake_client
+
+
+@pytest.mark.asyncio
+async def test_kmd_energi_ikast_enriches_cooling_flow_and_dynamic_tariff(tmp_path: Path) -> None:
+    import datetime as dt
+    from kmd_easy_energy.insights import DK_TZ
+
+    coord, _, _, _ = make_coordinator(
+        tmp_path,
+        utility="Energi Ikast",
+        utility_id="energi-ikast",
+        portal_url="https://energi-ikast.dk/",
+    )
+
+    async def fake_cooling(mp_id, meter_type_id, zoom, d_from, d_to):
+        assert mp_id == "mp-ikast-1"
+        assert meter_type_id == 10
+        if zoom == 2:
+            return {
+                "CoolingData": [
+                    {
+                        "Period": "Januar",
+                        "DegreesIn": 68.0,
+                        "DegreesOut": 36.0,
+                        "Degrees": 32.0,
+                        "Flow": 40.0,
+                        "Energy": 1400.0,
+                    },
+                    {
+                        "Period": "November",
+                        "DegreesIn": 62.0,
+                        "DegreesOut": 35.0,
+                        "Degrees": 27.0,
+                        "Flow": 20.0,
+                        "Energy": 600.0,
+                    },
+                ]
+            }
+        if zoom == 3:
+            return {
+                "CoolingData": [
+                    {
+                        "DateFrom": "2026-11-22T00:00:00Z",
+                        "DegreesIn": 64.0,
+                        "DegreesOut": 35.0,
+                        "Flow": 1.2,
+                    },
+                    {
+                        "DateFrom": "2026-11-23T00:00:00Z",
+                        "DegreesIn": 62.0,
+                        "DegreesOut": 36.5,
+                        "Flow": 1.3,
+                    },
+                ]
+            }
+        return {"CoolingData": []}
+
+    coord.client = _make_ikast_kmd_client(cooling_side_effect=fake_cooling)
+    coord._async_update_weather = AsyncMock()
+    fixed_now = dt.datetime(2026, 11, 24, 12, 0, tzinfo=DK_TZ)
+    with (
+        patch("kmd_easy_energy.coordinator.dt_util.now", return_value=fixed_now),
+        patch("kmd_easy_energy.coordinator.copenhagen_today", return_value=dt.date(2026, 11, 24)),
+        patch("kmd_easy_energy.tariff.copenhagen_today", return_value=dt.date(2026, 11, 24)),
+    ):
+        state = await coord._async_fetch_from_kmd({})
+
+    assert state["kmd_cooling"] == {
+        "monthly_rt": 2,
+        "monthly_fwd": 2,
+        "monthly_flow": 2,
+        "daily_rows": 2,
+    }
+    assert state["return_temp"]["monthly_2026"] == {"Jan": 36.0, "Nov": 35.0}
+    assert state["return_temp"]["annual"]["2026"] == 35.7
+    assert state["return_temp"]["forward_monthly_2026"] == {"Jan": 68.0, "Nov": 62.0}
+    assert state["return_temp"]["forward_annual"]["2026"] == 66.0
+    assert state["forward_temp"] == 66.0
+    assert state["expected_return_temp"] == 34.0
+    assert state["penalty_temp"] == 34.0
+    assert state["bonus_temp"] == 0.0
+    # latest_reading has 36.5 °C return > 34.0 °C target -> penalty
+    assert state["latest_reading"]["temp_return"] == 36.5
+    assert state["motivation_status"] == "penalty"
+    assert state["motivation_dkk_per_kwh"] == round(2.5 * 0.00375, 5)
+    assert state["daily_m3_history"] == {"2026-11-22": 1.2, "2026-11-23": 1.3}
+    assert state["daily_m3"]["source"] == "kmd_cooling"
+    assert state["daily_m3"]["total"] == 2.5
+    assert state["cost_estimate"]["base_price_dkk_per_kwh"] == round(0.59625, 4)
+    assert state["energy_price_dkk_per_kwh"] == 0.59625
+    assert {"temperatures", "volume", "cost"} <= set(state["capabilities"])
+
+
+@pytest.mark.asyncio
+async def test_kmd_cooling_delta_t_not_mistaken_for_return_temp(tmp_path: Path) -> None:
+    import datetime as dt
+    from kmd_easy_energy.insights import DK_TZ
+
+    coord, _, _, _ = make_coordinator(
+        tmp_path,
+        utility="Energi Ikast",
+        utility_id="energi-ikast",
+        portal_url="https://energi-ikast.dk/",
+    )
+
+    async def fake_cooling(*args):
+        return {
+            "CoolingData": [
+                {
+                    "Period": "Januar",
+                    "Degrees": 30.5,
+                    "DegreesIn": None,
+                    "DegreesOut": None,
+                    "Flow": None,
+                }
+            ]
+        }
+
+    coord.client = _make_ikast_kmd_client(cooling_side_effect=fake_cooling)
+    coord._async_update_weather = AsyncMock()
+    fixed_now = dt.datetime(2026, 11, 24, 12, 0, tzinfo=DK_TZ)
+    with (
+        patch("kmd_easy_energy.coordinator.dt_util.now", return_value=fixed_now),
+        patch("kmd_easy_energy.coordinator.copenhagen_today", return_value=dt.date(2026, 11, 24)),
+        patch("kmd_easy_energy.tariff.copenhagen_today", return_value=dt.date(2026, 11, 24)),
+    ):
+        state = await coord._async_fetch_from_kmd({})
+
+    assert not state.get("return_temp")
+    assert "temperatures" not in state["capabilities"]
+
+
+@pytest.mark.asyncio
+async def test_kmd_cooling_http_error_does_not_fail_sync(tmp_path: Path) -> None:
+    import datetime as dt
+    from kmd_easy_energy.insights import DK_TZ
+
+    coord, _, _, _ = make_coordinator(
+        tmp_path,
+        utility="Energi Ikast",
+        utility_id="energi-ikast",
+        portal_url="https://energi-ikast.dk/",
+    )
+    err = ClientResponseError(MagicMock(), (), status=403, message="Forbidden")
+    coord.client = _make_ikast_kmd_client(cooling_side_effect=err)
+    coord._async_update_weather = AsyncMock()
+    fixed_now = dt.datetime(2026, 11, 24, 12, 0, tzinfo=DK_TZ)
+    with (
+        patch("kmd_easy_energy.coordinator.dt_util.now", return_value=fixed_now),
+        patch("kmd_easy_energy.coordinator.copenhagen_today", return_value=dt.date(2026, 11, 24)),
+        patch("kmd_easy_energy.tariff.copenhagen_today", return_value=dt.date(2026, 11, 24)),
+    ):
+        state = await coord._async_fetch_from_kmd({})
+
+    assert state["annual"]["2026"] == 2000
+    assert state["energy_price_dkk_per_kwh"] == 0.59625
+    assert state["cost_estimate"]["base_price_dkk_per_kwh"] == round(0.59625, 4)
+    assert "temperatures" not in state["capabilities"]
+
+
+@pytest.mark.asyncio
+async def test_kmd_null_balance_does_not_crash_or_claim_billing(tmp_path: Path) -> None:
+    import datetime as dt
+    from kmd_easy_energy.insights import DK_TZ
+
+    coord, _, _, _ = make_coordinator(
+        tmp_path,
+        utility="Energi Ikast",
+        utility_id="energi-ikast",
+        portal_url="https://energi-ikast.dk/",
+    )
+    coord.client = _make_ikast_kmd_client(balance_val={"Balance": None})
+    coord._async_update_weather = AsyncMock()
+    fixed_now = dt.datetime(2026, 11, 24, 12, 0, tzinfo=DK_TZ)
+    with (
+        patch("kmd_easy_energy.coordinator.dt_util.now", return_value=fixed_now),
+        patch("kmd_easy_energy.coordinator.copenhagen_today", return_value=dt.date(2026, 11, 24)),
+        patch("kmd_easy_energy.tariff.copenhagen_today", return_value=dt.date(2026, 11, 24)),
+    ):
+        state = await coord._async_fetch_from_kmd({})
+
+    assert "saldo_kr" not in (state.get("billing") or {})
+    assert "billing" not in state["capabilities"]
+
+
+@pytest.mark.asyncio
+async def test_kmd_hourly_temp_fallback_populates_return_temp(tmp_path: Path) -> None:
+    import datetime as dt
+    from kmd_easy_energy.insights import DK_TZ
+
+    coord, _, _, _ = make_coordinator(
+        tmp_path,
+        utility="Energi Ikast",
+        utility_id="energi-ikast",
+        portal_url="https://energi-ikast.dk/",
+    )
+    temp_unit = {"Id": "u-temp", "Name": "°C", "Description": "Temperatur", "Decimals": 1, "Order": 2}
+    client = _make_ikast_kmd_client(extra_units=[temp_unit])
+
+    async def fake_hourly(inst, mp, unit, d_from, d_to):
+        if unit.get("Name") == "°C":
+            return [
+                {"DateFrom": "2026-11-22T01:00:00+01:00", "Value": 34.0, "IsComplete": True},
+                {"DateFrom": "2026-11-22T02:00:00+01:00", "Value": 36.0, "IsComplete": True},
+            ]
+        return []
+
+    client.get_hourly_with_fallback = AsyncMock(side_effect=fake_hourly)
+    coord.client = client
+    coord._async_update_weather = AsyncMock()
+    fixed_now = dt.datetime(2026, 11, 24, 12, 0, tzinfo=DK_TZ)
+    with (
+        patch("kmd_easy_energy.coordinator.dt_util.now", return_value=fixed_now),
+        patch("kmd_easy_energy.coordinator.copenhagen_today", return_value=dt.date(2026, 11, 24)),
+        patch("kmd_easy_energy.tariff.copenhagen_today", return_value=dt.date(2026, 11, 24)),
+    ):
+        state = await coord._async_fetch_from_kmd({})
+
+    assert state["return_temp"]["monthly_2026"] == {"Nov": 35.0}
+    assert state["return_temp"]["annual"]["2026"] == 35.0
+    assert "temperatures" in state["capabilities"]

@@ -1816,3 +1816,38 @@ def test_nyborg_forsyning_2026_tariff() -> None:
     assert resolved.fixed_fee_dkk_per_m2_year == 16.0
     assert resolved.suggested_fixed_fee_dkk_per_year == 750.0
     assert resolved.motivation_dkk_per_kwh_per_k is None
+
+
+def test_fjernvarme_horsens_confirmed_2026_tariff() -> None:
+    from kmd_easy_energy.tariff import load_utilities
+
+    utilities = load_utilities()
+    by_id = {u["id"]: u for u in utilities}
+    horsens = by_id["fjernvarme-horsens"]
+    assert horsens["status"] == "confirmed"
+    assert horsens["tier"] == "confirmed"
+
+    resolved = resolve_tariff(
+        _entry(data={"utility_id": "fjernvarme-horsens"}),
+        today=date(2026, 11, 27),
+        utilities=utilities,
+    )
+    assert resolved.utility_id == "fjernvarme-horsens"
+    assert resolved.price_dkk_per_kwh == 0.685
+    assert resolved.fixed_fee_dkk_per_m2_year == 30.625
+    assert resolved.suggested_fixed_fee_dkk_per_year == 825.0
+    assert resolved.motivation_pct_per_k == 1.0
+    assert resolved.motivation_max_pct == 35.0
+    assert resolved.motivation_bonus is True
+    assert resolved.bonus_temp == 37.0
+    assert resolved.penalty_temp == 37.0
+
+    for fwd, expected_ret in ((50.0, 40.0), (60.0, 37.0), (70.0, 34.0), (75.0, 33.0)):
+        res = resolve_tariff(
+            _entry(data={"utility_id": "fjernvarme-horsens"}),
+            today=date(2026, 11, 27),
+            utilities=utilities,
+            forward_temp=fwd,
+        )
+        assert res.bonus_temp == expected_ret
+        assert res.penalty_temp == expected_ret

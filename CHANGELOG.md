@@ -2,6 +2,12 @@
 
 Alle væsentlige ændringer i **Dansk Fjernvarme** (tidligere *Fjernvarme (KMD Easy Energy)*) dokumenteres her.
 
+## [1.3.18] - 2026-11-27
+
+### Bekræftet & Forbedret
+- **Fjernvarme Horsens bekræftet live + officiel 2026 fremløbskurve ([issue #65](https://github.com/DKAnord/fjernvarme-dk-ha/issues/65), tak til `@Larven1337`):** Markeret som ✅ **Bekræftet** E|Forsyning-værk (`fjernvarme-horsens`, `https://eforsyning.dk/horsens/`, verificeret med `kWh`, `m³` og `°C` — nu **31** live-bekræftede værker og **70/70** forudfyldte værker), inkl. eksisterende officielle 2026-takst (`0,685 kr./kWh` / `685,00 kr./MWh` inkl. moms, fast effektbidrag `30,625 kr./m²/år`, abonnementsbidrag `825,00 kr./år`) samt tilføjet officiel fremløbsafhængig motivationstarif-kurve (`±1 %/°C`, maks. `±35 %`, `50–75 °C → 40–33 °C`).
+- **Kortressource:** Opdateret cache-busting ressource-URL til `/kmd_easy_energy/kmd-easy-energy-card.js?v=1.3.18`.
+
 ## [1.3.17] - 2026-11-27
 
 ### Tilføjet & Rettet

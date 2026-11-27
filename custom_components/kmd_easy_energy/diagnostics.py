@@ -155,6 +155,7 @@ def _summarize_coordinator(data: dict[str, Any] | None) -> dict[str, Any]:
         "sync_reminder": data.get("sync_reminder"),
         "initial_setup_complete": bool(data.get("initial_setup_complete", True)),
         "sync_state": data.get("sync_state"),
+        "sync_message": data.get("sync_message") or None,
         "has_mitid_username": bool(data.get("has_mitid_username")),
         "updated": data.get("updated"),
         "bonus_temp": data.get("bonus_temp"),

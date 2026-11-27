@@ -2,6 +2,18 @@
 
 Alle væsentlige ændringer i **Dansk Fjernvarme** (tidligere *Fjernvarme (KMD Easy Energy)*) dokumenteres her.
 
+## [1.3.5] - 2026-11-27
+
+### Rettet & Forbedret
+- **Vestforsyning (Holstebro) bekræftet live (KMD / Min Forsyning):** Markeret som ✅ **Bekræftet** efter live-verifikation med MitID (nu **16** live-bekræftede værker), inkl. eksisterende officielle 2026/2027-takster (`0,67375` / `0,70125 kr./kWh` inkl. moms, fast bidrag `20,40` / `21,2125 kr./m²/år` samt `±0,00375 kr./kWh/K`).
+- **Hurtigere første synkronisering på Watts On & E|Forsyning (`coordinator.py`):** Ved helt ny opsætning uden tidligere synkronisering (`last_sync is None`) starter første automatiske synkronisering nu efter **10 sekunder** i stedet for 120 sekunder, så sensorerne udfyldes næsten med det samme (beholder 120 sek. forsinkelse ved almindelig Home Assistant-genstart med ældre cache).
+- **Robust Watts On-målervalg & -opdagelse (`coordinator.py`, `api/wattson_client.py`):**
+  - `async_sync_wattson()` respekterer nu et manuelt valgt `wattson_device_id` på tværs af alle fundne enheder før fallback til første varmemåler, så ikke-autoklassificerede målere fra opsætningsguiden ikke længere afvises ved første synkronisering.
+  - `WattsOnClient.async_devices()` fletter manglende `kind`, `type` og `unit`, når samme `deviceId` optræder flere steder i `provisioning/api/v1/locations/{loc_id}`.
+- **`sync_message` i diagnostics (`diagnostics.py`):** **Download diagnostik** inkluderer nu den sanitiserede `sync_message` (ingen tokens eller persondata), så fejl ved første synkronisering fremgår direkte af supportfiler.
+- **Fjernet Høje Taastrup Fjernvarme fra E|Forsyning (`utilities.json`, `api/eforsyning_client.py`, `README.md`):** Høje Taastrup Fjernvarme er overgået til egen selvbetjeningsportal på `selvbetjening.htf.dk`, så værket er fjernet fra de forudfyldte presets og ekskluderet (`htf`) fra E|Forsyning-søgningen (nu **62/62** forudfyldte værker med officielle 2026/2027-takster).
+- **Kortressource:** Opdateret cache-busting ressource-URL til `/kmd_easy_energy/kmd-easy-energy-card.js?v=1.3.5`.
+
 ## [1.3.4] - 2026-11-27
 
 ### Tilføjet & Rettet

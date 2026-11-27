@@ -240,19 +240,38 @@ def test_cost_statistics_motivation_monthly_dynamic_asymmetric_cap_and_fallback(
         7.035,
     ]
 
-    # 3) Høje Taastrup asymmetric rates in 2026
-    htf_entry = SimpleNamespace(
-        entry_id="htf",
-        title="HTF",
-        data={CONF_UTILITY_ID: "hoje-taastrup-fjernvarme"},
+    # 3) Fixed DKK/kWh/K asymmetric rates in 2026 (synthetic utility)
+    asym_utilities = [
+        {
+            "id": "synthetic-asym-varme",
+            "tariffs": [
+                {
+                    "year": 2026,
+                    "effective_from": "2026-01-01",
+                    "price_dkk_per_kwh": 0.6925,
+                    "motivation_dkk_per_kwh_per_k": 0.01076,
+                    "motivation_bonus_dkk_per_kwh_per_k": 0.00538,
+                    "bonus_temp": 41.0,
+                    "penalty_temp": 41.0,
+                }
+            ],
+        }
+    ]
+    asym_entry = SimpleNamespace(
+        entry_id="asym",
+        title="Asym",
+        data={CONF_UTILITY_ID: "synthetic-asym-varme"},
         options={},
     )
-    htf_state = {"return_temp": {"monthly_2026": {"Jan": 39.0, "Feb": 43.0}}}
-    htf_buckets = [
+    asym_state = {"return_temp": {"monthly_2026": {"Jan": 39.0, "Feb": 43.0}}}
+    asym_buckets = [
         (datetime(2026, 1, 10, 12, 0, tzinfo=timezone.utc), 10.0),  # 0.6925 - 2*0.00538 = 0.68174
         (datetime(2026, 2, 10, 12, 0, tzinfo=timezone.utc), 10.0),  # 0.6925 + 2*0.01076 = 0.71402
     ]
-    assert [round(v, 5) for _, v in build_cost_buckets(htf_entry, htf_state, htf_buckets)] == [
+    assert [
+        round(v, 5)
+        for _, v in build_cost_buckets(asym_entry, asym_state, asym_buckets, utilities=asym_utilities)
+    ] == [
         6.8174,
         7.1402,
     ]

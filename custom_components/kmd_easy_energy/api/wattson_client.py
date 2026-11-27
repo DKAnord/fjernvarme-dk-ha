@@ -395,18 +395,28 @@ class WattsOnClient:
                     dev_id = ci_get(dev, "id")
                 if dev_id is None:
                     continue
-                found.setdefault(
-                    str(dev_id),
-                    {
-                        "id": str(dev_id),
-                        "kind": classify_device(dev),
-                        "type": str(
-                            ci_get(dev, "utilityType", "deviceType", "meterType", "type") or ""
-                        )[:40],
-                        "unit": str(ci_get(dev, "unit", "unitOfMeasure") or "")[:16],
+                key = str(dev_id)
+                kind = classify_device(dev)
+                dev_type = str(
+                    ci_get(dev, "utilityType", "deviceType", "meterType", "type") or ""
+                )[:40]
+                unit = str(ci_get(dev, "unit", "unitOfMeasure") or "")[:16]
+                existing = found.get(key)
+                if existing is None:
+                    found[key] = {
+                        "id": key,
+                        "kind": kind,
+                        "type": dev_type,
+                        "unit": unit,
                         "location_id": str(loc_id),
-                    },
-                )
+                    }
+                else:
+                    if existing.get("kind") is None and kind is not None:
+                        existing["kind"] = kind
+                    if not existing.get("type") and dev_type:
+                        existing["type"] = dev_type
+                    if not existing.get("unit") and unit:
+                        existing["unit"] = unit
         return list(found.values())
 
     async def async_heat_consumptions(

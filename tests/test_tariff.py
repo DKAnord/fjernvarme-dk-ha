@@ -833,14 +833,14 @@ def test_bundled_utilities_json_has_energi_ikast_2026_2027_tariffs_and_dynamic_c
     assert with_area_est["annual_fixed_fee_dkk"] == 4375.0
 
 
-def test_bundled_utilities_json_all_63_have_tariffs_and_spot_checks() -> None:
+def test_bundled_utilities_json_all_62_have_tariffs_and_spot_checks() -> None:
     from kmd_easy_energy.tariff import load_utilities
 
     utilities = load_utilities()
-    assert len(utilities) == 63
+    assert len(utilities) == 62
     with_tariffs = [u for u in utilities if u.get("tariffs")]
-    assert len(with_tariffs) == len(utilities) == 63
-    assert len({u["id"] for u in utilities}) == 63
+    assert len(with_tariffs) == len(utilities) == 62
+    assert len({u["id"] for u in utilities}) == 62
 
     backends = {}
     for u in utilities:
@@ -849,9 +849,10 @@ def test_bundled_utilities_json_all_63_have_tariffs_and_spot_checks() -> None:
         for t in u["tariffs"]:
             assert t["price_dkk_per_kwh"] > 0, u["id"]
             assert str(t.get("source", "")).startswith("https://"), u["id"]
-    assert backends == {"kmd": 16, "eforsyning": 43, "wattson": 4}
+    assert backends == {"kmd": 16, "eforsyning": 42, "wattson": 4}
 
     by_id = {u["id"]: u for u in utilities}
+    assert "hoje-taastrup-fjernvarme" not in by_id
     assert by_id["envafors"]["portal_url"] == "https://www.envafors.dk/slagelse/selvbetjening/min-side"
 
     # nykobing-sj migrated from kmd candidate to verified eforsyning
@@ -901,32 +902,6 @@ def test_bundled_utilities_json_all_63_have_tariffs_and_spot_checks() -> None:
     )
     assert koge_27.price_dkk_per_kwh == 0.95841
     assert koge_27.fixed_fee_dkk_per_m2_year == 40.45
-
-    htf_26 = resolve_tariff(
-        _entry(data={"utility_id": "hoje-taastrup-fjernvarme"}),
-        today=date(2026, 11, 27),
-        utilities=utilities,
-    )
-    assert htf_26.price_dkk_per_kwh == 0.6925
-    assert htf_26.fixed_fee_dkk_per_m2_year == 36.52
-    assert htf_26.motivation_dkk_per_kwh_per_k == 0.01076
-    assert htf_26.motivation_bonus_dkk_per_kwh_per_k == 0.00538
-    assert htf_26.motivation_penalty_dkk_per_kwh_per_k == 0.01076
-    assert htf_26.bonus_temp == 41.0
-    assert htf_26.penalty_temp == 41.0
-    assert htf_26.motivation_bonus is True
-
-    htf_27 = resolve_tariff(
-        _entry(data={"utility_id": "hoje-taastrup-fjernvarme"}),
-        today=date(2027, 2, 1),
-        utilities=utilities,
-    )
-    assert htf_27.price_dkk_per_kwh == 0.71625
-    assert htf_27.fixed_fee_dkk_per_m2_year == 37.71
-    assert htf_27.motivation_dkk_per_kwh_per_k == 0.01113
-    assert htf_27.motivation_bonus is False
-    assert htf_27.bonus_temp == 0.0
-    assert htf_27.penalty_temp == 41.0
 
     # 4 new 2027 additions (+ soroe 2026 fixed m2)
     beof_27 = resolve_tariff(
@@ -1058,50 +1033,99 @@ def test_asymmetric_motivation_rates_and_suggested_fixed_fee_year() -> None:
 
     utilities = load_utilities()
 
-    # 1. Fixed DKK/kWh/K asymmetry: Høje Taastrup 2026 (-0.00538 bonus / +0.01076 penalty)
-    htf = resolve_tariff(
-        _entry(data={"utility_id": "hoje-taastrup-fjernvarme"}),
+    # 1. Fixed DKK/kWh/K asymmetry + 2026->2027 transition (synthetic utility)
+    asym_utilities = [
+        {
+            "id": "synthetic-asym-varme",
+            "tariffs": [
+                {
+                    "year": 2026,
+                    "effective_from": "2026-01-01",
+                    "price_dkk_per_kwh": 0.6925,
+                    "fixed_fee_dkk_per_m2_year": 36.52,
+                    "motivation_dkk_per_kwh_per_k": 0.01076,
+                    "motivation_bonus_dkk_per_kwh_per_k": 0.00538,
+                    "bonus_temp": 41.0,
+                    "penalty_temp": 41.0,
+                    "fixed_fee_dkk_per_year": 1567.5,
+                },
+                {
+                    "year": 2027,
+                    "effective_from": "2027-01-01",
+                    "price_dkk_per_kwh": 0.71625,
+                    "fixed_fee_dkk_per_m2_year": 37.71,
+                    "motivation_dkk_per_kwh_per_k": 0.01113,
+                    "motivation_bonus": False,
+                    "bonus_temp": 0.0,
+                    "penalty_temp": 41.0,
+                    "fixed_fee_dkk_per_year": 1618.75,
+                },
+            ],
+        }
+    ]
+    asym_26 = resolve_tariff(
+        _entry(data={"utility_id": "synthetic-asym-varme"}),
         today=date(2026, 11, 27),
-        utilities=utilities,
+        utilities=asym_utilities,
     )
-    assert htf.suggested_fixed_fee_dkk_per_year == 1567.5
-    assert htf.fixed_fee_dkk_per_year is None
-    assert htf.annual_fixed_fee_dkk == 0.0
+    assert asym_26.price_dkk_per_kwh == 0.6925
+    assert asym_26.fixed_fee_dkk_per_m2_year == 36.52
+    assert asym_26.motivation_dkk_per_kwh_per_k == 0.01076
+    assert asym_26.motivation_bonus_dkk_per_kwh_per_k == 0.00538
+    assert asym_26.motivation_penalty_dkk_per_kwh_per_k == 0.01076
+    assert asym_26.bonus_temp == 41.0
+    assert asym_26.penalty_temp == 41.0
+    assert asym_26.motivation_bonus is True
+    assert asym_26.suggested_fixed_fee_dkk_per_year == 1567.5
+    assert asym_26.fixed_fee_dkk_per_year is None
+    assert asym_26.annual_fixed_fee_dkk == 0.0
+
+    asym_27 = resolve_tariff(
+        _entry(data={"utility_id": "synthetic-asym-varme"}),
+        today=date(2027, 2, 1),
+        utilities=asym_utilities,
+    )
+    assert asym_27.price_dkk_per_kwh == 0.71625
+    assert asym_27.fixed_fee_dkk_per_m2_year == 37.71
+    assert asym_27.motivation_dkk_per_kwh_per_k == 0.01113
+    assert asym_27.motivation_bonus is False
+    assert asym_27.bonus_temp == 0.0
+    assert asym_27.penalty_temp == 41.0
 
     bonus_adj = motivation_dkk_per_kwh(
         39.0,
-        htf.bonus_temp,
-        htf.penalty_temp,
-        htf.motivation_dkk_per_kwh_per_k,
-        bonus_rate=htf.motivation_bonus_dkk_per_kwh_per_k,
-        penalty_rate=htf.motivation_penalty_dkk_per_kwh_per_k,
+        asym_26.bonus_temp,
+        asym_26.penalty_temp,
+        asym_26.motivation_dkk_per_kwh_per_k,
+        bonus_rate=asym_26.motivation_bonus_dkk_per_kwh_per_k,
+        penalty_rate=asym_26.motivation_penalty_dkk_per_kwh_per_k,
     )
     penalty_adj = motivation_dkk_per_kwh(
         43.0,
-        htf.bonus_temp,
-        htf.penalty_temp,
-        htf.motivation_dkk_per_kwh_per_k,
-        bonus_rate=htf.motivation_bonus_dkk_per_kwh_per_k,
-        penalty_rate=htf.motivation_penalty_dkk_per_kwh_per_k,
+        asym_26.bonus_temp,
+        asym_26.penalty_temp,
+        asym_26.motivation_dkk_per_kwh_per_k,
+        bonus_rate=asym_26.motivation_bonus_dkk_per_kwh_per_k,
+        penalty_rate=asym_26.motivation_penalty_dkk_per_kwh_per_k,
     )
     assert bonus_adj == -0.01076
     assert penalty_adj == 0.02152
 
     # User motivation override forces symmetric rates and clears asymmetric split
-    htf_ovr = resolve_tariff(
+    asym_ovr = resolve_tariff(
         _entry(
-            data={"utility_id": "hoje-taastrup-fjernvarme"},
+            data={"utility_id": "synthetic-asym-varme"},
             options={
                 CONF_MOTIVATION_DKK_PER_KWH_PER_K: 0.02,
                 CONF_FIXED_FEE_DKK_PER_YEAR: 1567.5,
             },
         ),
         today=date(2026, 11, 27),
-        utilities=utilities,
+        utilities=asym_utilities,
     )
-    assert htf_ovr.motivation_bonus_dkk_per_kwh_per_k == 0.02
-    assert htf_ovr.motivation_penalty_dkk_per_kwh_per_k == 0.02
-    assert htf_ovr.annual_fixed_fee_dkk == 1567.5
+    assert asym_ovr.motivation_bonus_dkk_per_kwh_per_k == 0.02
+    assert asym_ovr.motivation_penalty_dkk_per_kwh_per_k == 0.02
+    assert asym_ovr.annual_fixed_fee_dkk == 1567.5
 
     # 2. Percentage asymmetry + price scaling: Sønderborg (-1% bonus / +0.5% penalty)
     sond_scaled = resolve_tariff(
@@ -1154,3 +1178,31 @@ def test_asymmetric_motivation_rates_and_suggested_fixed_fee_year() -> None:
     # Base 0.0125 + 2 °C * (12% * 0.0125 = 0.0015) = 0.0155 DKK/kWh -> 1000 * 0.0155 = 16 kr
     assert est["effective_price_dkk_per_kwh"] == 0.0155
     assert est["monthly_dkk"]["Jan"] == 16
+
+
+def test_bundled_utilities_json_has_vestforsyning_confirmed_and_tariffs() -> None:
+    from kmd_easy_energy.tariff import load_utilities
+
+    utilities = load_utilities()
+    by_id = {u["id"]: u for u in utilities}
+    vest = by_id["vestforsyning"]
+    assert vest["status"] == "confirmed"
+    assert vest["tier"] == "confirmed"
+
+    t26 = resolve_tariff(
+        _entry(data={"utility_id": "vestforsyning"}),
+        today=date(2026, 11, 27),
+        utilities=utilities,
+    )
+    assert t26.price_dkk_per_kwh == 0.67375
+    assert t26.fixed_fee_dkk_per_m2_year == 20.4
+    assert t26.motivation_dkk_per_kwh_per_k == 0.00375
+
+    t27 = resolve_tariff(
+        _entry(data={"utility_id": "vestforsyning"}),
+        today=date(2027, 2, 1),
+        utilities=utilities,
+    )
+    assert t27.price_dkk_per_kwh == 0.70125
+    assert t27.fixed_fee_dkk_per_m2_year == 21.2125
+    assert t27.motivation_dkk_per_kwh_per_k == 0.00375

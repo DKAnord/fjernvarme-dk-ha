@@ -25,6 +25,8 @@ def test_summarize_omits_series_and_tokens() -> None:
             "meters": [{"InstallationId": "inst-1", "Address": "Hemmeligvej 1"}],
             "available_units": [{"Name": "kWh", "Id": "u1"}],
             "daily": {"total": 12.5},
+            "sync_state": "error",
+            "sync_message": "Fejl: timeout",
             "token_expired": False,
             "kmd_supplies": {
                 "customer_count": 2,
@@ -60,6 +62,9 @@ def test_summarize_omits_series_and_tokens() -> None:
     assert summary["hourly_m3_points"] == 3
     assert summary["meter_count"] == 1
     assert summary["energy_mtd_kwh"] == 12.5
+    assert summary["sync_state"] == "error"
+    assert summary["sync_message"] == "Fejl: timeout"
+    assert _summarize_coordinator({"sync_message": ""})["sync_message"] is None
     assert "kWh" in summary["available_unit_names"]
     assert summary["kmd_supplies"]["selected_kind"] == "heat"
     assert summary["kmd_supplies"]["customer_count"] == 2

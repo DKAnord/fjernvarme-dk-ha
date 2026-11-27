@@ -9,7 +9,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import json
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -173,6 +173,24 @@ async def test_devices_are_classified_and_carry_no_personal_fields() -> None:
     assert by_id[fx.WATER_DEVICE]["kind"] == "water"
     dumped = json.dumps(devices)
     assert "Testvej" not in dumped and "12345678" not in dumped and "someone@" not in dumped
+
+
+@pytest.mark.asyncio
+async def test_devices_merge_metadata_when_device_id_appears_multiple_times() -> None:
+    detail = {
+        "devices": [
+            {"deviceId": fx.HEAT_DEVICE},
+            {"deviceId": fx.HEAT_DEVICE, "utilityType": "DistrictHeating", "unit": "kWh"},
+        ]
+    }
+    devices = await WattsOnClient(
+        fx.FakeSession({"/locations/loc-1": detail}), fx.REFRESH_1
+    ).async_devices()
+    assert len(devices) == 1
+    assert devices[0]["id"] == fx.HEAT_DEVICE
+    assert devices[0]["kind"] == "heat"
+    assert devices[0]["type"] == "DistrictHeating"
+    assert devices[0]["unit"] == "kWh"
 
 
 @pytest.mark.asyncio
@@ -597,6 +615,44 @@ def test_wattson_defaults_and_mitid_flags(tmp_path: Path) -> None:
     assert coord.sync_reminder_enabled is False and coord.data_source == "Watts On"
     kmd, _, _, _ = make_coordinator(tmp_path)
     assert kmd.uses_mitid is True
+
+
+@pytest.mark.asyncio
+async def test_wattson_sync_respects_selected_unclassified_device_id(tmp_path: Path) -> None:
+    device_id = "unclassified-dev-1"
+    coord, _, _, store = _w_coord(tmp_path, FakeStore({}), wattson_device_id=device_id)
+    detail = {"devices": [{"deviceId": device_id, "utilityType": "Unknown1", "unit": "kWh"}]}
+    session = fx.FakeSession(
+        {
+            "/locations/loc-1": detail,
+            f"dk/heating/api/v1/devices/{device_id}/consumption/recent": fx.heat_items(3),
+        }
+    )
+    with patch("kmd_easy_energy.coordinator.async_get_clientsession", return_value=session), patch(
+        "kmd_easy_energy.coordinator.copenhagen_today", return_value=TODAY
+    ):
+        await coord.async_sync_wattson()
+    assert store.data["wattson"]["device"]["type"] == "Unknown1"
+    assert store.data["daily_kwh_history"]
+
+
+def test_wattson_fresh_setup_schedules_fast_initial_sync(tmp_path: Path) -> None:
+    coord, _, _, _ = _w_coord(tmp_path)
+    with patch("kmd_easy_energy.coordinator.async_track_time_change"), patch(
+        "kmd_easy_energy.coordinator.async_call_later"
+    ) as later:
+        unsub = coord.async_start_auto_sync()
+        assert later.call_count == 1
+        assert later.call_args.args[1] == 10
+        unsub()
+    coord.last_sync = datetime.now(timezone.utc) - timedelta(hours=30)
+    with patch("kmd_easy_energy.coordinator.async_track_time_change"), patch(
+        "kmd_easy_energy.coordinator.async_call_later"
+    ) as later:
+        unsub = coord.async_start_auto_sync()
+        assert later.call_count == 1
+        assert later.call_args.args[1] == 120
+        unsub()
 
 
 @pytest.mark.asyncio

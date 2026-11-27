@@ -70,7 +70,7 @@ _SELECT_PLANT_RE = re.compile(
     r"selectPlant\(\s*['\"]([^'\"]+)['\"]\s*\)[^>]*>\s*<h5>(.*?)</h5>",
     re.IGNORECASE | re.DOTALL,
 )
-_EXCLUDED_DIRECTORY_SLUGS = {"albertslund"}
+_EXCLUDED_DIRECTORY_SLUGS = {"albertslund", "htf"}
 _NON_FILE_EXT_RE = re.compile(r"\.(?:php|html?|aspx)$", re.IGNORECASE)
 
 

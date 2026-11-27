@@ -228,13 +228,13 @@
       "name": "Vestforsyning",
       "city": "Holstebro",
       "portal_url": "https://www.vestforsyning.dk/selvbetjening/",
-      "status": "pending_test",
-      "tier": "verified_portal",
+      "status": "confirmed",
+      "tier": "confirmed",
       "auth_method": "MitID",
       "backend": "kmd",
       "latitude": 56.36,
       "longitude": 8.616,
-      "notes": "Uses minForsyning with MitID or email login.",
+      "notes": "KMD Min Forsyning with MitID login. Confirmed live. Official 2026/2027 tariffs included (0,67375 kr./kWh in 2026, 0,70125 kr./kWh in 2027, 20,40 / 21,2125 kr./m²/år, ±0,00375 kr./kWh/K).",
       "tariffs": [
         {
           "year": 2026,
@@ -914,50 +914,6 @@
           "source": "https://www.koegefjernvarme.dk/-/media/subsites/koege-fjernvarme/prisblad-2027-kge-fjernvarme-320.pdf",
           "source_note": "Prisblad 2027 (Køge Fjernvarme, almindelig omkostningsbestemt prisaftale pr. 2027-01-01): Varmepris 766,73 kr./MWh ekskl. moms / 958,41 kr./MWh inkl. moms (0,95841 kr./kWh). Effektbidrag (1–500 m² BBR): 32,36 ekskl. / 40,45 kr./m²/år inkl. moms. Målerbidrag (1–500 m²): 1.553,73 ekskl. / 1.942,16 kr./år inkl. moms. Ingen særskilt afkølings-/motivationstarif.",
           "fixed_fee_dkk_per_year": 1942.16
-        }
-      ]
-    },
-    {
-      "id": "hoje-taastrup-fjernvarme",
-      "name": "Høje Taastrup Fjernvarme",
-      "city": "Taastrup",
-      "portal_url": "https://eforsyning.dk/htf/",
-      "status": "pending_test",
-      "tier": "verified_portal",
-      "auth_method": "Forbrugernummer + webpinkode",
-      "backend": "eforsyning",
-      "eforsyning_supplier_id": "4DA78D70-B57F-4AD8-A037-2E62FBA3E0CD",
-      "latitude": 55.65,
-      "longitude": 12.292,
-      "notes": "E|Forsyning (afventer 1. test). forsyningid og AppServerUri bekræftet offentligt via GetVaerkSettings. Login med forbrugernummer + webpinkode fra regningen; daglige aflæsninger.",
-      "tariffs": [
-        {
-          "year": 2026,
-          "effective_from": "2026-01-01",
-          "price_dkk_per_kwh": 0.6925,
-          "price_dkk_per_m3": null,
-          "fixed_fee_dkk_per_m2_year": 36.52,
-          "motivation_dkk_per_kwh_per_k": 0.01076,
-          "bonus_temp": 41.0,
-          "penalty_temp": 41.0,
-          "source": "https://htf.dk/wp-content/uploads/2025/12/Prisblad-2026.pdf",
-          "source_note": "Prisblad 2026 (Høje Taastrup Fjernvarme a.m.b.a.): Variabel afgift 554,00 kr./MWh ekskl. moms / 692,50 kr./MWh inkl. moms (0,6925 kr./kWh). Effektafgift (< 500 m² BBR): 29,22 ekskl. / 36,52 kr./m²/år inkl. moms. Abonnement måler (< 500 m²): 1.254,00 ekskl. / 1.567,50 kr./år inkl. moms. Returtemperaturtarif (asymmetrisk ift. 41 °C årsgennemsnit): tillæg +8,61 ekskl. / +10,76 kr./°C/MWh inkl. moms (+0,01076 kr./°C/kWh) over 41 °C (+16,02 kr./°C/MWh over 50 °C) og bonus -4,31 ekskl. / -5,38 kr./°C/MWh inkl. moms under 41 °C.",
-          "motivation_bonus_dkk_per_kwh_per_k": 0.00538,
-          "fixed_fee_dkk_per_year": 1567.5
-        },
-        {
-          "year": 2027,
-          "effective_from": "2027-01-01",
-          "price_dkk_per_kwh": 0.71625,
-          "price_dkk_per_m3": null,
-          "fixed_fee_dkk_per_m2_year": 37.71,
-          "motivation_dkk_per_kwh_per_k": 0.01113,
-          "motivation_bonus": false,
-          "bonus_temp": 0.0,
-          "penalty_temp": 41.0,
-          "source": "https://htf.dk/wp-content/uploads/2026/11/Prisblad-2027-1.pdf",
-          "source_note": "Prisblad 2027 (Høje Taastrup Fjernvarme a.m.b.a., gældende fra 2027-01-01): Variabelt bidrag 573,00 kr./MWh ekskl. moms / 716,25 kr./MWh inkl. moms (0,71625 kr./kWh). Effektbidrag (0–499,5 m² BBR): 30,17 ekskl. / 37,71 kr./m²/år inkl. moms. Abonnement (0–499,5 m²): 1.295,00 ekskl. / 1.618,75 kr./år inkl. moms. Motivationstarif (kun tillæg i 2027, bonus udgår): +8,90 ekskl. / +11,13 kr./°C/MWh inkl. moms (+0,01113 kr./°C/kWh) over 41 °C og ekstra tillæg +26,47 ekskl. / +33,09 kr./°C/MWh inkl. moms over 50 °C.",
-          "fixed_fee_dkk_per_year": 1618.75
         }
       ]
     },

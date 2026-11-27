@@ -2609,9 +2609,11 @@ class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             if not device_id or not device_meta:
                 devices = await client.async_devices()
                 heat = [d for d in devices if d.get("kind") == "heat"]
-                chosen = next((d for d in heat if d["id"] == device_id), None) or (
-                    heat[0] if heat else None
-                )
+                chosen = (
+                    next((d for d in devices if d["id"] == device_id), None)
+                    if device_id
+                    else None
+                ) or (heat[0] if heat else None)
                 if chosen is None:
                     kinds = sorted({str(d.get("kind") or d.get("type") or "?") for d in devices})
                     raise RuntimeError(
@@ -2703,8 +2705,9 @@ class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     def async_start_auto_sync(self) -> Callable[[], None]:
         """Daily automatic sync for E|Forsyning / Watts On (no-op for KMD/MitID).
 
-        Runs at the configured hour (Europe/Copenhagen HA time) and once a few
-        minutes after start-up when the last sync is older than a day.
+        Runs at the configured hour (Europe/Copenhagen HA time), quickly (~10 s)
+        on a fresh setup with no prior sync, or ~2 minutes after start-up when
+        the cached last sync is older than 26 hours.
         """
         self.started_auto_sync_signature = self.auto_sync_signature
         if not self.auto_sync_enabled:
@@ -2718,8 +2721,9 @@ class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             self.hass, _daily, hour=self.auto_sync_hour, minute=17, second=0
         )
         unsub_start: Callable[[], None] | None = None
-        stale = self.last_sync is None or (dt_util.utcnow() - self.last_sync) > timedelta(hours=26)
-        if stale:
+        if self.last_sync is None:
+            unsub_start = async_call_later(self.hass, 10, _daily)
+        elif (dt_util.utcnow() - self.last_sync) > timedelta(hours=26):
             unsub_start = async_call_later(self.hass, 120, _daily)
 
         def _unsub() -> None:

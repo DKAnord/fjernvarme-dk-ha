@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -364,7 +364,16 @@ def test_auto_sync_timer_only_for_eforsyning(tmp_path: Path) -> None:
         assert track.call_count == 0 and later.call_count == 0
         unsub = ef.async_start_auto_sync()
         assert track.call_args.kwargs["hour"] == 6
-        assert later.call_count == 1  # never synced -> one catch-up sync after start
+        assert later.call_count == 1  # never synced -> quick catch-up sync after start
+        assert later.call_args.args[1] == 10
+        unsub()
+    ef.last_sync = datetime.now(timezone.utc) - timedelta(hours=30)
+    with patch("kmd_easy_energy.coordinator.async_track_time_change"), patch(
+        "kmd_easy_energy.coordinator.async_call_later"
+    ) as later:
+        unsub = ef.async_start_auto_sync()
+        assert later.call_count == 1
+        assert later.call_args.args[1] == 120
         unsub()
     ef.last_sync = datetime.now(timezone.utc)
     with patch("kmd_easy_energy.coordinator.async_track_time_change"), patch(
@@ -401,7 +410,8 @@ def test_utilities_json_backend_field_and_hjorring() -> None:
     assert fh["tier"] == "confirmed"
 
     eforsyning = {u["id"] for u in data["utilities"] if u.get("backend") == "eforsyning"}
-    assert len(eforsyning) == 43
+    assert len(eforsyning) == 42
+    assert "hoje-taastrup-fjernvarme" not in by_id
     assert eforsyning >= {
         "soroe-fjernvarme",
         "hadsund-fjernvarme",
@@ -456,6 +466,11 @@ def test_utilities_json_backend_field_and_hjorring() -> None:
     assert kalundborg["status"] == "confirmed"
     assert kalundborg["tier"] == "confirmed"
     assert kalundborg["auth_method"] == "MitID"
+    vestforsyning = by_id["vestforsyning"]
+    assert vestforsyning["backend"] == "kmd"
+    assert vestforsyning["status"] == "confirmed"
+    assert vestforsyning["tier"] == "confirmed"
+    assert vestforsyning["auth_method"] == "MitID"
     wattson = {u["id"] for u in data["utilities"] if u.get("backend") == "wattson"}
     others = eforsyning | wattson
     assert wattson >= {"aalborg-forsyning", "forsyning-helsingor", "fjernvarme-fyn", "hillerod-forsyning"}
@@ -638,6 +653,7 @@ def test_parse_eforsyning_directory_filters_water_and_albertslund() -> None:
     sample_html = """
     <a href="javascript:selectPlant('https://eforsyning.dk/addit/');"><h5>Addit Vandv&#xE6;rk</h5></a>
     <a href="javascript:selectPlant('https://eforsyning.dk/albertslund/');"><h5>Albertslund Forsyning</h5></a>
+    <a href="javascript:selectPlant('https://eforsyning.dk/htf/');"><h5>H&#xF8;je Taastrup Fjernvarme</h5></a>
     <a href="javascript:selectPlant('https://eforsyning.dk/aulumfjernvarme/');"><h5>Aulum Fjernvarme a.m.b.a. og Aulum Vandv&#xE6;rk a.m.b.a.</h5></a>
     <a href="javascript:selectPlant('https://eforsyning.dk/horsens/');"><h5>Fjernvarme Horsens</h5></a>
     <a href="javascript:selectPlant('https://www.vejlefjernvarme.dk/eforsyning/');"><h5>Vejle Fjernvarme</h5></a>
@@ -646,6 +662,7 @@ def test_parse_eforsyning_directory_filters_water_and_albertslund() -> None:
     names = [p["name"] for p in parsed]
     assert "Addit Vandværk" not in names
     assert "Albertslund Forsyning" not in names
+    assert "Høje Taastrup Fjernvarme" not in names
     assert names == [
         "Aulum Fjernvarme a.m.b.a. og Aulum Vandværk a.m.b.a.",
         "Fjernvarme Horsens",

@@ -100,6 +100,7 @@
     { id: "hedensted-fjernvarme", name: "Hedensted Fjernvarme", city: "Hedensted", url: "https://eforsyning.dk/hedenstedfjernvarme/", status: "confirmed", backend: "eforsyning" },
     { id: "dronninglund-fjernvarme", name: "Dronninglund Fjernvarme", city: "Dronninglund", url: "https://eforsyning.dk/dronninglundfjernvarme/", status: "confirmed", backend: "eforsyning" },
     { id: "kongerslev-fjernvarme", name: "Kongerslev Fjernvarme", city: "Kongerslev", url: "https://eforsyning.dk/kongerslev/", status: "confirmed", backend: "eforsyning" },
+    { id: "grenaa-varmevaerk", name: "Grenaa Varmeværk", city: "Grenaa", url: "https://eforsyning.dk/grenaa-varmevaerk/", status: "confirmed", backend: "eforsyning" },
     { id: "hjorring-varmeforsyning", name: "Hjørring Varmeforsyning", city: "Hjørring", url: "https://eforsyning.dk/hjvarme/", status: "pending_test", backend: "eforsyning" },
     { id: "aalborg-forsyning", name: "Aalborg Forsyning", city: "Aalborg", url: "https://aalborgforsyning.dk/services/forbrug/watts-on/", status: "confirmed", backend: "wattson" },
     { id: "fjernvarme-fyn", name: "Fjernvarme Fyn", city: "Odense / Fyn", url: "https://www.fjernvarmefyn.dk/spar-paa-energien/overblik/watts-on-app/", status: "confirmed", backend: "wattson" },

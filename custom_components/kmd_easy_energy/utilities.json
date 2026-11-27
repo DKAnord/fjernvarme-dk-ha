@@ -1119,6 +1119,35 @@
       ]
     },
     {
+      "id": "grenaa-varmevaerk",
+      "name": "Grenaa Varmeværk",
+      "city": "Grenaa",
+      "portal_url": "https://eforsyning.dk/grenaa-varmevaerk/",
+      "status": "confirmed",
+      "tier": "confirmed",
+      "auth_method": "Forbrugernummer + webpinkode",
+      "backend": "eforsyning",
+      "eforsyning_supplier_id": "BE112409-C45D-4E63-BFF6-1C4E8F9ED990",
+      "latitude": 56.416,
+      "longitude": 10.878,
+      "notes": "E|Forsyning. forsyningid og AppServerUri (https://apiapp.dff-edb.dk/grenaa/) bekræftet live for Grenaa Varmeværk A.m.b.A. (issue #48). Login med forbrugernummer + webpinkode fra regningen; daglige aflæsninger. Takstblad 2026: 390,00 kr./MWh inkl. moms (0,39 kr./kWh), fast effektbidrag 28,25 kr./m²/år inkl. moms, målerabonnement 975,00 kr./år inkl. moms (1,5 m³-måler) samt ±1 %/°C motivationstarif uden for fremløbsafhængig neutralzone (32–35 °C ved 60–61 °C fremløb).",
+      "tariffs": [
+        {
+          "year": 2026,
+          "effective_from": "2026-01-01",
+          "price_dkk_per_kwh": 0.39,
+          "price_dkk_per_m3": null,
+          "fixed_fee_dkk_per_m2_year": 28.25,
+          "motivation_pct_per_k": 1.0,
+          "bonus_temp": 32.0,
+          "penalty_temp": 35.0,
+          "source": "https://grenaa-varmevaerk.dk/p/Grenaa%20Varmev%C3%A6rk/%C3%98konomi/Takstblad-2026.pdf",
+          "source_note": "Takstblad 2026 (Grenaa Varmeværk A.m.b.A., fastsat 10. dec. 2025): Forbrugsbidrag 312,00 kr./MWh ekskl. moms / 390,00 kr./MWh inkl. moms (0,39 kr./kWh). Effektbidrag 22,60 ekskl. / 28,25 kr./m²/år inkl. moms iflg. BBR (50 % rabat for nyopførte BR18-lavenergihuse). Abonnementsbidrag (1,5 m³-måler): 780,00 ekskl. / 975,00 kr./år inkl. moms (2,5 m³-måler: 1.300,00 kr./år inkl. moms). Motivationstarif: -1 %/°C under og +1 %/°C over fremløbsafhængig neutralzone (37–40 °C ved 50–51 °C, 32–35 °C ved 60–61 °C, 30–34 °C ved 64–66 °C, 28–31 °C ved 70–72 °C fremløb; bruger automatisk Forv_Retur fra E|Forsyning hvis oplyst).",
+          "fixed_fee_dkk_per_year": 975.0
+        }
+      ]
+    },
+    {
       "id": "solrod-fjernvarme",
       "name": "Solrød Fjernvarme",
       "city": "Solrød Strand",

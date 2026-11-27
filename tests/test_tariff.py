@@ -833,14 +833,14 @@ def test_bundled_utilities_json_has_energi_ikast_2026_2027_tariffs_and_dynamic_c
     assert with_area_est["annual_fixed_fee_dkk"] == 4375.0
 
 
-def test_bundled_utilities_json_all_62_have_tariffs_and_spot_checks() -> None:
+def test_bundled_utilities_json_all_63_have_tariffs_and_spot_checks() -> None:
     from kmd_easy_energy.tariff import load_utilities
 
     utilities = load_utilities()
-    assert len(utilities) == 62
+    assert len(utilities) == 63
     with_tariffs = [u for u in utilities if u.get("tariffs")]
-    assert len(with_tariffs) == len(utilities) == 62
-    assert len({u["id"] for u in utilities}) == 62
+    assert len(with_tariffs) == len(utilities) == 63
+    assert len({u["id"] for u in utilities}) == 63
 
     backends = {}
     for u in utilities:
@@ -849,7 +849,7 @@ def test_bundled_utilities_json_all_62_have_tariffs_and_spot_checks() -> None:
         for t in u["tariffs"]:
             assert t["price_dkk_per_kwh"] > 0, u["id"]
             assert str(t.get("source", "")).startswith("https://"), u["id"]
-    assert backends == {"kmd": 16, "eforsyning": 42, "wattson": 4}
+    assert backends == {"kmd": 16, "eforsyning": 43, "wattson": 4}
 
     by_id = {u["id"]: u for u in utilities}
     assert "hoje-taastrup-fjernvarme" not in by_id
@@ -1206,3 +1206,63 @@ def test_bundled_utilities_json_has_vestforsyning_confirmed_and_tariffs() -> Non
     assert t27.price_dkk_per_kwh == 0.70125
     assert t27.fixed_fee_dkk_per_m2_year == 21.2125
     assert t27.motivation_dkk_per_kwh_per_k == 0.00375
+
+
+def test_bundled_utilities_json_has_grenaa_2026_tariff_and_custom_matching() -> None:
+    from kmd_easy_energy.tariff import load_utilities, match_utility_for_entry
+
+    utilities = load_utilities()
+    by_id = {u["id"]: u for u in utilities}
+    grenaa = by_id["grenaa-varmevaerk"]
+    assert grenaa["status"] == "confirmed"
+    assert grenaa["tier"] == "confirmed"
+    assert grenaa["eforsyning_supplier_id"] == "BE112409-C45D-4E63-BFF6-1C4E8F9ED990"
+    assert grenaa["portal_url"] == "https://eforsyning.dk/grenaa-varmevaerk/"
+
+    t = published_tariff("grenaa-varmevaerk", 2026, utilities)
+    assert t is not None
+    assert t["price_dkk_per_kwh"] == 0.39
+    assert t["fixed_fee_dkk_per_m2_year"] == 28.25
+    assert t["fixed_fee_dkk_per_year"] == 975.0
+    assert t["motivation_pct_per_k"] == 1.0
+    assert t["bonus_temp"] == 32.0
+    assert t["penalty_temp"] == 35.0
+    assert t["source"].startswith("https://grenaa-varmevaerk.dk/")
+
+    by_supplier = match_utility_for_entry(
+        {
+            "utility_id": "eforsyning-custom",
+            "eforsyning_supplier_id": "be112409-c45d-4e63-bff6-1c4e8f9ed990",
+            "portal_url": "https://eforsyning.dk/",
+        },
+        utilities,
+    )
+    assert by_supplier is not None and by_supplier["id"] == "grenaa-varmevaerk"
+
+    by_portal = match_utility_for_entry(
+        {
+            "utility_id": "eforsyning-custom",
+            "portal_url": "https://eforsyning.dk/grenaa-varmevaerk",
+        },
+        utilities,
+    )
+    assert by_portal is not None and by_portal["id"] == "grenaa-varmevaerk"
+
+    resolved = resolve_tariff(
+        _entry(
+            data={
+                "utility_id": "eforsyning-custom",
+                "portal_url": "https://eforsyning.dk/grenaa-varmevaerk/",
+            },
+        ),
+        today=date(2026, 11, 27),
+        utilities=utilities,
+    )
+    assert resolved.utility_id == "grenaa-varmevaerk"
+    assert resolved.price_dkk_per_kwh == 0.39
+    assert resolved.fixed_fee_dkk_per_m2_year == 28.25
+    assert resolved.suggested_fixed_fee_dkk_per_year == 975.0
+    assert resolved.motivation_pct_per_k == 1.0
+    assert resolved.motivation_dkk_per_kwh_per_k == round(0.39 * 0.01, 6)
+    assert resolved.bonus_temp == 32.0
+    assert resolved.penalty_temp == 35.0

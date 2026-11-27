@@ -438,6 +438,7 @@ def test_utilities_json_backend_field_and_hjorring() -> None:
         "svendborg-fjernvarme",
         "norfors-fjernvarme",
         "taarnby-forsyning",
+        "aabenraa-fjernvarme",
     }
     hadsund = by_id["hadsund-fjernvarme"]
     assert hadsund["status"] == "confirmed"
@@ -514,6 +515,11 @@ def test_utilities_json_backend_field_and_hjorring() -> None:
     assert aalestrup["tier"] == "confirmed"
     assert aalestrup["eforsyning_supplier_id"] == "5AE1507E-D219-49F4-95FB-C87338FC67A0"
     assert aalestrup["portal_url"] == "https://eforsyning.dk/an-energi-varme/"
+    aabenraa = by_id["aabenraa-fjernvarme"]
+    assert aabenraa["status"] == "confirmed"
+    assert aabenraa["tier"] == "confirmed"
+    assert aabenraa["eforsyning_supplier_id"] == "36793E9C-71E7-4DD5-B386-654FEEEEDB21"
+    assert aabenraa["portal_url"] == "https://eforsyning.dk/aabenraa-fjernvarme/"
     silkeborg = by_id["silkeborg-forsyning"]
     assert silkeborg["backend"] == "kmd"
     assert silkeborg["status"] == "confirmed"

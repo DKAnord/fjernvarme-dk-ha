@@ -1756,3 +1756,40 @@ def test_viborg_varme_and_aalestrup_norager_confirmed_tariffs() -> None:
     )
     assert a_82.bonus_temp == 25.0
     assert a_82.penalty_temp == 25.0
+
+
+def test_aabenraa_fjernvarme_confirmed_2026_and_2027_tariffs() -> None:
+    from kmd_easy_energy.tariff import load_utilities
+
+    utilities = load_utilities()
+    by_id = {u["id"]: u for u in utilities}
+    aabenraa = by_id["aabenraa-fjernvarme"]
+    assert aabenraa["status"] == "confirmed"
+    assert aabenraa["tier"] == "confirmed"
+    assert aabenraa["eforsyning_supplier_id"] == "36793E9C-71E7-4DD5-B386-654FEEEEDB21"
+    assert aabenraa["portal_url"] == "https://eforsyning.dk/aabenraa-fjernvarme/"
+
+    for check_date in (date(2026, 11, 27), date(2027, 2, 1)):
+        res = resolve_tariff(
+            _entry(data={"utility_id": "aabenraa-fjernvarme"}),
+            today=check_date,
+            utilities=utilities,
+        )
+        assert res.utility_id == "aabenraa-fjernvarme"
+        assert res.price_dkk_per_kwh == 0.511
+        assert res.fixed_fee_dkk_per_m2_year == 12.5
+        assert res.suggested_fixed_fee_dkk_per_year == 750.0
+        assert res.motivation_pct_per_k == 1.0
+        assert res.motivation_bonus is False
+        assert res.bonus_temp == 0.0
+        assert res.penalty_temp == 40.0
+
+    for fwd, expected_ret in ((50.0, 44.0), (60.0, 40.0), (70.0, 37.0), (75.0, 36.0)):
+        res = resolve_tariff(
+            _entry(data={"utility_id": "aabenraa-fjernvarme"}),
+            today=date(2026, 11, 27),
+            utilities=utilities,
+            forward_temp=fwd,
+        )
+        assert res.bonus_temp == 0.0
+        assert res.penalty_temp == expected_ret

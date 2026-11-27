@@ -2,6 +2,12 @@
 
 Alle væsentlige ændringer i **Dansk Fjernvarme** (tidligere *Fjernvarme (KMD Easy Energy)*) dokumenteres her.
 
+## [1.3.16] - 2026-11-27
+
+### Bekræftet & Forbedret
+- **Aabenraa Fjernvarme bekræftet live + 2026/2027 afkølingstarif ([issue #62](https://github.com/DKAnord/fjernvarme-dk-ha/issues/62), tak til `@GuezzDK`):** Markeret som ✅ **Bekræftet** E|Forsyning-værk (`aabenraa-fjernvarme`, `https://eforsyning.dk/aabenraa-fjernvarme/`, verificeret med `kWh`, `m³` og `°C` — nu **30** live-bekræftede værker og **69/69** forudfyldte værker), inkl. officielle 2026/2027-takster (`0,511 kr./kWh` / `511,00 kr./MWh` inkl. moms, arealbidrag `12,50 kr./m²/år`, målerabonnement `750,00 kr./år`) samt officiel afkølingstarif (`+1 %/°C`, kun tillæg uden bonus, med fremløbsskema `50–75 °C → 44–36 °C`).
+- **Kortressource:** Opdateret cache-busting ressource-URL til `/kmd_easy_energy/kmd-easy-energy-card.js?v=1.3.16`.
+
 ## [1.3.15] - 2026-11-27
 
 ### Bekræftet & Tilføjet

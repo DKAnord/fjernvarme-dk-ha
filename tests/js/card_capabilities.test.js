@@ -466,7 +466,7 @@ for (const hiddenSec of ["return-temp", "hourly", "daily", "mtd-ytd", "insights"
 }
 assert.ok(!emptyHtml.includes("– °C") && !emptyHtml.includes("– kWh"), "no placeholder dash KPIs rendered");
 assert.ok(!emptyHtml.includes("0 kr."), "no fake 0 kr. billing KPI rendered");
-assert.ok(!emptyHtml.includes("kl. 00:00") && !emptyHtml.includes("0,00 kWh/t"), "no empty peak hour insight rendered");
+assert.ok(!emptyHtml.includes("kl. 00:00") && !emptyHtml.includes("0,00 kWh"), "no empty peak hour insight rendered");
 assert.ok(!emptyHtml.includes("Ude °C"), "monthly chart hides outdoor temperature legend when monthly_temp is missing");
 
 // Saldo-only billing shows actual Saldo instead of fake 0 kr.
@@ -491,6 +491,8 @@ const hourlyNoRetCard = render({
 }, []);
 const hourlySectionHtml = hourlyNoRetCard.shadowRoot.innerHTML.split('data-section="hourly"')[1].split("</svg>")[0];
 assert.ok(!hourlySectionHtml.includes("Retur °C"), "hourly chart hides Retur °C legend when hourly ret_temp is missing");
+assert.ok(hourlySectionHtml.includes(">kWh</text>"), "hourly chart uses kWh unit on Y-axis");
+assert.ok(!hourlyNoRetCard.shadowRoot.innerHTML.includes("kWh/t"), "hourly card never renders kWh/t");
 
 // 18) Dismissible manual-entry note + localStorage persistence + editor opt-out + non-admin visibility.
 const prevLocalStorage = global.localStorage;

@@ -30,7 +30,7 @@ def test_manifest_loggers_and_integration_type() -> None:
     manifest = json.loads((CC / "manifest.json").read_text())
     assert manifest["integration_type"] == "service"
     assert "custom_components.kmd_easy_energy" in manifest["loggers"]
-    assert manifest["version"] == "1.3.12"
+    assert manifest["version"] == "1.3.13"
     assert "http" in manifest.get("after_dependencies", [])
     assert "recorder" in manifest.get("after_dependencies", [])
     assert not any(str(r).startswith("requests") for r in manifest["requirements"])

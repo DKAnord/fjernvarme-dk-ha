@@ -1603,3 +1603,28 @@ def test_hammel_fjernvarme_confirmed_2026_and_custom_matching() -> None:
     assert resolved.fixed_fee_dkk_per_m2_year == 28.75
     assert resolved.suggested_fixed_fee_dkk_per_year == 1375.0
     assert resolved.motivation_dkk_per_kwh_per_k is None
+
+
+def test_bronderslev_forsyning_confirmed_2026_tariff() -> None:
+    from kmd_easy_energy.tariff import load_utilities
+
+    utilities = load_utilities()
+    by_id = {u["id"]: u for u in utilities}
+    bronderslev = by_id["bronderslev-forsyning"]
+    assert bronderslev["status"] == "confirmed"
+    assert bronderslev["tier"] == "confirmed"
+
+    resolved = resolve_tariff(
+        _entry(data={"utility_id": "bronderslev-forsyning"}),
+        today=date(2026, 11, 27),
+        utilities=utilities,
+    )
+    assert resolved.utility_id == "bronderslev-forsyning"
+    assert resolved.price_dkk_per_kwh == 0.75825
+    assert resolved.fixed_fee_dkk_per_m2_year == 18.35
+    assert resolved.suggested_fixed_fee_dkk_per_year == 918.75
+    assert resolved.motivation_pct_per_k == 1.0
+    assert resolved.motivation_bonus is False
+    assert resolved.bonus_temp == 0.0
+    assert resolved.penalty_temp == 30.0
+    assert resolved.motivation_dkk_per_kwh_per_k == round(0.75825 * 0.01, 6)

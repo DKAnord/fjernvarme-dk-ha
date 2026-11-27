@@ -3,7 +3,7 @@
  * Zero external dependencies, Shadow DOM, responsive, interactive tooltips, DA/EN i18n.
  */
 (() => {
-  const VER = "1.3.12";
+  const VER = "1.3.13";
   const MONTHS = ["Jan", "Feb", "Mar", "Apr", "Maj", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Dec"];
   const DAYS_IN_MONTH = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
   const isLeapYear = (y) => (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0;
@@ -88,7 +88,7 @@
     { id: "albertslund-forsyning", name: "Albertslund Forsyning", city: "Albertslund", url: "https://forsyning.albertslund.dk/selvbetjening", status: "confirmed" },
     { id: "frederiksberg-forsyning", name: "Frederiksberg Forsyning", city: "Frederiksberg", url: "https://www.frb-forsyning.dk/selvbetjening/", status: "pending_test" },
     { id: "silkeborg-forsyning", name: "Silkeborg Forsyning", city: "Silkeborg", url: "https://www.silkeborgforsyning.dk/selvbetjening/", status: "confirmed" },
-    { id: "bronderslev-forsyning", name: "Brønderslev Forsyning", city: "Brønderslev", url: "https://www.bronderslevforsyning.dk/", status: "pending_test" },
+    { id: "bronderslev-forsyning", name: "Brønderslev Forsyning", city: "Brønderslev", url: "https://www.bronderslevforsyning.dk/", status: "confirmed" },
     { id: "lolland-forsyning", name: "Lolland Forsyning", city: "Nakskov / Lolland", url: "https://lollandforsyning.dk/kunde/varme/", status: "pending_test" },
     { id: "halsnaes-forsyning", name: "Halsnæs Forsyning", city: "Frederiksværk / Halsnæs", url: "https://hnf.dk/selvbetjening/", status: "pending_test" },
     { id: "kerteminde-forsyning", name: "Kerteminde Forsyning", city: "Kerteminde", url: "https://www.kertemindeforsyning.dk/minforsyning-forbrugsapp", status: "pending_test" },
@@ -542,7 +542,7 @@
       const yK = (v) => pad.t + ch - (v / maxK) * ch;
       const yT = (t) => pad.t + ch - ((t - minT) / Math.max(1, maxT - minT)) * ch;
 
-      let grid = `<text x="${pad.l - 6}" y="13" text-anchor="end" class="ax-unit">kWh/t</text>${hasTemp ? `<text x="${W - pad.r + 6}" y="13" text-anchor="start" class="ax-unit">°C</text>` : ""}`;
+      let grid = `<text x="${pad.l - 6}" y="13" text-anchor="end" class="ax-unit">kWh</text>${hasTemp ? `<text x="${W - pad.r + 6}" y="13" text-anchor="start" class="ax-unit">°C</text>` : ""}`;
       const kStep = maxK <= 1.8 ? 0.5 : (maxK <= 5 ? 1 : niceStep(maxK, 4));
       for (let kv = kStep; kv <= maxK + 1e-6; kv += kStep) {
         const y = yK(kv);
@@ -574,7 +574,7 @@
           const y = yK(kv);
           const isPeak = info.peaks.has(h);
           const bw = Math.min(15, xStep * 0.64);
-          bars += `<rect x="${cx - bw / 2}" y="${y}" width="${bw}" height="${Math.max(2, pad.t + ch - y)}" rx="3.5" fill="${isPeak ? '#ec4899' : '#f59e0b'}" fill-opacity="${isPeak ? '0.94' : '0.72'}" tabindex="0" data-tip="Kl. ${String(h).padStart(2, '0')}:00 snit: ${fmtDec(kv, 2)} kWh/t${isPeak ? ' (Spidstime)' : ''}${typeof tv === 'number' ? ` · Retur ${fmtDec(tv)} °C` : ''}"/>`;
+          bars += `<rect x="${cx - bw / 2}" y="${y}" width="${bw}" height="${Math.max(2, pad.t + ch - y)}" rx="3.5" fill="${isPeak ? '#ec4899' : '#f59e0b'}" fill-opacity="${isPeak ? '0.94' : '0.72'}" tabindex="0" data-tip="Kl. ${String(h).padStart(2, '0')}:00 snit: ${fmtDec(kv, 2)} kWh${isPeak ? ' (Spidstime)' : ''}${typeof tv === 'number' ? ` · Retur ${fmtDec(tv)} °C` : ''}"/>`;
           if (h === info.maxIdx && info.peaks.has(h)) {
             bars += `<text x="${cx}" y="${Math.max(pad.t - 4, y - 6)}" text-anchor="middle" class="val">${fmtDec(kv, 2)}</text>`;
           }
@@ -821,10 +821,10 @@
       const peakHourIdx = peakInfo.maxIdx || (hrArr.length ? hrArr.indexOf(peakHourVal) : 0);
       const minHourVal = peakInfo.minPos || (hrArr.length ? Math.min(...hrArr) : 0);
       const peakLegendTxt = peakInfo.peaks.size > 1
-        ? `Peak ${String(peakHourIdx).padStart(2, "0")}:00 (${fmtDec(peakHourVal, 2)} kWh/t) · ${peakInfo.peaks.size} ${lang === "en" ? "peak hrs" : "spidstimer"}`
+        ? `Peak ${String(peakHourIdx).padStart(2, "0")}:00 (${fmtDec(peakHourVal, 2)} kWh) · ${peakInfo.peaks.size} ${lang === "en" ? "peak hrs" : "spidstimer"}`
         : peakInfo.peaks.size === 1
-          ? `Peak ${String(peakHourIdx).padStart(2, "0")}:00 (${fmtDec(peakHourVal, 2)} kWh/t)`
-          : `${lang === "en" ? "No sharp peak" : "Ingen markant spidstime"} (maks ${fmtDec(peakHourVal, 2)} kWh/t)`;
+          ? `Peak ${String(peakHourIdx).padStart(2, "0")}:00 (${fmtDec(peakHourVal, 2)} kWh)`
+          : `${lang === "en" ? "No sharp peak" : "Ingen markant spidstime"} (maks ${fmtDec(peakHourVal, 2)} kWh)`;
       const peakOtherList = peakInfo.peakList.filter((h) => h !== peakHourIdx).map((h) => `kl. ${String(h).padStart(2, "0")}:00`);
       const peakInsightSub = peakOtherList.length ? ` (samt ${peakOtherList.join(", ")})` : "";
       const baseDayKwh = Number(ins.baseload_kwh_mo ?? 0) / 30;
@@ -1667,7 +1667,7 @@
               </div>` : ""}
               ${showInsHourly ? `<div class="ins" data-section="ins-hourly">
                 <div class="ins-title">🚿 Døgnrytme (${esc(hr.days_averaged || Object.keys(dy.days || {}).length)}-dages MTD)</div>
-                Højeste spidstime er kl. <b>${String(peakHourIdx).padStart(2, "0")}:00</b> med <b>${fmtDec(peakHourVal, 2)} kWh/t</b>${esc(peakInsightSub)}, mens bundniveauet ligger på ~${fmtDec(minHourVal, 2)} kWh/t.
+                Højeste spidstime er kl. <b>${String(peakHourIdx).padStart(2, "0")}:00</b> med <b>${fmtDec(peakHourVal, 2)} kWh</b>${esc(peakInsightSub)}, mens bundniveauet ligger på ~${fmtDec(minHourVal, 2)} kWh.
               </div>` : ""}
               ${showInsReturnTemp ? `<div class="ins" data-section="ins-temp">
                 <div class="ins-title">⚡ Returtemperatur &amp; Afkøling</div>

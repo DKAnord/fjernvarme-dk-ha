@@ -432,13 +432,13 @@
       "name": "Brønderslev Forsyning",
       "city": "Brønderslev",
       "portal_url": "https://www.bronderslevforsyning.dk/",
-      "status": "pending_test",
-      "tier": "verified_portal",
+      "status": "confirmed",
+      "tier": "confirmed",
       "auth_method": "MitID",
       "backend": "kmd",
       "latitude": 57.27,
       "longitude": 9.941,
-      "notes": "KMD Min Forsyning 2 (OIDC discovery bekræftet live mod mf 0682000). Afventer 1. brugertest med MitID.",
+      "notes": "KMD Min Forsyning 2 (OIDC discovery bekræftet live mod mf 0682000). Bekræftet live i issue #57 af @tr4x1s (verificeret med kWh).",
       "tariffs": [
         {
           "year": 2026,
@@ -447,8 +447,12 @@
           "price_dkk_per_m3": null,
           "fixed_fee_dkk_per_m2_year": 18.35,
           "fixed_fee_dkk_per_year": 918.75,
+          "motivation_pct_per_k": 1.0,
+          "motivation_bonus": false,
+          "bonus_temp": 0.0,
+          "penalty_temp": 30.0,
           "source": "https://bronderslevforsyning.dk/varme/takster-varme-2026",
-          "source_note": "Takster varme 2026 (Brønderslev Varme A/S, inkl. moms): Variabel forbrugsafgift 758,25 kr./MWh (0,75825 kr./kWh). Fast bidrag: 18,35 kr./m²/år og abonnement: 918,75 kr./år inkl. moms."
+          "source_note": "Takster varme 2026 (Brønderslev Varme A/S, inkl. moms): Variabel forbrugsafgift 758,25 kr./MWh (0,75825 kr./kWh). Fast bidrag: 18,35 kr./m²/år og abonnement: 918,75 kr./år inkl. moms (QP 1,5/SCYLAR). Motivationstarif (kun tillæg, ingen bonus): +1 %/°C ved årsgennemsnitlig returtemperatur over 30 °C."
         }
       ]
     },

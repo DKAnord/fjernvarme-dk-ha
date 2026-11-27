@@ -2,6 +2,12 @@
 
 Alle væsentlige ændringer i **Dansk Fjernvarme** (tidligere *Fjernvarme (KMD Easy Energy)*) dokumenteres her.
 
+## [1.3.13] - 2026-11-27
+
+### Bekræftet & Forbedret
+- **Brønderslev Forsyning bekræftet live + 2026 motivationstarif ([issue #57](https://github.com/DKAnord/fjernvarme-dk-ha/issues/57), tak til `@tr4x1s`):** Markeret som ✅ **Bekræftet** KMD (Min Forsyning 2)-værk (`bronderslev-forsyning`, `https://www.bronderslevforsyning.dk/`, verificeret med `kWh` — nu **26** live-bekræftede værker og **68/68** forudfyldte værker), inkl. officiel 2026-takst (`0,75825 kr./kWh` / `758,25 kr./MWh` inkl. moms, arealbidrag `18,35 kr./m²/år`, fast abonnement `918,75 kr./år` og nu også officiel motivationstarif på `+1 %/°C` tillæg uden bonus ved årsgennemsnitlig returtemperatur over `30 °C`).
+- **Kortressource:** Opdateret cache-busting ressource-URL til `/kmd_easy_energy/kmd-easy-energy-card.js?v=1.3.13`.
+
 ## [1.3.12] - 2026-11-27
 
 ### Tilføjet & Bekræftet

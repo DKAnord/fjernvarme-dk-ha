@@ -833,14 +833,14 @@ def test_bundled_utilities_json_has_energi_ikast_2026_2027_tariffs_and_dynamic_c
     assert with_area_est["annual_fixed_fee_dkk"] == 4375.0
 
 
-def test_bundled_utilities_json_all_67_have_tariffs_and_spot_checks() -> None:
+def test_bundled_utilities_json_all_68_have_tariffs_and_spot_checks() -> None:
     from kmd_easy_energy.tariff import load_utilities
 
     utilities = load_utilities()
-    assert len(utilities) == 67
+    assert len(utilities) == 68
     with_tariffs = [u for u in utilities if u.get("tariffs")]
-    assert len(with_tariffs) == len(utilities) == 67
-    assert len({u["id"] for u in utilities}) == 67
+    assert len(with_tariffs) == len(utilities) == 68
+    assert len({u["id"] for u in utilities}) == 68
 
     backends = {}
     for u in utilities:
@@ -849,7 +849,7 @@ def test_bundled_utilities_json_all_67_have_tariffs_and_spot_checks() -> None:
         for t in u["tariffs"]:
             assert t["price_dkk_per_kwh"] > 0, u["id"]
             assert str(t.get("source", "")).startswith("https://"), u["id"]
-    assert backends == {"kmd": 16, "eforsyning": 47, "wattson": 4}
+    assert backends == {"kmd": 16, "eforsyning": 48, "wattson": 4}
 
     by_id = {u["id"]: u for u in utilities}
     assert "hoje-taastrup-fjernvarme" not in by_id
@@ -1549,3 +1549,57 @@ def test_odder_forsyning_confirmed_2026_2027_and_dynamic_curve() -> None:
     assert r_27.suggested_fixed_fee_dkk_per_year == 1250.0
     assert r_27.motivation_pct_per_k == 3.0
     assert r_27.motivation_bonus is False
+
+
+def test_hammel_fjernvarme_confirmed_2026_and_custom_matching() -> None:
+    from kmd_easy_energy.tariff import load_utilities, match_utility_for_entry
+
+    utilities = load_utilities()
+    by_id = {u["id"]: u for u in utilities}
+    hammel = by_id["hammel-fjernvarme"]
+    assert hammel["status"] == "confirmed"
+    assert hammel["tier"] == "confirmed"
+    assert hammel["eforsyning_supplier_id"] == "F97D7E2D-EB87-4122-A01F-44244527317A"
+    assert hammel["portal_url"] == "https://eforsyning.dk/hammelfjernvarme/"
+
+    t26 = published_tariff("hammel-fjernvarme", 2026, utilities)
+    assert t26 is not None
+    assert t26["price_dkk_per_kwh"] == 0.59375
+    assert t26["fixed_fee_dkk_per_m2_year"] == 28.75
+    assert t26["fixed_fee_dkk_per_year"] == 1375.0
+    assert t26["source"].startswith("https://hammelfjernvarme.dk/")
+
+    by_supplier = match_utility_for_entry(
+        {
+            "utility_id": "eforsyning-custom",
+            "eforsyning_supplier_id": "f97d7e2d-eb87-4122-a01f-44244527317a",
+            "portal_url": "https://eforsyning.dk/",
+        },
+        utilities,
+    )
+    assert by_supplier is not None and by_supplier["id"] == "hammel-fjernvarme"
+
+    by_portal = match_utility_for_entry(
+        {
+            "utility_id": "eforsyning-custom",
+            "portal_url": "https://eforsyning.dk/hammelfjernvarme",
+        },
+        utilities,
+    )
+    assert by_portal is not None and by_portal["id"] == "hammel-fjernvarme"
+
+    resolved = resolve_tariff(
+        _entry(
+            data={
+                "utility_id": "eforsyning-custom",
+                "portal_url": "https://eforsyning.dk/hammelfjernvarme/",
+            },
+        ),
+        today=date(2026, 11, 27),
+        utilities=utilities,
+    )
+    assert resolved.utility_id == "hammel-fjernvarme"
+    assert resolved.price_dkk_per_kwh == 0.59375
+    assert resolved.fixed_fee_dkk_per_m2_year == 28.75
+    assert resolved.suggested_fixed_fee_dkk_per_year == 1375.0
+    assert resolved.motivation_dkk_per_kwh_per_k is None

@@ -1313,6 +1313,32 @@
       ]
     },
     {
+      "id": "hammel-fjernvarme",
+      "name": "Hammel Fjernvarme a.m.b.a.",
+      "city": "Hammel",
+      "portal_url": "https://eforsyning.dk/hammelfjernvarme/",
+      "status": "confirmed",
+      "tier": "confirmed",
+      "auth_method": "Forbrugernummer + webpinkode",
+      "backend": "eforsyning",
+      "eforsyning_supplier_id": "F97D7E2D-EB87-4122-A01F-44244527317A",
+      "latitude": 56.257,
+      "longitude": 9.863,
+      "notes": "E|Forsyning. forsyningid og AppServerUri (https://apiapp.dff-edb.dk/hammel/) bekræftet live i issue #55 af @andreasjuhl2000 (kWh, m3, °C). Login med forbrugernummer + webpinkode fra regningen; daglige aflæsninger. Takstblad 2026: 593,75 kr./MWh inkl. moms (0,59375 kr./kWh), kapacitetsbidrag privat bolig 28,75 kr./m²/år (erhverv 16,25 kr./m²/år), årligt abonnementsbidrag 1.375,00 kr./år samt tillæg ved dårlig årsafkøling (ΔT < 25 °C) på 8,89 kr./°C/MWh inkl. moms.",
+      "tariffs": [
+        {
+          "year": 2026,
+          "effective_from": "2026-01-01",
+          "price_dkk_per_kwh": 0.59375,
+          "price_dkk_per_m3": null,
+          "fixed_fee_dkk_per_m2_year": 28.75,
+          "fixed_fee_dkk_per_year": 1375.0,
+          "source": "https://hammelfjernvarme.dk/p/Hammel%20Fjernvarme/Priser/Fjernvarmetakster-1.januar-2026.pdf",
+          "source_note": "Fjernvarmetakster 01.01.2026–31.12.2026 (Hammel Fjernvarme AMBA, inkl. moms): Forbrugsbidrag 475,00 kr./MWh ekskl. / 593,75 kr./MWh inkl. moms (0,59375 kr./kWh). Kapacitetsbidrag privat bolig 23,00 ekskl. / 28,75 kr./m²/år inkl. moms (erhvervsareal 13,00 ekskl. / 16,25 kr./m²/år inkl. moms). Årligt abonnementsbidrag 1.100,00 ekskl. / 1.375,00 kr./år inkl. moms. Betaling ved dårlig afkøling (kun straf på årsafkøling ΔT): 7,12 ekskl. / 8,89 kr./°C/MWh inkl. moms ved gennemsnitlig årsafkøling under 25 °C."
+        }
+      ]
+    },
+    {
       "id": "solrod-fjernvarme",
       "name": "Solrød Fjernvarme",
       "city": "Solrød Strand",

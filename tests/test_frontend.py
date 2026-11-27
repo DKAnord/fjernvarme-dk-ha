@@ -23,7 +23,7 @@ def test_card_uses_event_and_service() -> None:
     assert "start_mitid_sync" not in js
     assert "mitid_otp_code" not in js
     assert "mitid_qr_svg" not in js
-    assert 'VER = "1.3.11"' in js
+    assert 'VER = "1.3.12"' in js
     assert "data-kmd-card-version" in js
     # Must not guess button.<utility_id>_sync as the only path
     assert "button.${activeUtilId" not in js
@@ -96,6 +96,7 @@ def test_card_cost_estimate_and_utilities_fallback() -> None:
     assert 'id: "vestforbraending"' in js and 'status: "confirmed"' in js and 'backend: "eforsyning"' in js
     assert 'id: "spjald-fjernvarme"' in js and 'status: "confirmed"' in js and 'backend: "eforsyning"' in js
     assert 'id: "odder-forsyning"' in js and 'status: "confirmed"' in js and 'backend: "eforsyning"' in js
+    assert 'id: "hammel-fjernvarme"' in js and 'status: "confirmed"' in js and 'backend: "eforsyning"' in js
     assert 'id: "fjernvarme-fyn"' in js
     assert 'id: "hillerod-forsyning"' in js
     assert 'id: "hillerod-forsyning", name: "Hillerød Forsyning", city: "Hillerød", url: "https://hfors.dk/selvbetjening/se-forbrug-regninger/watts-on-din-forbrugsapp-til-vand-varme", status: "confirmed", backend: "wattson"' in js

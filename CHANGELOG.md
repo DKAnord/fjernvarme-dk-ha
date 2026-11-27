@@ -2,6 +2,12 @@
 
 Alle væsentlige ændringer i **Dansk Fjernvarme** (tidligere *Fjernvarme (KMD Easy Energy)*) dokumenteres her.
 
+## [1.3.12] - 2026-11-27
+
+### Tilføjet & Bekræftet
+- **Hammel Fjernvarme a.m.b.a. tilføjet og bekræftet live + 2026-takst ([issue #55](https://github.com/DKAnord/fjernvarme-dk-ha/issues/55), tak til `@andreasjuhl2000`):** Tilføjet som dedikeret ✅ **Bekræftet** E|Forsyning-værk (`hammel-fjernvarme`, `forsyningId: F97D7E2D-EB87-4122-A01F-44244527317A`, `https://eforsyning.dk/hammelfjernvarme/`, verificeret med `kWh`, `m³` og `°C` — nu **25** live-bekræftede værker og **68/68** forudfyldte værker) med automatisk opgradering fra `eforsyning-custom` samt officiel 2026-takst (`0,59375 kr./kWh` / `593,75 kr./MWh` inkl. moms, kapacitetsbidrag `28,75 kr./m²/år`, årligt abonnementsbidrag `1.375,00 kr./år` og dokumenteret ΔT-afkølingstillæg på `8,89 kr./°C/MWh` ved årsafkøling under `25 °C`).
+- **Kortressource:** Opdateret cache-busting ressource-URL til `/kmd_easy_energy/kmd-easy-energy-card.js?v=1.3.12`.
+
 ## [1.3.11] - 2026-11-27
 
 ### Rettet & Tilføjet

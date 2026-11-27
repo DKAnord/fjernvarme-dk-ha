@@ -1204,3 +1204,69 @@ async def test_kmd_hourly_temp_fallback_populates_return_temp(tmp_path: Path) ->
     assert state["return_temp"]["monthly_2026"] == {"Nov": 35.0}
     assert state["return_temp"]["annual"]["2026"] == 35.0
     assert "temperatures" in state["capabilities"]
+
+
+@pytest.mark.asyncio
+async def test_update_data_backfills_cost_statistics_and_refreshes_on_price_change(
+    tmp_path: Path,
+) -> None:
+    from kmd_easy_energy.const import CONF_HEATED_AREA_M2, CONF_PRICE_DKK_PER_KWH
+
+    store = FakeStore(
+        {
+            "annual": {"2026": 300.0},
+            "monthly": {"2026": {"Nov": 100.0}},
+            "daily": {"days": {"24": 3.0}, "total": 3.0, "latest_complete": True},
+            "hourly_kwh": [
+                {"DateFrom": "2026-11-24T00:00:00.000Z", "Value": 1.0, "IsComplete": True},
+                {"DateFrom": "2026-11-24T01:00:00.000Z", "Value": 2.0, "IsComplete": True},
+            ],
+            "statistics_imported": {"energy": 2, "volume": 0},
+        }
+    )
+    coord, hass, entry, store = make_coordinator(tmp_path, store=store)
+    hass.config.components = {"recorder"}
+    recorder = SimpleNamespace(
+        async_add_executor_job=AsyncMock(side_effect=lambda fn, *a: fn(*a))
+    )
+    prior_cost = {"change": None}
+
+    def fake_stat_during_period(_hass, start_time, end_time, stat_id, types, units):
+        return dict(prior_cost)
+
+    with (
+        patch("homeassistant.components.recorder.get_instance", return_value=recorder),
+        patch(
+            "homeassistant.components.recorder.statistics.statistic_during_period",
+            side_effect=fake_stat_during_period,
+        ) as stat_lookup,
+        patch(
+            "homeassistant.components.recorder.statistics.async_add_external_statistics"
+        ) as add,
+    ):
+        state = await coord._async_update_data()
+        coord.data = state
+        assert add.call_count == 1
+        assert add.call_args_list[0].args[1]["statistic_id"] == "kmd_easy_energy:cost_entry_1"
+        assert state["statistics_imported"] == {"energy": 2, "volume": 0, "cost": 2}
+        assert state["cost_statistics_sig"]
+        assert store.saved
+
+        # Second startup/refresh with unchanged signature is a no-op
+        await coord._async_update_data()
+        assert add.call_count == 1
+
+        # Fixed-fee / area option change does NOT re-import variable cost statistics
+        entry.options[CONF_HEATED_AREA_M2] = 140.0
+        state = await coord._async_update_data()
+        coord.data = state
+        assert add.call_count == 1
+
+        # Price change DOES re-import cost statistics with recorder base-sum anchoring
+        prior_cost["change"] = 50.0
+        entry.options[CONF_PRICE_DKK_PER_KWH] = 0.95
+        state = await coord._async_update_data()
+        assert add.call_count == 2
+        assert stat_lookup.call_count >= 2
+        rows = list(add.call_args_list[1].args[2])
+        assert [r["sum"] for r in rows] == [50.95, 52.85]

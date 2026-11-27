@@ -463,7 +463,7 @@ def test_statistics_import_uses_hourly_rows() -> None:
     entry = SimpleNamespace(entry_id="e1", title="Aalborg Forsyning")
     with patch("homeassistant.components.recorder.statistics.async_add_external_statistics") as add:
         res = import_hourly_statistics(hass, entry, s)
-    assert res == {"energy": 24, "volume": 24}
+    assert res == {"energy": 24, "volume": 24, "cost": 0}
     rows = list(add.call_args_list[0].args[2])
     assert rows[-1]["sum"] == 48.0
 

@@ -151,6 +151,15 @@ def test_cost_estimate_sensors_and_translations() -> None:
     assert day.native_value == 32.0 and day.extra_state_attributes["day"] == "21. Nov"
     assert mon.native_value == 648.0 and mon.extra_state_attributes["kwh"] == 1000.0
     assert yr.native_value == 7200.0 and yr.extra_state_attributes["monthly_dkk"] == {"Nov": 648}
+    from datetime import datetime
+    from kmd_easy_energy.insights import DK_TZ
+
+    assert yr.last_reset == datetime(2026, 1, 1, 0, 0, tzinfo=DK_TZ)
+    empty_yr = KMDYearCostSensor(
+        SimpleNamespace(data={"cost_estimate": {"year": 2026, "ytd_dkk": None}}),
+        entry,
+    )
+    assert empty_yr.last_reset is None
 
     for rel in ("strings.json", "translations/en.json", "translations/da.json"):
         sensors_tr = json.loads(

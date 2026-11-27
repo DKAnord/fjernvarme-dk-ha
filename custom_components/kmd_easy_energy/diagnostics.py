@@ -177,6 +177,7 @@ def _summarize_coordinator(data: dict[str, Any] | None) -> dict[str, Any]:
         # Source only (sensor entity id, location *kind*, day counts) — never coordinates.
         "outdoor_temp": _outdoor_summary(data.get("outdoor_temp")),
         "statistics_imported_on": data.get("statistics_imported_on"),
+        "statistics_imported": data.get("statistics_imported"),
     }
 
 

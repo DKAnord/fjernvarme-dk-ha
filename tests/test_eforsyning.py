@@ -260,7 +260,7 @@ def test_statistics_import_uses_daily_rows_without_hourly() -> None:
     state = apply_eforsyning_data({}, _readings(), date(2026, 11, 5))
     with patch("homeassistant.components.recorder.statistics.async_add_external_statistics") as add:
         res = import_hourly_statistics(hass, SimpleNamespace(entry_id="e1", title="Hjørring"), state)
-    assert res == {"energy": 3, "volume": 3}
+    assert res == {"energy": 3, "volume": 3, "cost": 0}
     rows = list(add.call_args_list[0].args[2])
     assert [r["sum"] for r in rows] == [25.0, 55.0, 75.0]
     assert rows[0]["start"].hour == 0

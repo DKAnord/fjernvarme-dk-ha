@@ -143,9 +143,11 @@ def hourly_points_to_buckets(
 
 def cumulative_statistic_rows(
     buckets: list[tuple[datetime, float]],
+    *,
+    initial_sum: float = 0.0,
 ) -> list[dict[str, Any]]:
     """Build StatisticData-like dicts with a running sum from the first hour."""
-    running = 0.0
+    running = float(initial_sum)
     rows: list[dict[str, Any]] = []
     for start, value in buckets:
         running += value

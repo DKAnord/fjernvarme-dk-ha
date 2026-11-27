@@ -2,6 +2,17 @@
 
 Alle væsentlige ændringer i **Dansk Fjernvarme** (tidligere *Fjernvarme (KMD Easy Energy)*) dokumenteres her.
 
+## [1.3.4] - 2026-11-27
+
+### Tilføjet & Rettet
+- **Ekstern Energy-dashboard prisstatistik (`kmd_easy_energy:cost_<entry_id>`) ([issue #43](https://github.com/DKAnord/fjernvarme-dk-ha/issues/43), tak til `@JBoye`):**
+  - Importerer nu en separat ekstern omkostningsstatistik (`DKK`, `unit_class=None`) på præcis de samme time- eller døgnbuckets som `kmd_easy_energy:energy_<entry_id>`, klar til Home Assistant Energy-dashboardets valg *Brug en entitet, der sporer de samlede omkostninger* (*Use an entity tracking the total costs*).
+  - Beregner variabel varmeudgift ekskl. faste bidrag pr. time/døgn med automatiske takstskift (inkl. 2026→2027, `effective_from`-datoer og fallback til værkets tidligste takst ved 2025-historik) samt måneds-/dagsbaseret motivationstarif (inkl. dynamisk fremløbskurve, asymmetriske satser og maks.-grænse), når returtemperatur kendes.
+  - **Recorder `sum`-forankring:** Slår eksisterende kumulativ sum før første bucket op i Home Assistants recorder (`statistic_during_period`), så rullende historik-afskæring på E|Forsyning/Watts On eller prisændringer i indstillingerne ikke giver store negative eller positive engangs-hop.
+  - **Automatisk opstart- & indstillingsopdatering (`coordinator.py`):** Eksisterende opsætninger efterudfylder `cost_<entry_id>` én gang fra den lokale cache ved opstart uden et MitID-login, og pris-/motivationsændringer i indstillingerne genberegner automatisk `cost`-statistikken.
+- **`last_reset` på `sensor.<værk>_year_cost` (`sensor.py`):** Eksponerer `1. januar` (`Europe/Copenhagen`) som `last_reset` på den årlige udgiftssensor (`SensorStateClass.TOTAL`), så årsskifte-nulstilling ikke registreres som et negativt beløb i statistikker.
+- **Kortressource:** Opdateret cache-busting ressource-URL til `/kmd_easy_energy/kmd-easy-energy-card.js?v=1.3.4`.
+
 ## [1.3.3] - 2026-11-27
 
 ### Tilføjet & Forbedret

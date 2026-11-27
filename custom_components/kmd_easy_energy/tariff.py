@@ -234,6 +234,18 @@ def published_tariff(
     return max(past, key=lambda t: int(t.get("year") or 0))
 
 
+def earliest_tariff_date(
+    entry_data: Mapping[str, Any],
+    utilities: list[dict[str, Any]] | None = None,
+) -> date | None:
+    """Return the earliest effective tariff date for a matched utility, or None."""
+    matched = match_utility_for_entry(entry_data, utilities)
+    tariffs = (matched or {}).get("tariffs") or []
+    if not tariffs:
+        return None
+    return min(_tariff_effective_date(t) for t in tariffs)
+
+
 def _opt_float(entry: ConfigEntry, key: str, default: float | None = None) -> float | None:
     raw = entry.options.get(key)
     if raw is None:

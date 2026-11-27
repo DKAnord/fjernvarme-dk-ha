@@ -5,10 +5,12 @@ from __future__ import annotations
 import asyncio
 import calendar
 import datetime as dt_mod
+import hashlib
+import json
 import logging
 import math
 import re
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from datetime import datetime, timedelta
 from typing import Any
 
@@ -122,7 +124,7 @@ from .insights import (
     motivation_status,
     parse_iso_dt,
 )
-from .statistics import import_hourly_statistics
+from .statistics import async_get_statistics_base_sums, import_hourly_statistics
 from .sync_reminder import compute_sync_reminder, parse_last_sync
 from .tariff import (
     cached_utilities,
@@ -342,6 +344,7 @@ _CONSUMPTION_CACHE_KEYS = (
     "latest_reading",
     "statistics_imported_on",
     "statistics_imported",
+    "cost_statistics_sig",
     "daily_hdd",
     "kmd_energy_factor",
     "kmd_energy_unit",
@@ -1156,10 +1159,7 @@ class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         state.update(self._base_meta())
         if _migrate_unscaled_kmd_cache(state):
             try:
-                imported = import_hourly_statistics(self.hass, self.entry, state)
-                if imported["energy"] or imported["volume"]:
-                    state["statistics_imported_on"] = copenhagen_today().isoformat()
-                    state["statistics_imported"] = imported
+                await self._async_import_statistics(state)
             except Exception as err:  # noqa: BLE001
                 _LOGGER.warning("Optional post-migration Energy statistics import failed: %s", err)
             await self._store.async_save(sanitize_cache(state))
@@ -1748,6 +1748,80 @@ class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             if inferred_units:
                 state["available_units"] = inferred_units
 
+    def _cost_statistics_signature(self, state: Mapping[str, Any]) -> str:
+        """Fingerprint of variable tariff settings and energy series bounds."""
+        tariff = state.get("tariff") if isinstance(state.get("tariff"), Mapping) else {}
+        points = state.get("hourly_kwh") or state.get("daily_stat_kwh") or []
+        first_dt = (
+            str(points[0].get("DateFrom") or "")
+            if points and isinstance(points[0], Mapping)
+            else ""
+        )
+        last_dt = (
+            str(points[-1].get("DateFrom") or "")
+            if points and isinstance(points[-1], Mapping)
+            else ""
+        )
+        payload = {
+            "tariff": {
+                key: tariff.get(key)
+                for key in (
+                    "utility_id",
+                    "price_dkk_per_kwh",
+                    "bonus_temp",
+                    "penalty_temp",
+                    "forward_temp",
+                    "forward_temp_source",
+                    "motivation_dkk_per_kwh_per_k",
+                    "motivation_pct_per_k",
+                    "motivation_bonus_dkk_per_kwh_per_k",
+                    "motivation_penalty_dkk_per_kwh_per_k",
+                    "motivation_max_pct",
+                    "motivation_bonus",
+                )
+            },
+            "count": len(points),
+            "first": first_dt,
+            "last": last_dt,
+        }
+        raw = json.dumps(payload, sort_keys=True, default=str)
+        return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:16]
+
+    async def _async_import_statistics(
+        self,
+        state: dict[str, Any],
+        *,
+        day: dt_mod.date | None = None,
+        kinds: tuple[str, ...] | None = None,
+    ) -> dict[str, int]:
+        """Anchor cumulative sums in the recorder and queue external statistics."""
+        base_sums = await async_get_statistics_base_sums(
+            self.hass, self.entry, state, kinds=kinds
+        )
+        kwargs: dict[str, Any] = {}
+        if base_sums:
+            kwargs["base_sums"] = base_sums
+        if kinds is not None:
+            kwargs["kinds"] = kinds
+        imported = import_hourly_statistics(self.hass, self.entry, state, **kwargs)
+        eff_day = (day or copenhagen_today()).isoformat()
+        has_price = bool((state.get("tariff") or {}).get("price_dkk_per_kwh"))
+        if kinds == ("cost",):
+            prev = dict(state.get("statistics_imported") or {})
+            prev["cost"] = imported.get("cost", 0)
+            state["statistics_imported"] = prev
+            if imported.get("cost", 0) > 0:
+                state["statistics_imported_on"] = eff_day
+            if imported.get("cost", 0) > 0 or not has_price:
+                state["cost_statistics_sig"] = self._cost_statistics_signature(state)
+        else:
+            if any(imported.values()):
+                state["statistics_imported_on"] = eff_day
+                state["statistics_imported"] = imported
+            if imported.get("cost", 0) > 0 or not has_price:
+                state["cost_statistics_sig"] = self._cost_statistics_signature(state)
+        return imported
+
     async def _async_update_data(self) -> dict[str, Any]:
         """Return cached data only. Never contacts KMD (no background polling).
 
@@ -1766,6 +1840,19 @@ class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         state["initial_setup_complete"] = self._initial_setup_complete
         _migrate_unscaled_kmd_cache(state)
         self._enrich_derived(state)
+        components = getattr(getattr(self.hass, "config", None), "components", None)
+        if (
+            components
+            and "recorder" in components
+            and (state.get("hourly_kwh") or state.get("daily_stat_kwh"))
+        ):
+            sig = self._cost_statistics_signature(state)
+            if state.get("cost_statistics_sig") != sig:
+                try:
+                    await self._async_import_statistics(state, kinds=("cost",))
+                    await self._async_save_cache(state)
+                except Exception as err:  # noqa: BLE001
+                    _LOGGER.warning("Optional cost statistics refresh failed: %s", err)
         return state
 
     @property
@@ -2366,10 +2453,9 @@ class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
             self._enrich_derived(state)
             try:
-                imported = import_hourly_statistics(self.hass, self.entry, state)
-                if imported["energy"] or imported["volume"]:
-                    state["statistics_imported_on"] = copenhagen_today(now_local).isoformat()
-                    state["statistics_imported"] = imported
+                await self._async_import_statistics(
+                    state, day=copenhagen_today(now_local)
+                )
             except Exception as err:  # noqa: BLE001
                 _LOGGER.warning("Optional Energy statistics import failed: %s", err)
 
@@ -2465,10 +2551,7 @@ class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         await self._async_update_weather(state)
         self._enrich_derived(state)
         try:
-            imported = import_hourly_statistics(self.hass, self.entry, state)
-            if imported["energy"] or imported["volume"]:
-                state["statistics_imported_on"] = today.isoformat()
-                state["statistics_imported"] = imported
+            await self._async_import_statistics(state, day=today)
         except Exception as err:  # noqa: BLE001
             _LOGGER.warning("Optional Energy statistics import failed: %s", err)
         self.last_sync = dt_util.utcnow()

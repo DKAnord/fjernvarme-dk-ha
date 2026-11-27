@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any
 
 from homeassistant.components.sensor import (
@@ -19,6 +20,7 @@ from homeassistant.util import dt as dt_util
 from .const import DOMAIN
 from .capabilities import CAP_BILLING, CAP_COST, CAP_TEMPERATURES, CAP_VOLUME
 from .coordinator import KMDEasyEnergyCoordinator
+from .insights import DK_TZ
 
 
 async def async_setup_entry(
@@ -518,6 +520,16 @@ class KMDYearCostSensor(KMDBaseSensor):
         est = (self.coordinator.data or {}).get("cost_estimate") or {}
         val = est.get("ytd_dkk")
         return float(val) if val is not None else None
+
+    @property
+    def last_reset(self) -> datetime | None:
+        est = (self.coordinator.data or {}).get("cost_estimate") or {}
+        if est.get("ytd_dkk") is None:
+            return None
+        yr = est.get("year")
+        if not isinstance(yr, int) or isinstance(yr, bool):
+            return None
+        return datetime(yr, 1, 1, 0, 0, 0, tzinfo=DK_TZ)
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:

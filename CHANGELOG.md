@@ -2,6 +2,14 @@
 
 Alle væsentlige ændringer i **Dansk Fjernvarme** (tidligere *Fjernvarme (KMD Easy Energy)*) dokumenteres her.
 
+## [1.3.10] - 2026-11-27
+
+### Tilføjet & Bekræftet
+- **Silkeborg Forsyning bekræftet live ([issue #44](https://github.com/DKAnord/fjernvarme-dk-ha/issues/44), tak til `@CarstenHoell`):** Markeret som ✅ **Bekræftet** KMD (Min Forsyning 2)-værk (`silkeborg-forsyning`, verificeret med `MWh` → automatisk omregning til `kWh`), inkl. eksisterende officielle 2026/2027-takster (`0,855` / `1,04 kr./kWh` inkl. moms pr. 1. feb. 2027).
+- **Spjald Fjernvarme- og Vandværk tilføjet og bekræftet live + 2026/2027-takster ([issue #53](https://github.com/DKAnord/fjernvarme-dk-ha/issues/53), tak til `@TheHelzing`):** Tilføjet som dedikeret ✅ **Bekræftet** E|Forsyning-værk (`spjald-fjernvarme`, `forsyningId: B9B79876-4611-4549-933D-93A321AE1AEC`, `https://eforsyning.dk/spjaldvarme/`, verificeret med `kWh`, `m³` og `°C` — nu **23** live-bekræftede værker og **66/66** forudfyldte værker) med automatisk opgradering fra `eforsyning-custom` samt officielle takstblade fra Vildbjerg Tekniske Værker (`0,9125 kr./kWh` inkl. moms pr. 1. jul. 2026, `1,00 kr./kWh` pr. 1. dec. 2026–30. jun. 2027, effektbidrag `37,50 kr./m²/år` og målerabonnement `1.875,00 kr./år`).
+- **Dokumentation (`README.md`):** Præciseret tilføjelse i Home Assistants Energy-dashboard under **Gas** (lad *flow rate* stå tomt, jf. [#42](https://github.com/DKAnord/fjernvarme-dk-ha/issues/42)) samt datering efter forbrugsdag (`FraDato`) på E|Forsyning ift. portalens aflæsningsdato (`TilDato`, jf. [#50](https://github.com/DKAnord/fjernvarme-dk-ha/issues/50)).
+- **Kortressource:** Opdateret cache-busting ressource-URL til `/kmd_easy_energy/kmd-easy-energy-card.js?v=1.3.10`.
+
 ## [1.3.9] - 2026-11-27
 
 ### Bekræftet & Forbedret

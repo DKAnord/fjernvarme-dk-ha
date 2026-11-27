@@ -833,14 +833,14 @@ def test_bundled_utilities_json_has_energi_ikast_2026_2027_tariffs_and_dynamic_c
     assert with_area_est["annual_fixed_fee_dkk"] == 4375.0
 
 
-def test_bundled_utilities_json_all_65_have_tariffs_and_spot_checks() -> None:
+def test_bundled_utilities_json_all_66_have_tariffs_and_spot_checks() -> None:
     from kmd_easy_energy.tariff import load_utilities
 
     utilities = load_utilities()
-    assert len(utilities) == 65
+    assert len(utilities) == 66
     with_tariffs = [u for u in utilities if u.get("tariffs")]
-    assert len(with_tariffs) == len(utilities) == 65
-    assert len({u["id"] for u in utilities}) == 65
+    assert len(with_tariffs) == len(utilities) == 66
+    assert len({u["id"] for u in utilities}) == 66
 
     backends = {}
     for u in utilities:
@@ -849,7 +849,7 @@ def test_bundled_utilities_json_all_65_have_tariffs_and_spot_checks() -> None:
         for t in u["tariffs"]:
             assert t["price_dkk_per_kwh"] > 0, u["id"]
             assert str(t.get("source", "")).startswith("https://"), u["id"]
-    assert backends == {"kmd": 16, "eforsyning": 45, "wattson": 4}
+    assert backends == {"kmd": 16, "eforsyning": 46, "wattson": 4}
 
     by_id = {u["id"]: u for u in utilities}
     assert "hoje-taastrup-fjernvarme" not in by_id
@@ -1407,3 +1407,73 @@ def test_bundled_utilities_json_has_marstal_2026_tariff_and_custom_matching() ->
     assert resolved.fixed_fee_dkk_per_m2_year is None
     assert resolved.suggested_fixed_fee_dkk_per_year == 500.0
     assert resolved.motivation_dkk_per_kwh_per_k is None
+
+
+def test_bundled_utilities_json_has_silkeborg_confirmed_and_spjald_2026_2027_tariffs() -> None:
+    from kmd_easy_energy.tariff import load_utilities, match_utility_for_entry
+
+    utilities = load_utilities()
+    by_id = {u["id"]: u for u in utilities}
+
+    silkeborg = by_id["silkeborg-forsyning"]
+    assert silkeborg["status"] == "confirmed"
+    assert silkeborg["tier"] == "confirmed"
+
+    spjald = by_id["spjald-fjernvarme"]
+    assert spjald["status"] == "confirmed"
+    assert spjald["tier"] == "confirmed"
+    assert spjald["eforsyning_supplier_id"] == "B9B79876-4611-4549-933D-93A321AE1AEC"
+    assert spjald["portal_url"] == "https://eforsyning.dk/spjaldvarme/"
+
+    by_supplier = match_utility_for_entry(
+        {
+            "utility_id": "eforsyning-custom",
+            "eforsyning_supplier_id": "b9b79876-4611-4549-933d-93a321ae1aec",
+            "portal_url": "https://eforsyning.dk/",
+        },
+        utilities,
+    )
+    assert by_supplier is not None and by_supplier["id"] == "spjald-fjernvarme"
+
+    by_portal = match_utility_for_entry(
+        {
+            "utility_id": "eforsyning-custom",
+            "portal_url": "https://eforsyning.dk/spjaldvarme",
+        },
+        utilities,
+    )
+    assert by_portal is not None and by_portal["id"] == "spjald-fjernvarme"
+
+    r_nov = resolve_tariff(
+        _entry(
+            data={
+                "utility_id": "eforsyning-custom",
+                "portal_url": "https://eforsyning.dk/spjaldvarme/",
+            },
+        ),
+        today=date(2026, 11, 27),
+        utilities=utilities,
+    )
+    assert r_nov.utility_id == "spjald-fjernvarme"
+    assert r_nov.price_dkk_per_kwh == 0.9125
+    assert r_nov.fixed_fee_dkk_per_m2_year == 37.5
+    assert r_nov.suggested_fixed_fee_dkk_per_year == 1875.0
+    assert r_nov.motivation_dkk_per_kwh_per_k is None
+
+    r_dec = resolve_tariff(
+        _entry(data={"utility_id": "spjald-fjernvarme"}),
+        today=date(2026, 12, 1),
+        utilities=utilities,
+    )
+    assert r_dec.price_dkk_per_kwh == 1.0
+    assert r_dec.fixed_fee_dkk_per_m2_year == 37.5
+    assert r_dec.suggested_fixed_fee_dkk_per_year == 1875.0
+
+    r_27 = resolve_tariff(
+        _entry(data={"utility_id": "spjald-fjernvarme"}),
+        today=date(2027, 2, 1),
+        utilities=utilities,
+    )
+    assert r_27.price_dkk_per_kwh == 1.0
+    assert r_27.fixed_fee_dkk_per_m2_year == 37.5
+    assert r_27.suggested_fixed_fee_dkk_per_year == 1875.0

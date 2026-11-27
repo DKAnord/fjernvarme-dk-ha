@@ -837,10 +837,10 @@ def test_bundled_utilities_json_all_69_have_tariffs_and_spot_checks() -> None:
     from kmd_easy_energy.tariff import load_utilities
 
     utilities = load_utilities()
-    assert len(utilities) == 70
+    assert len(utilities) == 71
     with_tariffs = [u for u in utilities if u.get("tariffs")]
-    assert len(with_tariffs) == len(utilities) == 70
-    assert len({u["id"] for u in utilities}) == 70
+    assert len(with_tariffs) == len(utilities) == 71
+    assert len({u["id"] for u in utilities}) == 71
 
     backends = {}
     for u in utilities:
@@ -849,7 +849,7 @@ def test_bundled_utilities_json_all_69_have_tariffs_and_spot_checks() -> None:
         for t in u["tariffs"]:
             assert t["price_dkk_per_kwh"] > 0, u["id"]
             assert str(t.get("source", "")).startswith("https://"), u["id"]
-    assert backends == {"kmd": 17, "eforsyning": 49, "wattson": 4}
+    assert backends == {"kmd": 17, "eforsyning": 50, "wattson": 4}
 
     by_id = {u["id"]: u for u in utilities}
     assert "hoje-taastrup-fjernvarme" not in by_id
@@ -1892,3 +1892,61 @@ def test_thisted_varmeforsyning_confirmed_2026_tariff() -> None:
         )
         assert res.bonus_temp == 0.0
         assert res.penalty_temp == expected_ret
+
+
+def test_haslev_fjernvarme_confirmed_2026_2027_and_custom_matching() -> None:
+    from kmd_easy_energy.tariff import load_utilities, match_utility_for_entry
+
+    utilities = load_utilities()
+    by_id = {u["id"]: u for u in utilities}
+    haslev = by_id["haslev-fjernvarme"]
+    assert haslev["status"] == "confirmed"
+    assert haslev["tier"] == "confirmed"
+    assert haslev["eforsyning_supplier_id"] == "7FDC9D76-21E2-40C8-BD62-F932DB4812E6"
+    assert haslev["portal_url"] == "https://eforsyning.dk/haslev-fjernvarme/"
+
+    by_supplier = match_utility_for_entry(
+        {
+            "utility_id": "eforsyning-custom",
+            "eforsyning_supplier_id": "7fdc9d76-21e2-40c8-bd62-f932db4812e6",
+            "portal_url": "https://eforsyning.dk/",
+        },
+        utilities,
+    )
+    assert by_supplier is not None and by_supplier["id"] == "haslev-fjernvarme"
+
+    by_portal = match_utility_for_entry(
+        {
+            "utility_id": "eforsyning-custom",
+            "portal_url": "https://eforsyning.dk/haslev-fjernvarme",
+        },
+        utilities,
+    )
+    assert by_portal is not None and by_portal["id"] == "haslev-fjernvarme"
+
+    r_26 = resolve_tariff(
+        _entry(
+            data={
+                "utility_id": "eforsyning-custom",
+                "portal_url": "https://eforsyning.dk/haslev-fjernvarme/",
+            },
+        ),
+        today=date(2026, 11, 27),
+        utilities=utilities,
+    )
+    assert r_26.utility_id == "haslev-fjernvarme"
+    assert r_26.price_dkk_per_kwh == 0.8613
+    assert r_26.fixed_fee_dkk_per_m2_year == 33.64
+    assert r_26.suggested_fixed_fee_dkk_per_year == 1237.5
+    assert r_26.motivation_pct_per_k is None
+
+    r_27 = resolve_tariff(
+        _entry(data={"utility_id": "haslev-fjernvarme"}),
+        today=date(2027, 2, 1),
+        utilities=utilities,
+    )
+    assert r_27.price_dkk_per_kwh == 0.8613
+    assert r_27.motivation_pct_per_k == 1.0
+    assert r_27.motivation_bonus is True
+    assert r_27.bonus_temp == 38.0
+    assert r_27.penalty_temp == 42.0

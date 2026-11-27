@@ -2,6 +2,12 @@
 
 Alle væsentlige ændringer i **Dansk Fjernvarme** (tidligere *Fjernvarme (KMD Easy Energy)*) dokumenteres her.
 
+## [1.3.20] - 2026-11-27
+
+### Tilføjet & Bekræftet
+- **Haslev Fjernvarme A.m.b.a. tilføjet og bekræftet live + 2026-takst & 2027 motivationstarif ([issue #71](https://github.com/DKAnord/fjernvarme-dk-ha/issues/71), tak til `@Kaldru`):** Tilføjet som dedikeret ✅ **Bekræftet** E|Forsyning-værk (`haslev-fjernvarme`, `forsyningId: 7FDC9D76-21E2-40C8-BD62-F932DB4812E6`, `https://eforsyning.dk/haslev-fjernvarme/`, verificeret med `kWh`, `m³` og `°C`, inkl. automatisk opgradering fra `eforsyning-custom` — nu **33** live-bekræftede værker og **71/71** forudfyldte værker) med officiel 2026-takst (`0,8613 kr./kWh` / `861,30 kr./MWh` inkl. moms, m²-bidrag `33,64 kr./m²/år`, abonnementsbidrag `1.237,50 kr./år`) samt officielt varslet 2027-motivationstarif pr. 1. jan. 2027 (`±1 %/°C`, fradrag under `38 °C`, neutral `38–42 °C`, tillæg over `42 °C`).
+- **Kortressource:** Opdateret cache-busting ressource-URL til `/kmd_easy_energy/kmd-easy-energy-card.js?v=1.3.20`.
+
 ## [1.3.19] - 2026-11-27
 
 ### Bekræftet & Forbedret

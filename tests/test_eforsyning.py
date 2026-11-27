@@ -410,7 +410,7 @@ def test_utilities_json_backend_field_and_hjorring() -> None:
     assert fh["tier"] == "confirmed"
 
     eforsyning = {u["id"] for u in data["utilities"] if u.get("backend") == "eforsyning"}
-    assert len(eforsyning) == 49
+    assert len(eforsyning) == 50
     assert "hoje-taastrup-fjernvarme" not in by_id
     assert eforsyning >= {
         "soroe-fjernvarme",
@@ -424,6 +424,7 @@ def test_utilities_json_backend_field_and_hjorring() -> None:
         "spjald-fjernvarme",
         "odder-forsyning",
         "hammel-fjernvarme",
+        "haslev-fjernvarme",
         "aalestrup-norager-energi",
         "greve-fjernvarme",
         "hjorring-varmeforsyning",
@@ -530,6 +531,11 @@ def test_utilities_json_backend_field_and_hjorring() -> None:
     assert thisted["tier"] == "confirmed"
     assert thisted["eforsyning_supplier_id"] == "3D6C9D52-1BB8-4718-A7A1-CE27B9D137BA"
     assert thisted["portal_url"] == "https://eforsyning.dk/thisted-varmeforsyning/"
+    haslev = by_id["haslev-fjernvarme"]
+    assert haslev["status"] == "confirmed"
+    assert haslev["tier"] == "confirmed"
+    assert haslev["eforsyning_supplier_id"] == "7FDC9D76-21E2-40C8-BD62-F932DB4812E6"
+    assert haslev["portal_url"] == "https://eforsyning.dk/haslev-fjernvarme/"
     silkeborg = by_id["silkeborg-forsyning"]
     assert silkeborg["backend"] == "kmd"
     assert silkeborg["status"] == "confirmed"

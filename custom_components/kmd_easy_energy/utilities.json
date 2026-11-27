@@ -1396,6 +1396,46 @@
       ]
     },
     {
+      "id": "haslev-fjernvarme",
+      "name": "Haslev Fjernvarme A.m.b.a.",
+      "city": "Haslev",
+      "portal_url": "https://eforsyning.dk/haslev-fjernvarme/",
+      "status": "confirmed",
+      "tier": "confirmed",
+      "auth_method": "Forbrugernummer + webpinkode",
+      "backend": "eforsyning",
+      "eforsyning_supplier_id": "7FDC9D76-21E2-40C8-BD62-F932DB4812E6",
+      "latitude": 55.331,
+      "longitude": 11.964,
+      "notes": "E|Forsyning (bekræftet live via issue #71 af @Kaldru — kWh, m³ og °C). forsyningid og AppServerUri (https://apiapp.dff-edb.dk/haslev/) bekræftet live via GetVaerkSettings; login med forbrugernummer + webpinkode fra regningen; daglige aflæsninger. Tarifblad 2026 ver. 6: 861,30 kr./MWh inkl. moms (0,8613 kr./kWh), m²-bidrag 33,64 kr./m²/år, abonnementsbidrag 1.237,50 kr./år inkl. moms. Pr. 1. januar 2027 indføres motivationstarif (±1 %/°C): fradrag under 38 °C, neutral 38–42 °C og tillæg over 42 °C.",
+      "tariffs": [
+        {
+          "year": 2026,
+          "effective_from": "2026-01-01",
+          "price_dkk_per_kwh": 0.8613,
+          "price_dkk_per_m3": null,
+          "fixed_fee_dkk_per_m2_year": 33.64,
+          "fixed_fee_dkk_per_year": 1237.5,
+          "source": "https://haslev-fjernvarme.dk/oekonomi/priser",
+          "source_note": "Tarifblad 2026 ver. 6 (Haslev Fjernvarme A.m.b.a., inkl. moms, gældende til 31.12.2026): Varmeforbrugspris 689,04 ekskl. / 861,30 kr./MWh inkl. moms (0,8613 kr./kWh). M²-bidrag 26,91 ekskl. / 33,64 kr./m²/år inkl. moms (bolig, erhverv + ½ kælder) og abonnementsbidrag 990,00 ekskl. / 1.237,50 kr./år inkl. moms pr. tilsluttet måler. Generelt leveringskrav på min. 30 °C årsafkøling; motivationstarif træder i kraft pr. 1. januar 2027."
+        },
+        {
+          "year": 2027,
+          "effective_from": "2027-01-01",
+          "price_dkk_per_kwh": 0.8613,
+          "price_dkk_per_m3": null,
+          "fixed_fee_dkk_per_m2_year": 33.64,
+          "fixed_fee_dkk_per_year": 1237.5,
+          "motivation_pct_per_k": 1.0,
+          "motivation_bonus": true,
+          "bonus_temp": 38.0,
+          "penalty_temp": 42.0,
+          "source": "https://haslev-fjernvarme.dk/oekonomi/motivationstarif",
+          "source_note": "Motivationstarif pr. 1. januar 2027 (Haslev Fjernvarme A.m.b.a.): Fradrag på 1 %/°C ved årsgennemsnitlig returtemperatur under 38 °C, neutralzone 38–42 °C og tillæg på 1 %/°C over 42 °C (afregnes første gang på årsopgørelsen for 2027). Indtil officielt Tarifblad 2027 foreligger, videreføres 2026-grundtaksten (0,8613 kr./kWh, 33,64 kr./m²/år, 1.237,50 kr./år inkl. moms — samme grundlag som værkets egne 2027-eksempler)."
+        }
+      ]
+    },
+    {
       "id": "aalestrup-norager-energi",
       "name": "Aalestrup-Nørager Energi a.m.b.a.",
       "city": "Aalestrup / Nørager",

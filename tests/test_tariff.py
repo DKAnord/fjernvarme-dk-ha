@@ -837,10 +837,10 @@ def test_bundled_utilities_json_all_69_have_tariffs_and_spot_checks() -> None:
     from kmd_easy_energy.tariff import load_utilities
 
     utilities = load_utilities()
-    assert len(utilities) == 79
+    assert len(utilities) == 80
     with_tariffs = [u for u in utilities if u.get("tariffs")]
-    assert len(with_tariffs) == len(utilities) == 79
-    assert len({u["id"] for u in utilities}) == 79
+    assert len(with_tariffs) == len(utilities) == 80
+    assert len({u["id"] for u in utilities}) == 80
 
     backends = {}
     for u in utilities:
@@ -849,7 +849,7 @@ def test_bundled_utilities_json_all_69_have_tariffs_and_spot_checks() -> None:
         for t in u["tariffs"]:
             assert t["price_dkk_per_kwh"] > 0, u["id"]
             assert str(t.get("source", "")).startswith("https://"), u["id"]
-    assert backends == {"kmd": 18, "eforsyning": 57, "wattson": 4}
+    assert backends == {"kmd": 18, "eforsyning": 58, "wattson": 4}
 
     by_id = {u["id"]: u for u in utilities}
     assert "hoje-taastrup-fjernvarme" not in by_id
@@ -2575,3 +2575,54 @@ def test_helsinge_fjernvarme_confirmed_2026_and_custom_matching() -> None:
     assert r_26.suggested_fixed_fee_dkk_per_year == 625.0
     assert r_26.motivation_dkk_per_kwh_per_k is None
     assert r_26.motivation_pct_per_k is None
+
+
+def test_praestoe_fjernvarme_confirmed_2026_and_custom_matching() -> None:
+    from kmd_easy_energy.tariff import load_utilities, match_utility_for_entry
+
+    utilities = load_utilities()
+    by_id = {u["id"]: u for u in utilities}
+    praestoe = by_id["praestoe-fjernvarme"]
+    assert praestoe["status"] == "confirmed"
+    assert praestoe["tier"] == "confirmed"
+    assert praestoe["eforsyning_supplier_id"] == "C874E090-2769-4C2B-A2A8-418ECCEE57CB"
+    assert praestoe["portal_url"] == "https://eforsyning.dk/praestoe-fjernvarme/"
+
+    by_supplier = match_utility_for_entry(
+        {
+            "utility_id": "eforsyning-custom",
+            "eforsyning_supplier_id": "c874e090-2769-4c2b-a2a8-418eccee57cb",
+            "portal_url": "https://eforsyning.dk/",
+        },
+        utilities,
+    )
+    assert by_supplier is not None and by_supplier["id"] == "praestoe-fjernvarme"
+
+    by_portal = match_utility_for_entry(
+        {
+            "utility_id": "eforsyning-custom",
+            "portal_url": "https://eforsyning.dk/praestoe-fjernvarme",
+        },
+        utilities,
+    )
+    assert by_portal is not None and by_portal["id"] == "praestoe-fjernvarme"
+
+    r_26 = resolve_tariff(
+        _entry(
+            data={
+                "utility_id": "eforsyning-custom",
+                "portal_url": "https://eforsyning.dk/praestoe-fjernvarme/",
+            },
+        ),
+        today=date(2026, 11, 28),
+        utilities=utilities,
+    )
+    assert r_26.utility_id == "praestoe-fjernvarme"
+    assert r_26.price_dkk_per_kwh == 0.74625
+    assert r_26.fixed_fee_dkk_per_m2_year is None
+    assert r_26.suggested_fixed_fee_dkk_per_year == 1500.0
+    assert r_26.bonus_temp == 33.0
+    assert r_26.penalty_temp == 37.0
+    assert r_26.motivation_pct_per_k == 1.0
+    assert r_26.motivation_bonus is True
+    assert r_26.motivation_dkk_per_kwh_per_k == 0.007462

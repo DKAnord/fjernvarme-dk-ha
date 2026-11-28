@@ -128,6 +128,7 @@
     { id: "haderslev-fjernvarme", name: "Haderslev Fjernvarme", city: "Haderslev", url: "https://eforsyning.dk/haderslev-fjernvarme/", status: "confirmed", backend: "eforsyning" },
     { id: "skanderborg-horning-fjernvarme", name: "Skanderborg-Hørning Fjernvarme", city: "Skanderborg / Hørning", url: "https://eforsyning.dk/skanderborghorning/", status: "confirmed", backend: "eforsyning" },
     { id: "helsinge-fjernvarme", name: "Helsinge Fjernvarme a.m.b.a.", city: "Helsinge", url: "https://eforsyning.dk/helsingefjernvarme/", status: "confirmed", backend: "eforsyning" },
+    { id: "praestoe-fjernvarme", name: "Præstø Fjernvarme a.m.b.a.", city: "Præstø", url: "https://eforsyning.dk/praestoe-fjernvarme/", status: "confirmed", backend: "eforsyning" },
     { id: "hjorring-varmeforsyning", name: "Hjørring Varmeforsyning", city: "Hjørring", url: "https://eforsyning.dk/hjvarme/", status: "pending_test", backend: "eforsyning" },
     { id: "aalborg-forsyning", name: "Aalborg Forsyning", city: "Aalborg", url: "https://aalborgforsyning.dk/services/forbrug/watts-on/", status: "confirmed", backend: "wattson" },
     { id: "fjernvarme-fyn", name: "Fjernvarme Fyn", city: "Odense / Fyn", url: "https://www.fjernvarmefyn.dk/spar-paa-energien/overblik/watts-on-app/", status: "confirmed", backend: "wattson" },

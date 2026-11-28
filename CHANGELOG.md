@@ -2,6 +2,11 @@
 
 Alle væsentlige ændringer i **Dansk Fjernvarme** (tidligere *Fjernvarme (KMD Easy Energy)*) dokumenteres her.
 
+## [Unreleased]
+
+### Tilføjet & Bekræftet
+- **Præstø Fjernvarme a.m.b.a. tilføjet og bekræftet live + 2026-takster ([issue #90](https://github.com/DKAnord/fjernvarme-dk-ha/issues/90), tak til `@blommetrae-spec`):** Tilføjet som dedikeret ✅ **Bekræftet** E|Forsyning-værk (`praestoe-fjernvarme`, `forsyningId: C874E090-2769-4C2B-A2A8-418ECCEE57CB`, `https://eforsyning.dk/praestoe-fjernvarme/`, verificeret med `kWh`, `m³` og `°C`, inkl. automatisk opgradering fra `eforsyning-custom` — nu **48** live-bekræftede værker og **80/80** forudfyldte værker) med officielle 2026-takster inkl. moms: forbrugsafgift `0,74625 kr./kWh` (`746,25 kr./MWh`), motivation/kompensation på årsgennemsnitlig returtemperatur med neutralområde `33–37 °C` (`-1 %/°C` bonus under `33 °C`, `+1 %/°C` afgift over `37 °C`), målerleje `1.500,00 kr./år` samt rumafgift `15,00 kr./m³/år` dokumenteret i værknoten.
+
 ## [1.4.3] - 2026-11-28
 
 ### Bekræftet

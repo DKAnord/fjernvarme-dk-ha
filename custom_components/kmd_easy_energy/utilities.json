@@ -1835,6 +1835,34 @@
       ]
     },
     {
+      "id": "praestoe-fjernvarme",
+      "name": "Præstø Fjernvarme a.m.b.a.",
+      "city": "Præstø",
+      "portal_url": "https://eforsyning.dk/praestoe-fjernvarme/",
+      "status": "confirmed",
+      "tier": "confirmed",
+      "auth_method": "Forbrugernummer + webpinkode",
+      "backend": "eforsyning",
+      "eforsyning_supplier_id": "C874E090-2769-4C2B-A2A8-418ECCEE57CB",
+      "latitude": 55.122,
+      "longitude": 12.045,
+      "notes": "E|Forsyning (bekræftet live via issue #90 af @blommetrae-spec — kWh, m³ og °C, ingen direkte temperaturmåler). forsyningid og AppServerUri (https://apiapp.dff-edb.dk/praestoe/) bekræftet live via GetVaerkSettings; login med forbrugernummer + webpinkode eller e-mail + adgangskode; daglige aflæsninger. Takstblad 2026 (gældende 01.01.2026–31.12.2026, inkl. moms): forbrugsafgift 746,25 kr./MWh (0,74625 kr./kWh), rumafgift 15,00 kr./m³/år (rumfangsbaseret, ikke m²) og målerleje 1.500,00 kr./år. Motivation/kompensation for afkøling: neutralområde 35 °C ± 2 °C (33–37 °C) med -1 %/°C bonus under 33 °C og +1 %/°C afgift over 37 °C.",
+      "tariffs": [
+        {
+          "year": 2026,
+          "effective_from": "2026-01-01",
+          "price_dkk_per_kwh": 0.74625,
+          "price_dkk_per_m3": null,
+          "bonus_temp": 33.0,
+          "penalty_temp": 37.0,
+          "motivation_pct_per_k": 1.0,
+          "fixed_fee_dkk_per_year": 1500.0,
+          "source": "https://praestoe-fjernvarme.dk/p/Pr%C3%A6st%C3%B8%20Fjernvarme/Takstblade/Takstblad-2026.pdf",
+          "source_note": "Takstblad 2026 (Præstø Fjernvarme a.m.b.a., gældende 01-01-2026 til 31-12-2026): Forbrugsafgift 597,00 kr./MWh ekskl. moms / 746,25 kr./MWh inkl. moms (0,74625 kr./kWh). Faste afgifter: rumafgift (rumfangsbaseret, ikke m²) 12,00 ekskl. / 15,00 kr./m³ tilsluttet rum/år inkl. moms og målerleje 1.200,00 ekskl. / 1.500,00 kr./år inkl. moms. Motivation/kompensation for afkøling på årlig gennemsnitlig returtemperatur: neutralområde 35 °C ± 2 °C (33–37 °C), bonus -1 %/°C under 33 °C og afgift +1 %/°C over 37 °C."
+        }
+      ]
+    },
+    {
       "id": "aalestrup-norager-energi",
       "name": "Aalestrup-Nørager Energi a.m.b.a.",
       "city": "Aalestrup / Nørager",

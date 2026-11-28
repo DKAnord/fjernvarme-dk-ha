@@ -130,6 +130,7 @@ def test_card_cost_estimate_and_utilities_fallback() -> None:
     assert 'id: "haderslev-fjernvarme"' in js and 'status: "confirmed"' in js and 'backend: "eforsyning"' in js
     assert 'id: "skanderborg-horning-fjernvarme"' in js and 'status: "confirmed"' in js and 'backend: "eforsyning"' in js
     assert 'id: "helsinge-fjernvarme"' in js and 'status: "confirmed"' in js and 'backend: "eforsyning"' in js
+    assert 'id: "praestoe-fjernvarme"' in js and 'status: "confirmed"' in js and 'backend: "eforsyning"' in js
     assert 'id: "fjernvarme-fyn"' in js
     assert 'id: "hillerod-forsyning"' in js
     assert 'id: "hillerod-forsyning", name: "Hillerød Forsyning", city: "Hillerød", url: "https://hfors.dk/selvbetjening/se-forbrug-regninger/watts-on-din-forbrugsapp-til-vand-varme", status: "confirmed", backend: "wattson"' in js

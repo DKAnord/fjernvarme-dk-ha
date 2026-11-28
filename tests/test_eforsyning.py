@@ -545,7 +545,7 @@ def test_utilities_json_backend_field_and_hjorring() -> None:
     assert fh["tier"] == "confirmed"
 
     eforsyning = {u["id"] for u in data["utilities"] if u.get("backend") == "eforsyning"}
-    assert len(eforsyning) == 57
+    assert len(eforsyning) == 58
     assert "hoje-taastrup-fjernvarme" not in by_id
     assert eforsyning >= {
         "soroe-fjernvarme",
@@ -569,6 +569,7 @@ def test_utilities_json_backend_field_and_hjorring() -> None:
         "haderslev-fjernvarme",
         "skanderborg-horning-fjernvarme",
         "helsinge-fjernvarme",
+        "praestoe-fjernvarme",
         "gladsaxe-fjernvarme",
         "aalestrup-norager-energi",
         "greve-fjernvarme",
@@ -726,6 +727,11 @@ def test_utilities_json_backend_field_and_hjorring() -> None:
     assert helsinge["tier"] == "confirmed"
     assert helsinge["eforsyning_supplier_id"] == "478043AB-B215-4E8D-B300-F2934C6E64CC"
     assert helsinge["portal_url"] == "https://eforsyning.dk/helsingefjernvarme/"
+    praestoe = by_id["praestoe-fjernvarme"]
+    assert praestoe["status"] == "confirmed"
+    assert praestoe["tier"] == "confirmed"
+    assert praestoe["eforsyning_supplier_id"] == "C874E090-2769-4C2B-A2A8-418ECCEE57CB"
+    assert praestoe["portal_url"] == "https://eforsyning.dk/praestoe-fjernvarme/"
     gladsaxe = by_id["gladsaxe-fjernvarme"]
     assert gladsaxe["status"] == "confirmed"
     assert gladsaxe["tier"] == "confirmed"

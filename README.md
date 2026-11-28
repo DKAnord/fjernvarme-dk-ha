@@ -6,7 +6,7 @@
 Komplet, **100 % lokal** Home Assistant-integration (`kmd_easy_energy`) med **Plug-and-Play dashboard-kort** (`custom:kmd-easy-energy-card`) til danske fjernvarmeværker på **KMD Easy Energy / Min Forsyning**, **E|Forsyning** og **Watts On** — direkte på Raspberry Pi, Home Assistant OS og Docker uden Chromium eller ekstern server.
 
 > [!NOTE]
-> Officielt tilgængelig i **HACS / Home Assistant Marketplace** (`v1.4.3` — se [`CHANGELOG.md`](CHANGELOG.md) for versionshistorik). **47 værker er bekræftet live**, **alle 79** forudfyldte værker har officielle 2026/2027-takster indbygget, og over **300+ E|Forsyning-værker** kan vælges direkte fra opsætningsguiden.
+> Officielt tilgængelig i **HACS / Home Assistant Marketplace** (`v1.4.3` — se [`CHANGELOG.md`](CHANGELOG.md) for versionshistorik). **48 værker er bekræftet live**, **alle 80** forudfyldte værker har officielle 2026/2027-takster indbygget, og over **300+ E|Forsyning-værker** kan vælges direkte fra opsætningsguiden.
 
 ---
 
@@ -29,7 +29,7 @@ Komplet, **100 % lokal** Home Assistant-integration (`kmd_easy_energy`) med **Pl
 ## ✨ Hvad får du?
 
 - **📊 Rent dashboard uden tomme kort:** Kortet tilpasser sig automatisk de data, dit værk leverer — grafer, KPI'er og indsigter uden data skjules helt. Mangler varmepris, fremløbstemperatur eller boligareal til faste bidrag, vises højst én diskret note med genvej til indtastning, som nemt kan lukkes (`✕`) og gemmes pr. enhed.
-- **💰 Officielle 2026/2027-takster & årsudgift:** Alle 79 forudfyldte værker kommer med officielle forbrugspriser, bonus/gebyr-afkølingsregler (inkl. dynamisk fremløbsafhængig kurve) og valgfrie faste bidrag (`kr./m²/år` + `kr./år`) til beregning af forventet årsudgift.
+- **💰 Officielle 2026/2027-takster & årsudgift:** Alle 80 forudfyldte værker kommer med officielle forbrugspriser, bonus/gebyr-afkølingsregler (inkl. dynamisk fremløbsafhængig kurve) og valgfrie faste bidrag (`kr./m²/år` + `kr./år`) til beregning af forventet årsudgift.
 - **🔐 100 % lokalt MitID & login i Home Assistant:** Understøtter både roterende **QR-kode** og **4-cifret engangskode** direkte på kortet for KMD-værker, samt **forbrugernummer/webpinkode eller e-mail/adgangskode** på E|Forsyning og browser-PKCE på Watts On.
 - **⚡ Home Assistant Energy-dashboard:** Importerer timedata eller døgnserier som eksterne statistikker (`kWh`, `m³` og variabel varmeudgift i `DKK`), så historik og grafer passer uden dobbelttælling.
 - **🌡️ Lokal-først udetemperatur & vejrindsigter:** Bruger din egen Home Assistant-temperatursensor (langtidsstatistik) først og supplerer automatisk med Open-Meteo for graddage (`HDD17`), R²-sammenhæng, grundlast og årsprognose.
@@ -58,7 +58,7 @@ Komplet, **100 % lokal** Home Assistant-integration (`kmd_easy_energy`) med **Pl
 
 ## 🏭 Understøttede varmeværker
 
-### ✅ Bekræftet live (47 værker)
+### ✅ Bekræftet live (48 værker)
 
 | Værk | By | Platform | Portal |
 |---|---|---|---|
@@ -109,6 +109,7 @@ Komplet, **100 % lokal** Home Assistant-integration (`kmd_easy_energy`) med **Pl
 | **Haderslev Fjernvarme** | Haderslev | E\|Forsyning | https://eforsyning.dk/haderslev-fjernvarme/ |
 | **Skanderborg-Hørning Fjernvarme** | Skanderborg / Hørning | E\|Forsyning | https://eforsyning.dk/skanderborghorning/ |
 | **Helsinge Fjernvarme a.m.b.a.** | Helsinge | E\|Forsyning | https://eforsyning.dk/helsingefjernvarme/ |
+| **Præstø Fjernvarme a.m.b.a.** | Præstø | E\|Forsyning | https://eforsyning.dk/praestoe-fjernvarme/ |
 
 <details>
 <summary>Øvrige 32 forudfyldte værker (🧪 afventer 1. live-test) + 300+ E|Forsyning-værker</summary>
@@ -240,7 +241,7 @@ Integrationen opretter kun de entiteter, som din valgte platform og måler fakti
 **Dansk Fjernvarme** (`kmd_easy_energy`) is a 100% local Home Assistant integration and plug-and-play Lovelace dashboard card (`custom:kmd-easy-energy-card`) supporting Danish district heating utilities across **KMD Easy Energy / Min Forsyning** (built-in Python MitID QR & 4-digit OTP — no external browser add-on), **E|Forsyning** (consumer no. + web PIN or e-mail + password, 300+ searchable utilities), and **Watts On** *(experimental/unofficial browser-PKCE backend)*.
 
 - **Quick setup:** Install via HACS / Home Assistant Marketplace, add the **Dansk Fjernvarme** integration, and place **Dansk Fjernvarme: Dashboard** (or the optional add-on card **Dansk Fjernvarme: Samlet Forbrug (Valgfri add-on)** `custom:dansk-forbrug-card` for combined heating + optional electricity, EV, and water) on any view. The card bundle is served directly at `/kmd_easy_energy/kmd-easy-energy-card.js?v=1.4.3` (managed automatically in storage mode; for YAML mode add it as a `module`, keeping in mind HA may cache legacy `/local/` resources for up to `31 days`).
-- **Tariffs & zero blank cards:** **47 utilities** are confirmed live and **all 79** curated presets ship with official 2026/2027 tariffs (including dynamic supply-temperature cooling curves and optional fixed fees). Sections without underlying data are strictly hidden, with at most a compact dismissible hint (persisted per entry in `localStorage` or disabled via `hide_manual_hints`) suggesting optional manual fields like heat price, supply temperature, or heated area.
+- **Tariffs & zero blank cards:** **48 utilities** are confirmed live and **all 80** curated presets ship with official 2026/2027 tariffs (including dynamic supply-temperature cooling curves and optional fixed fees). Sections without underlying data are strictly hidden, with at most a compact dismissible hint (persisted per entry in `localStorage` or disabled via `hide_manual_hints`) suggesting optional manual fields like heat price, supply temperature, or heated area.
 - **Energy dashboard & weather:** Add external statistics `kmd_easy_energy:energy_<entry_id>`, `kmd_easy_energy:volume_<entry_id>`, and `kmd_easy_energy:cost_<entry_id>` (*Use an entity tracking the total costs*, variable heating cost excl. fixed fees) to HA Energy. Degree-day weather insights prefer your local HA temperature sensor's long-term statistics and only query Open-Meteo for missing days.
 - **History & licensing:** Full release notes live in [`CHANGELOG.md`](CHANGELOG.md), and third-party open-source attributions live in [`NOTICE`](NOTICE).
 

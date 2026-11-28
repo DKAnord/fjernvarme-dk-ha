@@ -747,4 +747,19 @@ const efDailyEnHtml = efDailyEnCard.shadowRoot.innerHTML;
 assert.ok(efDailyEnHtml.includes("Usage day (read 00:00 next day)"), "EN eforsyning daily chart legend explains usage day");
 assert.ok(efDailyEnHtml.includes("25.: 96 kWh · read 26/11"), "EN eforsyning daily tooltip includes reading date");
 
+// 20) Panel legend wraps inside card boundaries and grid2 uses @container queries (#77)
+assert.ok(
+  efDailyDaHtml.includes("white-space: normal;") && efDailyDaHtml.includes("max-width: 100%;"),
+  "panel legend spans wrap cleanly inside card boundaries"
+);
+assert.ok(
+  !efDailyDaHtml.includes(".p-leg span { display: inline-flex; align-items: center; white-space: nowrap;"),
+  "panel legend spans do not force nowrap overflow"
+);
+assert.ok(efDailyDaHtml.includes("container-type: inline-size;"), "card wrapper enables CSS container queries");
+assert.ok(
+  efDailyDaHtml.includes("@container (min-width: 768px)") && !efDailyDaHtml.includes("@media (min-width: 768px)"),
+  "grid2 layout responds to card container width instead of viewport width"
+);
+
 console.log("card_capabilities.test.js: OK");

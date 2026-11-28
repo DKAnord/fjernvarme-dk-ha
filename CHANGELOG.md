@@ -2,6 +2,14 @@
 
 Alle væsentlige ændringer i **Dansk Fjernvarme** (tidligere *Fjernvarme (KMD Easy Energy)*) dokumenteres her.
 
+## [1.3.28] - 2026-11-28
+
+### Rettet
+- **Tekst-ombrydning i grafforklaringer og responsivt layout i smalle Afsnit-visninger ([issue #77](https://github.com/DKAnord/fjernvarme-dk-ha/issues/77), tak til `@Dalle75`):**
+  - Fjernet `white-space: nowrap` på `.p-leg span` og tilføjet `white-space: normal`, `max-width: 100%`, `min-width: 0` samt `overflow-wrap: break-word` på `.p-head`, `.p-title` og `.p-leg`, så lange grafforklaringer som `Forbrugsdøgn (aflæst kl. 00:00 dagen efter)` ombrydes pænt inden for kortets kant.
+  - Skiftet de breddebaserede `@media`-regler for `.kpis`, `.grid2` og `.insights` til `@container`-queries via `container-type: inline-size` på `.wrap`, så et 1-sektions `Afsnit`-layout i Home Assistant ikke længere klemmer to grafpaneler sammen i to smalle kolonner på brede skærme.
+- **Kortressource:** Opdateret cache-busting ressource-URL til `/kmd_easy_energy/kmd-easy-energy-card.js?v=1.3.28`.
+
 ## [1.3.27] - 2026-11-28
 
 ### Tilføjet & Bekræftet

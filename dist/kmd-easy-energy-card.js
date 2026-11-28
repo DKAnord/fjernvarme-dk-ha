@@ -3,7 +3,7 @@
  * Zero external dependencies, Shadow DOM, responsive, interactive tooltips, DA/EN i18n.
  */
 (() => {
-  const VER = "1.3.27";
+  const VER = "1.3.28";
   const MONTHS = ["Jan", "Feb", "Mar", "Apr", "Maj", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Dec"];
   const DAYS_IN_MONTH = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
   const isLeapYear = (y) => (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0;
@@ -1144,7 +1144,7 @@
       this.shadowRoot.innerHTML = `
         <style>
           :host { display: block; font-family: inherit; color: var(--primary-text-color); }
-          .wrap { display: flex; flex-direction: column; gap: 14px; max-width: 1480px; margin: 0 auto; width: 100%; box-sizing: border-box; position: relative; }
+          .wrap { display: flex; flex-direction: column; gap: 14px; max-width: 1480px; margin: 0 auto; width: 100%; box-sizing: border-box; position: relative; container-type: inline-size; }
           .topbar {
             display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap;
             padding: 12px 16px; border-radius: 18px;
@@ -1195,11 +1195,11 @@
             backdrop-filter: blur(16px) saturate(160%); -webkit-backdrop-filter: blur(16px) saturate(160%);
             border: 1px solid var(--ha-card-border-color, var(--divider-color, rgba(148,163,184,0.28))); box-shadow: 0 8px 26px rgba(0,0,0,0.10);
           }
-          .p-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
-          .p-title { font-size: 15.5px; font-weight: 800; }
-          .p-leg { font-size: 12.5px; color: var(--secondary-text-color); display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
-          .p-leg span { display: inline-flex; align-items: center; white-space: nowrap; }
-          .dot { display: inline-block; width: 9px; height: 9px; border-radius: 3px; margin-right: 4px; vertical-align: middle; }
+          .p-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; min-width: 0; }
+          .p-title { font-size: 15.5px; font-weight: 800; min-width: 0; overflow-wrap: break-word; }
+          .p-leg { font-size: 12.5px; color: var(--secondary-text-color); display: flex; gap: 6px 10px; flex-wrap: wrap; align-items: center; max-width: 100%; min-width: 0; }
+          .p-leg span { display: inline-flex; align-items: center; max-width: 100%; min-width: 0; white-space: normal; overflow-wrap: break-word; line-height: 1.35; }
+          .dot { display: inline-block; flex-shrink: 0; width: 9px; height: 9px; border-radius: 3px; margin-right: 4px; vertical-align: middle; }
           .svg { width: 100%; height: auto; display: block; overflow: visible; }
           .ax { font-size: 13px; fill: var(--primary-text-color, #1e293b); opacity: 0.88; font-weight: 600; }
           .ax-sub { font-size: 11.5px; fill: var(--secondary-text-color, #64748b); font-weight: 600; }
@@ -1336,21 +1336,21 @@
           details.ob-manual summary { cursor: pointer; font-weight: 700; padding: 4px 0; }
           button.btn.primary { background: rgba(34,197,94,0.20); border-color: rgba(34,197,94,0.45); }
           button.btn:disabled { opacity: 0.55; cursor: wait; }
-          @media (min-width: 560px) and (max-width: 959px) {
+          @container (min-width: 560px) and (max-width: 959px) {
             .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
           }
-          @media (min-width: 960px) {
+          @container (min-width: 960px) {
             .kpis { grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; }
           }
-          @media (min-width: 768px) {
+          @container (min-width: 768px) {
             .grid2 { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
             .grid2 > .panel:last-child:nth-child(odd) { grid-column: 1 / -1; }
             .grid2 > .panel:last-child:nth-child(odd) .svg { max-height: 285px; }
           }
-          @media (min-width: 600px) and (max-width: 1199px) {
+          @container (min-width: 600px) and (max-width: 1199px) {
             .insights { grid-template-columns: repeat(2, minmax(0, 1fr)); }
           }
-          @media (min-width: 1200px) {
+          @container (min-width: 1200px) {
             .insights { grid-template-columns: repeat(auto-fit, minmax(195px, 1fr)); gap: 12px; }
           }
           @media (prefers-reduced-motion: reduce) {

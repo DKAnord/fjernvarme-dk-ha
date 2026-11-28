@@ -159,19 +159,36 @@ def apply_eforsyning_data(
     state: dict[str, Any], fetched: dict[str, Any], today: date
 ) -> dict[str, Any]:
     """Merge one E|Forsyning fetch into ``state`` (in place) and return it."""
-    prev_mt = ((state.get("eforsyning") or {}).get("monthly_temps") or {})
+    prev_ef = state.get("eforsyning") or {}
+    prev_mt = prev_ef.get("monthly_temps") or {}
     merged_mt = _merge_monthly_temps(prev_mt, fetched.get("monthly_temps") or {}, today)
     rows = [r for r in (fetched.get("readings") or []) if isinstance(r, dict) and r.get("date")]
     apply_daily_readings(state, rows, today)
     _apply_server_monthly_temps(state, merged_mt, today)
+    new_marker = fetched.get("year_marker") or {}
+    prev_marker = prev_ef.get("year_marker") or {}
+    new_bs = fetched.get("billing_summary")
+    prev_bs = prev_ef.get("billing_summary")
+    billing_summary: dict[str, Any] | None = None
+    if isinstance(new_bs, dict) and new_bs:
+        billing_summary = dict(new_bs)
+    elif (
+        isinstance(prev_bs, dict)
+        and prev_bs
+        and new_marker.get("aarsmaerke") is not None
+        and new_marker.get("aarsmaerke") == prev_marker.get("aarsmaerke")
+    ):
+        billing_summary = dict(prev_bs)
     ef_meta: dict[str, Any] = {
         "years": fetched.get("years") or [],
-        "year_marker": fetched.get("year_marker") or {},
+        "year_marker": new_marker,
         "installation": fetched.get("installation") or {},
         "readings_last_fetch": len(rows),
     }
     if merged_mt:
         ef_meta["monthly_temps"] = merged_mt
+    if billing_summary:
+        ef_meta["billing_summary"] = billing_summary
     state["eforsyning"] = ef_meta
     return state
 

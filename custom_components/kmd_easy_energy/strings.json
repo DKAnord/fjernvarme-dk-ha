@@ -147,6 +147,7 @@
           "fixed_fee_dkk_per_m2_year": "Annual area / subscription fee incl. VAT (DKK/m²/year, 0 = published default)",
           "heated_area_m2": "Household / heated area (m², 0 = unset)",
           "fixed_fee_dkk_per_year": "Flat annual subscription / meter fee incl. VAT (DKK/year, optional, 0 = none)",
+          "aconto_dkk_per_year": "Annual advance payment / aconto incl. VAT (DKK/year, optional, 0 = from E|Forsyning / hide)",
           "normal_hdd_year": "Normal-year HDD17 (0 = 3100 estimate)",
           "sync_reminder": "Soft weekend reminder (shown Sat/Sun if not synced Thu–Sat)",
           "auto_sync": "Automatic daily sync (E|Forsyning / Watts On)",
@@ -186,6 +187,9 @@
       },
       "balance": {
         "name": "Balance"
+      },
+      "settlement": {
+        "name": "Expected settlement balance"
       },
       "heating_degree_days": {
         "name": "Heating degree days (7d)"

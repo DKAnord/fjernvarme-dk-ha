@@ -111,6 +111,7 @@ async def test_admin_services_succeed_for_admin_user() -> None:
             "fixed_fee_dkk_per_m2_year": 33.75,
             "heated_area_m2": 162,
             "fixed_fee_dkk_per_year": 787.5,
+            "aconto_dkk_per_year": 12500,
             "mitid_username": "admin-mitid",
             "notify_service": "mobile_app_phone",
             "complete_setup": True,
@@ -121,6 +122,7 @@ async def test_admin_services_succeed_for_admin_user() -> None:
     )
     assert entry.options["price_dkk_per_kwh"] == 0.79
     assert entry.options["heated_area_m2"] == 162.0
+    assert entry.options["aconto_dkk_per_year"] == 12500.0
     coord.async_set_setup_state.assert_awaited_once()
 
     await hass.services.async_call(

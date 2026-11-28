@@ -292,8 +292,10 @@ async function run() {
   await flush();
 
   const html3 = card3.shadowRoot.innerHTML;
-  assert.strictEqual(card3._attrs["data-kmd-card-version"], "1.4.4", "sets version attribute");
+  assert.strictEqual(card3._attrs["data-kmd-card-version"], "1.5.0", "sets version attribute");
   assert.strictEqual(wsCalls.length, 2, "issues hour and day WS queries");
+  const hourCall = wsCalls.find((c) => c.period === "hour");
+  assert.deepStrictEqual(hourCall.units, { energy: "kWh" }, "requests energy statistics normalized to kWh (#88)");
   assert.ok(html3.includes("cols-3"), "3-column layout active");
   const d2Parts = day2Ymd.split("-");
   const expectedThru2 = `Eloverblik (t.o.m. ${Number(d2Parts[2])}/${Number(d2Parts[1])})`;
@@ -498,6 +500,68 @@ async function run() {
   assert.strictEqual(lastCfg.el_entity, "sensor.eloverblik_energy_statistic");
   assert.strictEqual(lastCfg.water_price_m3, 75);
   assert.ok(!("ev_entity" in lastCfg), "empty optional string removed from config");
+
+  // 6) Heating card insight shows settlement vs. aconto when settlement capability is active
+  const cardStl = new Card();
+  cardStl.setConfig({ entity: "sensor.soroe_overview" });
+  cardStl.hass = {
+    language: "da",
+    states: {
+      "sensor.soroe_overview": {
+        entity_id: "sensor.soroe_overview",
+        state: "8000",
+        attributes: {
+          utility: "Sorø Fjernvarme",
+          backend: "eforsyning",
+          capabilities: ["daily", "monthly", "cost", "settlement"],
+          cost_estimate: { ytd_dkk: 5600 },
+          settlement: { remaining_dkk: -920, status: "credit" },
+          daily: { month: "November 2026", days: { "10": 40 }, latest_complete: true },
+        },
+      },
+    },
+    callWS: async () => ({}),
+  };
+  await flush();
+  assert.ok(cardStl.shadowRoot.innerHTML.includes("~920 kr. til gode"), "DanskForbrugCard shows settlement credit suffix");
+
+  // 7) SaveEye Wh sensor discovery in getStubConfig & DanskForbrugCardEditor (#88)
+  const whStates = {
+    "sensor.kredslob_overview": baseStates["sensor.kredslob_overview"],
+    "sensor.saveeye_total_energy_import": {
+      entity_id: "sensor.saveeye_total_energy_import",
+      state: "15234000",
+      attributes: {
+        friendly_name: "SaveEye Total",
+        unit_of_measurement: "Wh",
+        device_class: "energy",
+        state_class: "total_increasing",
+      },
+    },
+    "sensor.saveeye_device_active_cumulative_energy_consumption_all_lines": {
+      entity_id: "sensor.saveeye_device_active_cumulative_energy_consumption_all_lines",
+      state: "15234000",
+      attributes: {
+        friendly_name: "SaveEye Active All Lines",
+        unit_of_measurement: "Wh",
+      },
+    },
+  };
+  const whStub = Card.getStubConfig({ states: whStates });
+  assert.strictEqual(
+    whStub.el_entity,
+    "sensor.saveeye_total_energy_import",
+    "getStubConfig accepts Wh energy sensors (#88)"
+  );
+  const whEd = new Editor();
+  whEd.setConfig({ language: "da" });
+  whEd.hass = { states: whStates };
+  const whEdHtml = whEd.shadowRoot.innerHTML;
+  assert.ok(
+    whEdHtml.includes("sensor.saveeye_device_active_cumulative_energy_consumption_all_lines"),
+    "editor datalist includes SaveEye Wh sensor (#88)"
+  );
+  assert.ok(whEdHtml.includes("(kWh / Wh)"), "editor labels reflect kWh / Wh support");
 
   console.log("card_dansk_forbrug.test.js: OK");
 }

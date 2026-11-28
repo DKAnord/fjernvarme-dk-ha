@@ -147,6 +147,7 @@
           "fixed_fee_dkk_per_m2_year": "Fast arealbidrag / abonnement inkl. moms (kr./m²/år, 0 = offentliggjort standard)",
           "heated_area_m2": "Boligareal / opvarmet areal (m², 0 = ikke sat)",
           "fixed_fee_dkk_per_year": "Fast årsabonnement / målerbidrag inkl. moms (kr./år, valgfri, 0 = ingen)",
+          "aconto_dkk_per_year": "Årlig aconto inkl. moms (kr./år, valgfri, 0 = fra E|Forsyning / skjul)",
           "normal_hdd_year": "Normalår-graddage HDD17 (0 = skøn 3100)",
           "sync_reminder": "Blød påmindelse i weekenden (vises lør/søn, hvis der ikke er synkroniseret tors–lør)",
           "auto_sync": "Automatisk daglig synkronisering (E|Forsyning / Watts On)",
@@ -186,6 +187,9 @@
       },
       "balance": {
         "name": "Saldo"
+      },
+      "settlement": {
+        "name": "Restbeløb til fakturering"
       },
       "heating_degree_days": {
         "name": "Graddage (7 dage)"

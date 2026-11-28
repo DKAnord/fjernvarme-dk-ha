@@ -19,6 +19,7 @@ CAP_TEMPERATURES = "temperatures"
 CAP_VOLUME = "volume"
 CAP_COST = "cost"
 CAP_BILLING = "billing"
+CAP_SETTLEMENT = "settlement"
 CAP_FORECAST = "forecast"
 CAP_MITID = "mitid"
 CAP_REMINDER = "reminder"
@@ -35,13 +36,14 @@ BACKEND_CAPABILITIES: dict[str, frozenset[str]] = {
             CAP_VOLUME,
             CAP_COST,
             CAP_BILLING,
+            CAP_SETTLEMENT,
             CAP_FORECAST,
             CAP_MITID,
             CAP_REMINDER,
         }
     ),
-    # E|Forsyning: daily readings (kWh, m³, frem/retur °C); no hourly data,
-    # no balance/invoices and no settlement forecast in this backend (yet).
+    # E|Forsyning: daily readings (kWh, m³, frem/retur °C) + optional billing summary
+    # (getberegnregnskab -> settlement vs. aconto); no hourly data or KMD invoices.
     BACKEND_EFORSYNING: frozenset(
         {
             CAP_DAILY,
@@ -49,13 +51,14 @@ BACKEND_CAPABILITIES: dict[str, frozenset[str]] = {
             CAP_TEMPERATURES,
             CAP_VOLUME,
             CAP_COST,
+            CAP_SETTLEMENT,
             CAP_REMINDER,
             CAP_AUTO_SYNC,
         }
     ),
     # Watts On (Aalborg Forsyning): expected hourly heat data, but the heat
-    # field names are not verified, so hourly/temperatures/volume only count
-    # once a sync has actually detected them (see DETECTED_CAPABILITIES).
+    # field names are not verified, so hourly/temperatures/volume/settlement only
+    # count once a sync or option has actually detected them (see DETECTED_CAPABILITIES).
     BACKEND_WATTSON: frozenset(
         {
             CAP_HOURLY,
@@ -64,6 +67,7 @@ BACKEND_CAPABILITIES: dict[str, frozenset[str]] = {
             CAP_TEMPERATURES,
             CAP_VOLUME,
             CAP_COST,
+            CAP_SETTLEMENT,
             CAP_REMINDER,
             CAP_AUTO_SYNC,
         }
@@ -71,9 +75,11 @@ BACKEND_CAPABILITIES: dict[str, frozenset[str]] = {
 }
 
 # Capabilities that a backend may or may not deliver: their entities are only
-# created after a sync detected matching data (the entry reloads once then).
+# created after a sync or option detected matching data (the entry reloads once then).
 DETECTED_CAPABILITIES: dict[str, frozenset[str]] = {
-    BACKEND_WATTSON: frozenset({CAP_HOURLY, CAP_TEMPERATURES, CAP_VOLUME}),
+    BACKEND_KMD: frozenset({CAP_SETTLEMENT}),
+    BACKEND_EFORSYNING: frozenset({CAP_SETTLEMENT}),
+    BACKEND_WATTSON: frozenset({CAP_HOURLY, CAP_TEMPERATURES, CAP_VOLUME, CAP_SETTLEMENT}),
 }
 
 _DATA_CAPS = (
@@ -84,6 +90,7 @@ _DATA_CAPS = (
     CAP_VOLUME,
     CAP_COST,
     CAP_BILLING,
+    CAP_SETTLEMENT,
     CAP_FORECAST,
 )
 
@@ -168,6 +175,9 @@ def data_capabilities(state: dict[str, Any] | None) -> set[str]:
     has_bal = isinstance(bal_val, (int, float)) and not isinstance(bal_val, bool)
     if _has(s.get("billing")) or has_bal:
         caps.add(CAP_BILLING)
+    rem_val = (s.get("settlement") or {}).get("remaining_dkk")
+    if isinstance(rem_val, (int, float)) and not isinstance(rem_val, bool):
+        caps.add(CAP_SETTLEMENT)
     exp_kwh = (s.get("forecast") or {}).get("expected_kwh")
     if isinstance(exp_kwh, (int, float)) and not isinstance(exp_kwh, bool) and float(exp_kwh) > 0:
         caps.add(CAP_FORECAST)

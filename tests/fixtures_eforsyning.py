@@ -82,6 +82,113 @@ INSTALLATIONS = {
 YEAR_MARKER = {"aarsmaerke": 2026, "aarsmaerke_start": "01-01-2026", "aarsmaerke_slut": "31-12-2026"}
 
 
+def billing_response(lines: list[dict[str, Any]] | None = None) -> dict[str, Any]:
+    """Synthetic api/getberegnregnskab (Beregnet varmeregnskab) payload."""
+    default_lines = [
+        {
+            "ekstra": "kr.",
+            "enhedPris": "433,80",
+            "linieType": "3",
+            "antalEnheder": "3,361",
+            "enhed": "MWh",
+            "tekst": "999999",
+            "prisEnhed": "kr./MWh",
+            "ialt": "1.458,00",
+        },
+        {
+            "ekstra": "",
+            "enhedPris": "",
+            "linieType": "3",
+            "antalEnheder": "108,66",
+            "enhed": "M3",
+            "tekst": "",
+            "prisEnhed": "",
+            "ialt": "",
+        },
+        {
+            "ekstra": "kr.",
+            "enhedPris": "433,80",
+            "linieType": "3",
+            "antalEnheder": "2,144",
+            "enhed": "MWh",
+            "tekst": "Prognose: 27-08-2026 til 31-12-2026",
+            "prisEnhed": "kr./MWh",
+            "ialt": "930,07",
+        },
+        {
+            "ekstra": "kr.",
+            "enhedPris": "",
+            "linieType": "12",
+            "antalEnheder": "",
+            "enhed": "",
+            "tekst": "Samlet varmeforbrug",
+            "prisEnhed": "",
+            "ialt": "2.388,07",
+        },
+        {
+            "ekstra": "kr.",
+            "enhedPris": "13,14",
+            "linieType": "1",
+            "antalEnheder": "170,25",
+            "enhed": "m3",
+            "tekst": "Fastbidrag",
+            "prisEnhed": "kr./m3",
+            "ialt": "2.237,09",
+        },
+        {
+            "ekstra": "kr.",
+            "enhedPris": "4.625,16",
+            "linieType": "10",
+            "antalEnheder": "25,00",
+            "enhed": "%",
+            "tekst": "Moms",
+            "prisEnhed": "kr.",
+            "ialt": "1.156,29",
+        },
+        {
+            "ekstra": "kr.",
+            "enhedPris": "",
+            "linieType": "12",
+            "antalEnheder": "",
+            "enhed": "",
+            "tekst": "Total (incl.moms)",
+            "prisEnhed": "",
+            "ialt": "5.781,45",
+        },
+        {
+            "ekstra": "kr.",
+            "enhedPris": "",
+            "linieType": "18",
+            "antalEnheder": "",
+            "enhed": "",
+            "tekst": "Tidl. opkrævet (incl. moms)",
+            "prisEnhed": "",
+            "ialt": "-4.770,00",
+        },
+        {
+            "ekstra": "kr.",
+            "enhedPris": "",
+            "linieType": "18",
+            "antalEnheder": "",
+            "enhed": "",
+            "tekst": "Restance",
+            "prisEnhed": "",
+            "ialt": "1.590,00",
+        },
+        {
+            "ekstra": "kr.",
+            "enhedPris": "",
+            "linieType": "12",
+            "antalEnheder": "",
+            "enhed": "",
+            "tekst": "Til indbetaling ",
+            "prisEnhed": "",
+            "ialt": "1.011,45",
+        },
+    ]
+    return {"faktlini": default_lines if lines is None else lines}
+
+
 class FakeResponse:
     def __init__(self, status: int, body: Any) -> None:
         self.status = status

@@ -129,6 +129,14 @@ configure_utility:
           min: 0
           max: 100000
           step: 1
+    aconto_dkk_per_year:
+      name: Annual advance payment / aconto incl. VAT (DKK/year, 0 = auto / hide)
+      required: false
+      selector:
+        number:
+          min: 0
+          max: 100000
+          step: 1
     mitid_username:
       name: MitID User ID
       required: false

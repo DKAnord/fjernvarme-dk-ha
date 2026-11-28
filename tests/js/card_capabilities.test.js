@@ -762,4 +762,110 @@ assert.ok(
   "grid2 layout responds to card container width instead of viewport width"
 );
 
+// 21) Restbeløb vs. aconto KPI tile & aconto inputs across backends
+const efStlCreditHtml = render({
+  backend: "eforsyning",
+  data_source: "E|Forsyning",
+  utility: "Sorø Fjernvarme",
+  utility_id: "soroe-fjernvarme",
+  capabilities: ["auto_sync", "daily", "monthly", "settlement"],
+  settlement: {
+    remaining_dkk: -1240,
+    status: "credit",
+    expected_total_dkk: 10760,
+    aconto_total_dkk: 12000,
+    excludes_fixed_fees: false,
+  },
+}, []).shadowRoot.innerHTML;
+assert.ok(efStlCreditHtml.includes('data-kpi="settlement"'), "renders settlement KPI tile");
+assert.ok(efStlCreditHtml.includes('<div class="k-val good">-1.240 kr.</div>'), "negative remaining uses good class");
+assert.ok(efStlCreditHtml.includes("🟢 Til gode · regning ~10.760 mod aconto 12.000 kr."), "shows credit summary");
+assert.ok(!efStlCreditHtml.includes("ekskl. faste bidrag"), "full E|Forsyning bill does not mark excl. fixed fees");
+
+const kmdStlDebitHtml = render({
+  backend: "kmd",
+  capabilities: ["daily", "monthly", "cost", "settlement"],
+  settlement: {
+    remaining_dkk: 850,
+    status: "debit",
+    expected_total_dkk: 12850,
+    aconto_total_dkk: 12000,
+    excludes_fixed_fees: true,
+  },
+}, []).shadowRoot.innerHTML;
+assert.ok(kmdStlDebitHtml.includes('<div class="k-val bad">+850 kr.</div>'), "positive remaining uses bad class");
+assert.ok(kmdStlDebitHtml.includes("🔴 Efterbetaling") && kmdStlDebitHtml.includes("(ekskl. faste bidrag)"), "shows debit + fixed fee caveat");
+
+const hiddenStlHtml = render({
+  backend: "kmd",
+  capabilities: ["daily", "monthly", "cost"],
+  settlement: { remaining_dkk: -500 },
+}, []).shadowRoot.innerHTML;
+assert.ok(!hiddenStlHtml.includes('data-kpi="settlement"'), "hidden without settlement capability");
+
+// E|Forsyning onboarding saves efAcontoYearInput
+const efCalls = [];
+const efSetupCard = render({
+  backend: "eforsyning",
+  data_source: "E|Forsyning",
+  utility: "Sorø Fjernvarme",
+  utility_id: "soroe-fjernvarme",
+  initial_setup_complete: false,
+  annual: {},
+  monthly: {},
+  daily: {},
+  settlement: { aconto_total_dkk: 11500 },
+  capabilities: ["auto_sync", "daily"],
+}, efCalls);
+assert.ok(efSetupCard.shadowRoot.innerHTML.includes("Auto (11.500 kr./år fra E|Forsyning)"), "E|Forsyning aconto placeholder shows detected aconto");
+efSetupCard.shadowRoot.getElementById("efAcontoYearInput").value = "13200";
+efSetupCard.shadowRoot.getElementById("saveTariffBtn").listeners.click();
+assert.strictEqual(efCalls.pop()[2].aconto_dkk_per_year, 13200, "efAcontoYearInput saved via configure_utility");
+
+// KMD onboarding useBilledAcontoBtn + completeNowBtn saves aconto_dkk_per_year
+const kmdCalls = [];
+const curYrStr = String(new Date().getFullYear());
+const kmdSetupCard = render({
+  backend: "kmd",
+  initial_setup_complete: false,
+  billing: { [`total_${curYrStr}_kr`]: 11400 },
+  capabilities: ["mitid", "daily", "billing"],
+}, kmdCalls);
+kmdSetupCard.shadowRoot.getElementById("useBilledAcontoBtn").listeners.click();
+assert.strictEqual(kmdSetupCard.shadowRoot.getElementById("acontoYearInput").value, "11400", "1-click billed aconto populates input");
+kmdSetupCard.shadowRoot.getElementById("completeNowBtn").listeners.click();
+assert.strictEqual(kmdCalls.pop()[2].aconto_dkk_per_year, 11400, "acontoYearInput saved via completeNowBtn");
+
+// 22) Forecast KPI renders signed delta and settlement period (#24)
+const fcPeriodDaHtml = render({
+  backend: "kmd",
+  capabilities: ["daily", "monthly", "forecast"],
+  forecast: {
+    expected_kwh: 1100,
+    budget_kwh: 224,
+    period: "01.11.2026 - 30.11.2026",
+  },
+}, []).shadowRoot.innerHTML;
+assert.ok(
+  fcPeriodDaHtml.includes("+391% mod budget (224 kWh) · 01.11.2026 - 30.11.2026"),
+  "shows signed % vs. budget and settlement period on Prognose KPI"
+);
+
+const fcEnCard = new Card();
+fcEnCard.setConfig({ language: "en" });
+fcEnCard.hass = mkHass({
+  backend: "kmd",
+  capabilities: ["daily", "monthly", "forecast"],
+  forecast: {
+    expected_kwh: 1100,
+    budget_kwh: 224,
+    period: "01.11.2026 - 30.11.2026",
+  },
+}, []);
+const fcPeriodEnHtml = fcEnCard.shadowRoot.innerHTML;
+assert.ok(
+  fcPeriodEnHtml.includes("+391% vs. budget (224 kWh) · 01.11.2026 - 30.11.2026"),
+  "shows English vs. budget and settlement period on Forecast KPI"
+);
+
 console.log("card_capabilities.test.js: OK");

@@ -42,6 +42,7 @@ from .const import (
     BACKEND_KMD,
     BACKEND_WATTSON,
     BACKENDS,
+    CONF_ACONTO_DKK_PER_YEAR,
     CONF_AUTO_SYNC,
     CONF_AUTO_SYNC_HOUR,
     CONF_BACKEND,
@@ -61,6 +62,7 @@ from .const import (
     CONF_NOTIFY_SERVICE,
     CONF_PENALTY_TEMP,
     CONF_PORTAL_URL,
+    CONF_PRICE_DKK_PER_KWH,
     CONF_SYNC_REMINDER,
     CONF_UTILITY,
     CONF_UTILITY_ID,
@@ -82,7 +84,7 @@ from .const import (
     SYNC_BACKFILL_MONTHS,
     UPDATE_INTERVAL,
 )
-from .capabilities import effective_capabilities, entity_capabilities
+from .capabilities import CAP_SETTLEMENT, effective_capabilities, entity_capabilities
 from .eforsyning_mapping import apply_eforsyning_data
 from .wattson_mapping import apply_wattson_data
 from .outdoor_temp import (
@@ -334,6 +336,7 @@ _CONSUMPTION_CACHE_KEYS = (
     "settlement_period",
     "billing",
     "balance",
+    "settlement",
     "return_temp",
     "daily_forward_temp",
     "daily_expected_return_temp",
@@ -991,6 +994,7 @@ class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         backend = str(entry.data.get(CONF_BACKEND) or BACKEND_KMD).strip().lower()
         self.backend: str = backend if backend in BACKENDS else BACKEND_KMD
         self.started_auto_sync_signature: tuple[bool, int] | None = None
+        self.registered_entity_capabilities: frozenset[str] | None = None
 
     def _make_client(
         self,
@@ -1053,12 +1057,30 @@ class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         """Automatic daily sync — only for backends that need no MitID."""
         return (not self.uses_mitid) and bool(self._opt(CONF_AUTO_SYNC, DEFAULT_AUTO_SYNC))
 
+    def _detected_capabilities_for(self, state: Mapping[str, Any] | None = None) -> list[str] | None:
+        """Detected capabilities for ``state`` (Watts On data kinds + settlement availability)."""
+        src = state if state is not None else getattr(self, "data", None)
+        detected: set[str] = set()
+        if isinstance(src, Mapping):
+            meta = src.get("wattson")
+            if isinstance(meta, Mapping):
+                detected.update(str(c) for c in (meta.get("detected") or []) if c)
+            stl = src.get("settlement")
+            rem = stl.get("remaining_dkk") if isinstance(stl, Mapping) else None
+            if isinstance(rem, (int, float)) and not isinstance(rem, bool):
+                detected.add(CAP_SETTLEMENT)
+        raw_aconto = self._opt(CONF_ACONTO_DKK_PER_YEAR)
+        try:
+            if raw_aconto is not None and raw_aconto != "" and float(raw_aconto) > 0:
+                detected.add(CAP_SETTLEMENT)
+        except (TypeError, ValueError):
+            pass
+        return sorted(detected) if detected else None
+
     @property
     def detected_capabilities(self) -> list[str] | None:
-        """Data kinds a Watts On sync actually found (None before the first sync)."""
-        data = getattr(self, "data", None)
-        meta = data.get("wattson") if isinstance(data, dict) else None
-        return list(meta.get("detected") or []) if isinstance(meta, dict) else None
+        """Data kinds actually available for optional entities (None before first sync)."""
+        return self._detected_capabilities_for(getattr(self, "data", None))
 
     @property
     def backend_capabilities(self) -> frozenset[str]:
@@ -1720,11 +1742,19 @@ class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         forecast = forecast_annual(ytd, kph, tariff.normal_hdd_year, today)
         state["degree_day"] = forecast
 
+        ef_summary = (state.get("eforsyning") or {}).get("billing_summary")
+        if not isinstance(ef_summary, Mapping):
+            ef_summary = {}
+
         forecast_kwh = forecast.get("forecast_annual_kwh")
         if forecast_kwh is None:
             raw_expected = (state.get("forecast") or {}).get("expected_kwh")
             if isinstance(raw_expected, (int, float)) and not isinstance(raw_expected, bool) and raw_expected > 0:
                 forecast_kwh = float(raw_expected)
+        if forecast_kwh is None:
+            raw_ef_fc = ef_summary.get("energy_forecast_kwh")
+            if isinstance(raw_ef_fc, (int, float)) and not isinstance(raw_ef_fc, bool) and raw_ef_fc > 0:
+                forecast_kwh = float(raw_ef_fc)
 
         state["cost_estimate"] = estimate_variable_costs(
             price_dkk_per_kwh=tariff.price_dkk_per_kwh,
@@ -1758,6 +1788,17 @@ class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 0,
             )
 
+        raw_price_opt = self._opt(CONF_PRICE_DKK_PER_KWH)
+        user_overrode_price = False
+        try:
+            if raw_price_opt is not None and raw_price_opt != "" and float(raw_price_opt) > 0:
+                user_overrode_price = True
+        except (TypeError, ValueError):
+            pass
+        state["settlement"] = self._build_settlement(
+            state, tariff, user_overrode_price=user_overrode_price, today=today
+        )
+
         # Leak/abnormal: last complete day (yesterday, or latest complete daily).
         target = today - dt_mod.timedelta(days=1)
         daily_obj = state.get("daily") or {}
@@ -1774,7 +1815,9 @@ class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         outdoor = self._outdoor_temp_summary(state)
         state["outdoor_temp"] = outdoor
         state["temp_source"] = outdoor.get("source")
-        state["backend_capabilities"] = sorted(self.backend_capabilities)
+        state["backend_capabilities"] = sorted(
+            entity_capabilities(self.backend, self._detected_capabilities_for(state))
+        )
         state["capabilities"] = self.capabilities(state)
         if not state.get("available_units") and self.backend in (BACKEND_WATTSON, BACKEND_EFORSYNING):
             caps = set(state.get("capabilities") or ())
@@ -1791,6 +1834,121 @@ class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 inferred_units.append({"Name": "°C"})
             if inferred_units:
                 state["available_units"] = inferred_units
+
+    @staticmethod
+    def _opt_num(val: Any) -> float | None:
+        if isinstance(val, (int, float)) and not isinstance(val, bool) and math.isfinite(float(val)):
+            return float(val)
+        return None
+
+    @classmethod
+    def _build_settlement(
+        cls,
+        state: Mapping[str, Any],
+        tariff: Any,
+        *,
+        user_overrode_price: bool,
+        today: dt_mod.date,
+    ) -> dict[str, Any]:
+        """Compute expected year-end settlement balance against aconto."""
+        ef_raw = (state.get("eforsyning") or {}).get("billing_summary")
+        ef_summary = ef_raw if isinstance(ef_raw, Mapping) else {}
+        cost_est = state.get("cost_estimate")
+        cost_map = cost_est if isinstance(cost_est, Mapping) else {}
+
+        manual_aconto = cls._opt_num(getattr(tariff, "aconto_dkk_per_year", None))
+        if manual_aconto is not None and manual_aconto <= 0:
+            manual_aconto = None
+
+        ef_rem = cls._opt_num(ef_summary.get("remaining_dkk"))
+        ef_tot = cls._opt_num(ef_summary.get("expected_total_dkk"))
+        ef_aconto_tot = cls._opt_num(ef_summary.get("aconto_total_dkk"))
+        ef_aconto_paid = cls._opt_num(ef_summary.get("aconto_paid_dkk"))
+        ef_aconto_upcoming = cls._opt_num(ef_summary.get("aconto_upcoming_dkk"))
+
+        expected_total_dkk: float | None = None
+        aconto_total_dkk: float | None = None
+        aconto_paid_dkk: float | None = None
+        aconto_upcoming_dkk: float | None = None
+        excludes_fixed_fees = False
+        source = ""
+
+        if manual_aconto is None and ef_rem is not None:
+            remaining_dkk = round(ef_rem, 2)
+            expected_total_dkk = round(ef_tot, 2) if ef_tot is not None else None
+            aconto_total_dkk = round(ef_aconto_tot, 2) if ef_aconto_tot is not None else None
+            aconto_paid_dkk = round(ef_aconto_paid, 2) if ef_aconto_paid is not None else None
+            aconto_upcoming_dkk = (
+                round(ef_aconto_upcoming, 2) if ef_aconto_upcoming is not None else None
+            )
+            excludes_fixed_fees = False
+            source = "eforsyning"
+        elif manual_aconto is not None and ef_tot is not None and not user_overrode_price:
+            expected_total_dkk = round(ef_tot, 2)
+            aconto_total_dkk = round(manual_aconto, 2)
+            remaining_dkk = round(expected_total_dkk - aconto_total_dkk, 2)
+            aconto_paid_dkk = round(ef_aconto_paid, 2) if ef_aconto_paid is not None else None
+            aconto_upcoming_dkk = (
+                round(ef_aconto_upcoming, 2) if ef_aconto_upcoming is not None else None
+            )
+            excludes_fixed_fees = False
+            source = "eforsyning_manual_aconto"
+        elif manual_aconto is not None:
+            fc_dkk = cls._opt_num(cost_map.get("forecast_annual_dkk"))
+            if fc_dkk is None:
+                return {}
+            expected_total_dkk = round(fc_dkk, 2)
+            aconto_total_dkk = round(manual_aconto, 2)
+            remaining_dkk = round(expected_total_dkk - aconto_total_dkk, 2)
+            bill_paid = cls._opt_num((state.get("billing") or {}).get(f"total_{today.year}_kr"))
+            if bill_paid is not None and bill_paid > 0:
+                aconto_paid_dkk = round(bill_paid, 2)
+            elif ef_aconto_paid is not None:
+                aconto_paid_dkk = round(ef_aconto_paid, 2)
+            aconto_upcoming_dkk = (
+                round(ef_aconto_upcoming, 2) if ef_aconto_upcoming is not None else None
+            )
+            excludes_fixed_fees = bool(cost_map.get("excludes_fixed_fees", True))
+            source = "manual_aconto"
+        else:
+            return {}
+
+        status = "credit" if remaining_dkk < -50 else ("debit" if remaining_dkk > 50 else "balanced")
+        ytd_cost_dkk = cls._opt_num(cost_map.get("ytd_dkk"))
+        ytd_vs_paid_dkk = (
+            round(ytd_cost_dkk - aconto_paid_dkk, 2)
+            if (not excludes_fixed_fees and ytd_cost_dkk is not None and aconto_paid_dkk is not None)
+            else None
+        )
+        energy_ytd_kwh = cls._opt_num(ef_summary.get("energy_ytd_kwh"))
+        if energy_ytd_kwh is None:
+            energy_ytd_kwh = cls._opt_num((state.get("annual") or {}).get(str(today.year)))
+        energy_forecast_kwh = cls._opt_num(ef_summary.get("energy_forecast_kwh"))
+        if energy_forecast_kwh is None:
+            energy_forecast_kwh = cls._opt_num(cost_map.get("forecast_annual_kwh"))
+
+        return {
+            "remaining_dkk": remaining_dkk,
+            "status": status,
+            "expected_total_dkk": expected_total_dkk,
+            "aconto_total_dkk": aconto_total_dkk,
+            "aconto_paid_dkk": aconto_paid_dkk,
+            "aconto_upcoming_dkk": aconto_upcoming_dkk,
+            "ytd_cost_dkk": round(ytd_cost_dkk, 2) if ytd_cost_dkk is not None else None,
+            "ytd_vs_paid_dkk": ytd_vs_paid_dkk,
+            "energy_ytd_kwh": energy_ytd_kwh,
+            "energy_forecast_kwh": energy_forecast_kwh,
+            "excludes_fixed_fees": excludes_fixed_fees,
+            "source": source,
+        }
+
+    def _schedule_reload_if_capabilities_grew(
+        self, state: Mapping[str, Any], before: set[str]
+    ) -> None:
+        after = set(entity_capabilities(self.backend, self._detected_capabilities_for(state)))
+        registered = getattr(self, "registered_entity_capabilities", None)
+        if (after - before) or (registered is not None and (after - registered)):
+            self.hass.config_entries.async_schedule_reload(self.entry.entry_id)
 
     def _cost_statistics_signature(self, state: Mapping[str, Any]) -> str:
         """Fingerprint of variable tariff settings and energy series bounds."""
@@ -2226,9 +2384,14 @@ class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                                     m_idx = int(df_str[5:7])
                                     v = float(item["Value"]) * energy_factor
                                     yr_dict[M_KEYS[m_idx - 1]] = int(v) if v.is_integer() else round(v, 2)
-                            annual_map[yr_s] = round(
-                                sum(v for v in yr_dict.values() if isinstance(v, (int, float)))
-                            )
+                            m_tot = m_raw.get("Total") if isinstance(m_raw, dict) else None
+                            raw_m_tot = m_tot.get("Value") if isinstance(m_tot, dict) else None
+                            if _is_num(raw_m_tot) and float(raw_m_tot) > 0:
+                                annual_map[yr_s] = round(float(raw_m_tot) * energy_factor)
+                            else:
+                                annual_map[yr_s] = round(
+                                    sum(v for v in yr_dict.values() if isinstance(v, (int, float)))
+                                )
                     except Exception as err:  # noqa: BLE001
                         _LOGGER.warning("Monthly fetch (%s) failed: %s", yr_s, err)
 
@@ -2286,6 +2449,13 @@ class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 if days:
                     vals = list(days.values())
                     stat_vals = complete_vals or vals
+                    d_tot = d_raw.get("Total") if isinstance(d_raw, dict) else None
+                    raw_d_tot = d_tot.get("Value") if isinstance(d_tot, dict) else None
+                    daily_total = (
+                        round(float(raw_d_tot) * energy_factor, 2)
+                        if _is_num(raw_d_tot) and float(raw_d_tot) > 0
+                        else round(sum(vals), 2)
+                    )
                     history = dict(state.get("daily_kwh_history") or {})
                     for d_num, val in days.items():
                         try:
@@ -2296,7 +2466,7 @@ class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     state["daily"] = {
                         "month": f"{M_FULL[mo - 1]} {yr}",
                         "days": days,
-                        "total": round(sum(vals), 2),
+                        "total": daily_total,
                         "gennemsnit": round(sum(stat_vals) / len(stat_vals), 1),
                         "minimum": min(stat_vals),
                         "maksimum": max(stat_vals),
@@ -2525,6 +2695,7 @@ class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         several syncs the same day never create duplicates.
         """
         state = await self._async_load_cache()
+        before = set(entity_capabilities(self.backend, self._detected_capabilities_for(state)))
         state.pop("token_expired", None)
         self.client = self._make_client(access_token, customer_id, customer_number)
         try:
@@ -2545,6 +2716,7 @@ class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         await self._async_save_cache(state)
         self._reminder_sig = None
         self.async_set_updated_data(state)
+        self._schedule_reload_if_capabilities_grew(state, before)
 
     async def async_update_token(
         self,
@@ -2575,6 +2747,7 @@ class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         written after a successful fetch, so a failure keeps the old values.
         """
         state = await self._async_load_cache()
+        before = set(entity_capabilities(self.backend, self._detected_capabilities_for(state)))
         today = copenhagen_today()
         first_sync = not (state.get("daily_kwh_history") or {})
         client = self._make_eforsyning_client()
@@ -2588,6 +2761,7 @@ class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             client.discard_credentials()
         apply_eforsyning_data(state, fetched, today)
         await self._async_finish_backend_sync(state, today)
+        self._schedule_reload_if_capabilities_grew(state, before)
 
     async def _async_finish_backend_sync(self, state: dict[str, Any], today: dt_mod.date) -> None:
         """Shared tail of a non-MitID sync: derive, import statistics, save, publish."""
@@ -2695,7 +2869,7 @@ class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             unit_hint=device_meta.get("unit"),
             unit_override=str(self._opt(CONF_WATTS_ENERGY_UNIT, "auto") or "auto"),
         )
-        before = set(entity_capabilities(self.backend, meta_prev.get("detected")))
+        before = set(entity_capabilities(self.backend, self._detected_capabilities_for(state)))
         apply_wattson_data(
             state,
             parsed,
@@ -2709,10 +2883,7 @@ class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             },
         )
         await self._async_finish_backend_sync(state, today)
-        after = entity_capabilities(self.backend, (state.get("wattson") or {}).get("detected"))
-        if set(after) - before:
-            # New data kinds detected: reload once so their entities are created.
-            self.hass.config_entries.async_schedule_reload(self.entry.entry_id)
+        self._schedule_reload_if_capabilities_grew(state, before)
 
     async def _async_run_eforsyning_sync(self, automatic: bool = False) -> None:
         await self._async_run_backend_sync(automatic)
@@ -2800,11 +2971,18 @@ class KMDEasyEnergyCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             self.mitid_qr_frames = []
         await self.hass.async_add_executor_job(load_utilities)
         state = dict(self.data or await self._async_load_cache())
+        if self.registered_entity_capabilities is not None:
+            prev_caps = set(self.registered_entity_capabilities)
+        elif isinstance(state.get("backend_capabilities"), (list, tuple, set)):
+            prev_caps = {str(c) for c in state["backend_capabilities"]}
+        else:
+            prev_caps = set(entity_capabilities(self.backend))
         state.update(self._base_meta())
         state["initial_setup_complete"] = complete
         self._enrich_derived(state)
         await self._async_save_cache(state)
         self.async_set_updated_data(state)
+        self._schedule_reload_if_capabilities_grew(state, prev_caps)
 
     def _push_sync_ui(
         self,

@@ -20,14 +20,15 @@ FULL_KMD_STATE = {
     "hourly_m3": [{"DateFrom": "x", "Value": 0.1, "IsComplete": True}],
     "energy_price_dkk_per_kwh": 0.668,
     "billing": {"saldo_kr": -12.0},
+    "settlement": {"remaining_dkk": -250.0},
     "forecast": {"expected_kwh": 9000},
 }
 
 
 def test_static_backend_capabilities() -> None:
-    assert {"hourly", "mitid", "billing"} <= BACKEND_CAPABILITIES["kmd"]
+    assert {"hourly", "mitid", "billing", "settlement"} <= BACKEND_CAPABILITIES["kmd"]
     ef = BACKEND_CAPABILITIES["eforsyning"]
-    assert {"daily", "monthly", "temperatures", "volume"} <= ef
+    assert {"daily", "monthly", "temperatures", "volume", "settlement"} <= ef
     assert not ef & {"hourly", "mitid", "billing", "forecast"}
 
 
@@ -58,11 +59,11 @@ def test_never_synced_kmd_still_offers_mitid() -> None:
     assert effective_capabilities("kmd", {}) == ["mitid", "reminder"]
 
 
-def _coord(backend: str):
-    from kmd_easy_energy.capabilities import backend_capabilities
+def _coord(backend: str, detected=None):
+    from kmd_easy_energy.capabilities import entity_capabilities
 
     coord = MagicMock()
-    coord.backend_capabilities = backend_capabilities(backend)
+    coord.backend_capabilities = entity_capabilities(backend, detected)
     coord.data = {}
     return coord
 
@@ -75,6 +76,7 @@ def test_sensors_only_created_when_backend_can_fill_them() -> None:
     ef = {type(s).__name__ for s in sensors_for(_coord("eforsyning"), entry)}
     assert len(kmd) == 17
     assert "KMDBalanceSensor" in kmd and "KMDBalanceSensor" not in ef
+    assert "KMDSettlementSensor" not in kmd and "KMDSettlementSensor" not in ef
     assert {
         "KMDVolumeSensor",
         "KMDReturnTempSensor",
@@ -83,6 +85,12 @@ def test_sensors_only_created_when_backend_can_fill_them() -> None:
         "KMDEffectivePriceSensor",
         "KMDYearCostSensor",
     } <= ef
+
+    kmd_stl = {type(s).__name__ for s in sensors_for(_coord("kmd", ["settlement"]), entry)}
+    ef_stl = {type(s).__name__ for s in sensors_for(_coord("eforsyning", ["settlement"]), entry)}
+    w_stl = {type(s).__name__ for s in sensors_for(_coord("wattson", ["settlement"]), entry)}
+    assert len(kmd_stl) == 18 and "KMDSettlementSensor" in kmd_stl
+    assert "KMDSettlementSensor" in ef_stl and "KMDSettlementSensor" in w_stl
 
 
 def test_binary_sensors_follow_capabilities() -> None:
@@ -113,6 +121,11 @@ def test_coordinator_publishes_capabilities_in_state(tmp_path) -> None:
 
     coord, _, _, _ = make_coordinator(tmp_path)
     state = dict(FULL_KMD_STATE)
+    coord._enrich_derived(state)
+    assert "settlement" not in state["capabilities"]
+    assert "settlement" not in state["backend_capabilities"]
+
+    coord.entry.options["aconto_dkk_per_year"] = 10000.0
     coord._enrich_derived(state)
     assert set(state["capabilities"]) == BACKEND_CAPABILITIES["kmd"]
     assert state["backend_capabilities"] == sorted(BACKEND_CAPABILITIES["kmd"])

@@ -552,6 +552,231 @@ def response_has_lines(result: Any) -> bool:
     return bool(fl.get("TForbrugsLinje"))
 
 
+_BILLING_PROGNOSIS_KW = ("prognose", "forventet forbrug", "restforbrug", "skønnet forbrug")
+_BILLING_TOTAL_EX_VAT_KW = (
+    "total før moms",
+    "total ekskl",
+    "total excl",
+    "ialt før moms",
+    "i alt ekskl",
+)
+_BILLING_TOTAL_INC_VAT_KW = (
+    "total (incl.moms)",
+    "total, inkl. moms",
+    "total med moms",
+    "total inkl. moms",
+    "i alt inkl. moms",
+    "samlet udgift inkl. moms",
+)
+_BILLING_CREDIT_KW = (
+    "til udbetaling",
+    "tilbagebetaling",
+    "for meget opkrævet",
+    "forventet tilbagebetaling",
+    "beløb til udbetaling",
+)
+_BILLING_DEBIT_KW = (
+    "til indbetaling",
+    "for lidt opkrævet",
+    "efterbetaling",
+    "beløb til opkrævning",
+    "restbeløb",
+)
+_BILLING_RESULT_KW = (
+    "årets forventede resultat",
+    "forventet årsresultat",
+    "forventet resultat",
+)
+
+
+def parse_billing_summary(result: dict[str, Any] | None) -> dict[str, Any]:
+    """Parse E|Forsyning api/getberegnregnskab (faktlini) into normalised numbers.
+
+    Never stores raw text, meter numbers, or customer identifiers.
+    """
+    if not isinstance(result, dict) or "response" in result:
+        return {}
+    lines = result.get("faktlini")
+    if not isinstance(lines, list) or not lines:
+        return {}
+
+    energy_ytd_kwh = 0.0
+    energy_remaining_kwh = 0.0
+    energy_ytd_ex_vat_dkk = 0.0
+    energy_remaining_ex_vat_dkk = 0.0
+    m3_ytd = 0.0
+    m3_remaining = 0.0
+    saw_energy_ytd = False
+    saw_energy_rem = False
+    saw_energy_ytd_dkk = False
+    saw_energy_rem_dkk = False
+    saw_m3_ytd = False
+    saw_m3_rem = False
+
+    motivation_ex_vat_dkk = 0.0
+    saw_motivation = False
+    fixed_ex_vat_dkk = 0.0
+    saw_fixed = False
+    vat_dkk = 0.0
+    saw_vat = False
+
+    paid_signed = 0.0
+    saw_paid = False
+    upcoming_signed = 0.0
+    saw_upcoming = False
+
+    heat_subtotal_ex_vat_dkk: float | None = None
+    total_ex_vat_dkk: float | None = None
+    expected_total_dkk: float | None = None
+    remaining_dkk: float | None = None
+    neutral_result_val: float | None = None
+
+    for record in lines:
+        if not isinstance(record, dict):
+            continue
+        ltype = str(record.get("linieType") or "").strip()
+        tekst_low = str(record.get("tekst") or "").strip().lower()
+        ialt = parse_number(record.get("ialt"))
+
+        if ltype == "3":
+            if "afkøling" in tekst_low or "afkoling" in tekst_low:
+                continue
+            is_prog = any(kw in tekst_low for kw in _BILLING_PROGNOSIS_KW)
+            enhed_raw = str(record.get("enhed") or "").strip()
+            enhed_low = enhed_raw.lower()
+            qty = parse_number(record.get("antalEnheder"))
+            factor = _energy_factor(enhed_raw)
+            if factor is not None:
+                if qty is not None:
+                    kwh_val = qty * factor
+                    if is_prog:
+                        energy_remaining_kwh += kwh_val
+                        saw_energy_rem = True
+                    else:
+                        energy_ytd_kwh += kwh_val
+                        saw_energy_ytd = True
+                if ialt is not None:
+                    if is_prog:
+                        energy_remaining_ex_vat_dkk += ialt
+                        saw_energy_rem_dkk = True
+                    else:
+                        energy_ytd_ex_vat_dkk += ialt
+                        saw_energy_ytd_dkk = True
+            elif enhed_low in ("m3", "m³"):
+                if qty is not None:
+                    if is_prog:
+                        m3_remaining += qty
+                        saw_m3_rem = True
+                    else:
+                        m3_ytd += qty
+                        saw_m3_ytd = True
+        elif ltype == "22":
+            if ialt is not None:
+                motivation_ex_vat_dkk += ialt
+                saw_motivation = True
+        elif ltype in ("1", "7"):
+            if ialt is not None:
+                fixed_ex_vat_dkk += ialt
+                saw_fixed = True
+        elif ltype == "10":
+            if ialt is not None:
+                vat_dkk += ialt
+                saw_vat = True
+        elif ltype == "18":
+            if "restance" in tekst_low:
+                continue
+            if ialt is not None:
+                paid_signed += ialt
+                saw_paid = True
+        elif ltype == "20":
+            if ialt is not None:
+                upcoming_signed += ialt
+                saw_upcoming = True
+        elif ltype == "12":
+            if ialt is None:
+                continue
+            if "samlet varmeforbrug" in tekst_low:
+                heat_subtotal_ex_vat_dkk = round(ialt, 2)
+            elif any(kw in tekst_low for kw in _BILLING_TOTAL_EX_VAT_KW):
+                total_ex_vat_dkk = round(ialt, 2)
+            elif any(kw in tekst_low for kw in _BILLING_TOTAL_INC_VAT_KW):
+                expected_total_dkk = round(ialt, 2)
+            elif any(kw in tekst_low for kw in _BILLING_CREDIT_KW):
+                remaining_dkk = round(-abs(ialt), 2)
+            elif any(kw in tekst_low for kw in _BILLING_DEBIT_KW):
+                remaining_dkk = round(abs(ialt), 2) if ialt >= 0 else round(ialt, 2)
+            elif any(kw in tekst_low for kw in _BILLING_RESULT_KW):
+                neutral_result_val = ialt
+
+    aconto_paid_dkk: float | None = (
+        (round(-paid_signed, 2) if paid_signed < 0 else round(paid_signed, 2))
+        if saw_paid
+        else None
+    )
+    aconto_upcoming_dkk: float | None = (
+        (round(-upcoming_signed, 2) if upcoming_signed < 0 else round(upcoming_signed, 2))
+        if saw_upcoming
+        else None
+    )
+    aconto_total_dkk: float | None = (
+        round((aconto_paid_dkk or 0.0) + (aconto_upcoming_dkk or 0.0), 2)
+        if (saw_paid or saw_upcoming)
+        else None
+    )
+
+    if neutral_result_val is not None:
+        if remaining_dkk is not None and expected_total_dkk is None:
+            expected_total_dkk = round(neutral_result_val, 2)
+        elif expected_total_dkk is not None or saw_paid or saw_upcoming or neutral_result_val < 0:
+            if remaining_dkk is None:
+                remaining_dkk = round(neutral_result_val, 2)
+        elif expected_total_dkk is None:
+            expected_total_dkk = round(neutral_result_val, 2)
+
+    if remaining_dkk is None and expected_total_dkk is not None and aconto_total_dkk is not None:
+        remaining_dkk = round(expected_total_dkk - aconto_total_dkk, 2)
+
+    if remaining_dkk is None and expected_total_dkk is None:
+        return {}
+
+    summary: dict[str, Any] = {}
+    if remaining_dkk is not None:
+        summary["remaining_dkk"] = remaining_dkk
+    if expected_total_dkk is not None:
+        summary["expected_total_dkk"] = expected_total_dkk
+    if total_ex_vat_dkk is not None:
+        summary["total_ex_vat_dkk"] = total_ex_vat_dkk
+    if saw_vat:
+        summary["vat_dkk"] = round(vat_dkk, 2)
+    if heat_subtotal_ex_vat_dkk is not None:
+        summary["heat_subtotal_ex_vat_dkk"] = heat_subtotal_ex_vat_dkk
+    if saw_fixed:
+        summary["fixed_ex_vat_dkk"] = round(fixed_ex_vat_dkk, 2)
+    if saw_motivation:
+        summary["motivation_ex_vat_dkk"] = round(motivation_ex_vat_dkk, 2)
+    if aconto_paid_dkk is not None:
+        summary["aconto_paid_dkk"] = aconto_paid_dkk
+    if aconto_upcoming_dkk is not None:
+        summary["aconto_upcoming_dkk"] = aconto_upcoming_dkk
+    if aconto_total_dkk is not None:
+        summary["aconto_total_dkk"] = aconto_total_dkk
+    if saw_energy_ytd:
+        summary["energy_ytd_kwh"] = round(energy_ytd_kwh, 2)
+    if saw_energy_rem:
+        summary["energy_remaining_kwh"] = round(energy_remaining_kwh, 2)
+    if saw_energy_ytd or saw_energy_rem:
+        summary["energy_forecast_kwh"] = round(energy_ytd_kwh + energy_remaining_kwh, 2)
+    if saw_energy_ytd_dkk:
+        summary["energy_ytd_ex_vat_dkk"] = round(energy_ytd_ex_vat_dkk, 2)
+    if saw_energy_rem_dkk:
+        summary["energy_remaining_ex_vat_dkk"] = round(energy_remaining_ex_vat_dkk, 2)
+    if saw_m3_ytd:
+        summary["m3_ytd"] = round(m3_ytd, 3)
+    if saw_m3_rem:
+        summary["m3_remaining"] = round(m3_remaining, 3)
+    return summary
+
+
 class EforsyningClient:
     """One-sync E|Forsyning client. Credentials live only in this object."""
 
@@ -753,6 +978,33 @@ class EforsyningClient:
         """Monthly readings (server-computed ENG2/TV2 temps) for one billing year."""
         return await self._async_get_forbrug(year, "afMaanedsvis")
 
+    async def async_get_billing_summary(self) -> dict[str, Any]:
+        """Calculated annual heating bill vs. aconto (Beregnet varmeregnskab)."""
+        inst = self.installation or {}
+        try:
+            aktiv_nr = int(inst.get("AktivNr", 1))
+        except (TypeError, ValueError):
+            aktiv_nr = 1
+        url = f"{self._api}api/getberegnregnskab?id={self._access}{self._consumer_query()}"
+        res = await self._request(
+            "POST",
+            url,
+            {"aktivnr": aktiv_nr, "beregnetVarmeRegnskab": "faktisk"},
+            what="getberegnregnskab",
+        )
+        if (
+            aktiv_nr != 0
+            and isinstance(res, dict)
+            and not (isinstance(res.get("faktlini"), list) and res.get("faktlini"))
+        ):
+            res = await self._request(
+                "POST",
+                url,
+                {"aktivnr": 0, "beregnetVarmeRegnskab": "faktisk"},
+                what="getberegnregnskab",
+            )
+        return res if isinstance(res, dict) else {}
+
     async def async_fetch(self, today: date, years_back: int = 1) -> dict[str, Any]:
         """Login and fetch daily readings for the current (+ previous) billing year."""
         await self.async_login()
@@ -799,6 +1051,16 @@ class EforsyningClient:
                         dst_yr.setdefault(kind, {}).update(m_map)
                 for yr_s, a_map in (mt.get("annual") or {}).items():
                     monthly_temps["annual"].setdefault(yr_s, {}).update(a_map)
+        billing_summary: dict[str, Any] = {}
+        try:
+            raw_billing = await self.async_get_billing_summary()
+        except EforsyningLoginError:
+            raise
+        except EforsyningError as err:
+            _LOGGER.debug("E|Forsyning billing summary not available: %s", err)
+            raw_billing = None
+        if raw_billing is not None:
+            billing_summary = parse_billing_summary(raw_billing)
         inst = self.installation or {}
         out: dict[str, Any] = {
             "readings": readings,
@@ -815,4 +1077,6 @@ class EforsyningClient:
         compact_mt = {k: v for k, v in monthly_temps.items() if v}
         if compact_mt:
             out["monthly_temps"] = compact_mt
+        if billing_summary:
+            out["billing_summary"] = billing_summary
         return out

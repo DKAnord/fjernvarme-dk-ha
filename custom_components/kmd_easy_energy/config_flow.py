@@ -55,6 +55,7 @@ from .const import (
     BACKEND_KMD,
     BACKEND_WATTSON,
     BACKENDS,
+    CONF_ACONTO_DKK_PER_YEAR,
     CONF_AUTO_SYNC,
     CONF_AUTO_SYNC_HOUR,
     CONF_BACKEND,
@@ -1303,6 +1304,10 @@ class KMDEasyEnergyOptionsFlow(config_entries.OptionsFlow):
                 vol.Optional(
                     CONF_FIXED_FEE_DKK_PER_YEAR,
                     default=float(opts.get(CONF_FIXED_FEE_DKK_PER_YEAR) or 0.0),
+                ): vol.Coerce(float),
+                vol.Optional(
+                    CONF_ACONTO_DKK_PER_YEAR,
+                    default=float(opts.get(CONF_ACONTO_DKK_PER_YEAR) or 0.0),
                 ): vol.Coerce(float),
                 vol.Optional(
                     CONF_NORMAL_HDD_YEAR,

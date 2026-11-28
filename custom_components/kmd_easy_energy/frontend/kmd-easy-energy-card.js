@@ -3,7 +3,7 @@
  * Zero external dependencies, Shadow DOM, responsive, interactive tooltips, DA/EN i18n.
  */
 (() => {
-  const VER = "1.4.4";
+  const VER = "1.5.0";
   const MONTHS = ["Jan", "Feb", "Mar", "Apr", "Maj", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Dec"];
   const DAYS_IN_MONTH = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
   const isLeapYear = (y) => (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0;
@@ -150,6 +150,7 @@
       kpi_ret: "🌡️ Returtemperatur",
       kpi_fc: "📉 Prognose",
       kpi_bill: "💳 Regninger",
+      kpi_stl: "⚖️ Restbeløb vs. aconto",
       outdoor: "Ude",
       avg_day: "kWh/dag",
       tip_hint: "Tryk eller hold musen over en søjle/prik for tal",
@@ -168,6 +169,7 @@
       kpi_ret: "🌡️ Return temp",
       kpi_fc: "📉 Forecast",
       kpi_bill: "💳 Billing",
+      kpi_stl: "⚖️ Balance vs. aconto",
       outdoor: "Outdoor",
       avg_day: "kWh/day",
       tip_hint: "Tap or hover a bar/point for details",
@@ -401,7 +403,7 @@
       const syncSt = statusEnt ? (hass?.states?.[statusEnt]?.state || "") : "";
       const capsSig = Array.isArray(st?.attributes?.capabilities) ? st.attributes.capabilities.join(",") : "";
       const sig = st
-        ? `${st.entity_id}|${st.state}|${st.attributes?.updated || ""}|${st.attributes?.hourly?.days_averaged || ""}|${st.attributes?.daily?.latest_complete}|${st.attributes?.last_sync || ""}|${st.attributes?.sync_reminder}|${st.attributes?.days_since_sync}|${st.attributes?.initial_setup_complete}|${st.attributes?.utility_id || ""}|${st.attributes?.entry_id || ""}|${st.attributes?.sync_state || ""}|${st.attributes?.sync_message || ""}|${st.attributes?.energy_price_dkk_per_kwh ?? ""}|${st.attributes?.tariff?.annual_fixed_fee_dkk ?? ""}|${st.attributes?.forward_temp ?? ""}|${st.attributes?.penalty_temp ?? ""}|${capsSig}|${this._mitidOtp || ""}|${Boolean(this._mitidQr)}|${syncSt}`
+        ? `${st.entity_id}|${st.state}|${st.attributes?.updated || ""}|${st.attributes?.hourly?.days_averaged || ""}|${st.attributes?.daily?.latest_complete}|${st.attributes?.last_sync || ""}|${st.attributes?.sync_reminder}|${st.attributes?.days_since_sync}|${st.attributes?.initial_setup_complete}|${st.attributes?.utility_id || ""}|${st.attributes?.entry_id || ""}|${st.attributes?.sync_state || ""}|${st.attributes?.sync_message || ""}|${st.attributes?.energy_price_dkk_per_kwh ?? ""}|${st.attributes?.tariff?.annual_fixed_fee_dkk ?? ""}|${st.attributes?.tariff?.aconto_dkk_per_year ?? ""}|${st.attributes?.settlement?.remaining_dkk ?? ""}|${st.attributes?.forward_temp ?? ""}|${st.attributes?.penalty_temp ?? ""}|${capsSig}|${this._mitidOtp || ""}|${Boolean(this._mitidQr)}|${syncSt}`
         : "none";
       if (sig === this._lastSig) return;
       this._lastSig = sig;
@@ -783,6 +785,7 @@
       const curFixedM2 = tariffObj.fixed_fee_dkk_per_m2_year ?? "";
       const curAreaM2 = tariffObj.heated_area_m2 ?? "";
       const curFixedYear = tariffObj.fixed_fee_dkk_per_year ?? "";
+      const curAcontoYear = tariffObj.aconto_dkk_per_year ?? "";
       const rawSuggestedFixed = tariffObj.suggested_fixed_fee_dkk_per_year;
       const suggestedFixedYear = (
         typeof rawSuggestedFixed === "number" && Number.isFinite(rawSuggestedFixed) && rawSuggestedFixed > 0
@@ -816,6 +819,7 @@
       const ins = a.insights || {};
       const fc = a.forecast || {};
       const bl = a.billing || {};
+      const stl = a.settlement || {};
       const costEst = a.cost_estimate || {};
 
       // Capability-driven rendering: the integration reports which data the
@@ -958,7 +962,8 @@
       const hasBillTotal = typeof billTotalRaw === "number" && Number.isFinite(billTotalRaw);
       const hasSaldo = typeof bl.saldo_kr === "number" && Number.isFinite(bl.saldo_kr);
       const showBillingKpi = has("billing") && (hasBillTotal || hasSaldo);
-      const showKpisRow = showYtdKpi || showReturnTempKpi || showForecastKpi || showBillingKpi;
+      const hasSettlementKpi = has("settlement") && typeof stl.remaining_dkk === "number" && Number.isFinite(stl.remaining_dkk);
+      const showKpisRow = showYtdKpi || showReturnTempKpi || showForecastKpi || showBillingKpi || hasSettlementKpi;
 
       const showMonthlyChart = has("monthly") && MONTHS.some((m) => typeof mCur[m] === "number" || typeof mPrev[m] === "number");
       const mCurHasTemp = MONTHS.some((_, i) => typeof (wx.monthly_temp || {})[`${curYr}-${String(i + 1).padStart(2, "0")}`] === "number");
@@ -993,6 +998,7 @@
       const wizFixedM2 = this._wizFixedM2 ?? (curFixedM2 !== "" && curFixedM2 !== null ? curFixedM2 : "");
       const wizAreaM2 = this._wizAreaM2 ?? (curAreaM2 !== "" && curAreaM2 !== null ? curAreaM2 : "");
       const wizFixedYear = this._wizFixedYear ?? (curFixedYear !== "" && curFixedYear !== null ? curFixedYear : "");
+      const wizAcontoYear = this._wizAcontoYear ?? (curAcontoYear !== "" && curAcontoYear !== null ? curAcontoYear : "");
       const wizEfPrice = this._wizEfPrice ?? wizPrice;
       const wizEfBonus = this._wizEfBonus ?? (allowBonus ? (efExpectedRt !== null ? efExpectedRt : bonusT) : "");
       const wizEfPenalty = this._wizEfPenalty ?? (allowBonus && singleReturnTarget ? "" : penaltyT);
@@ -1001,6 +1007,7 @@
       const wizEfFixedM2 = this._wizEfFixedM2 ?? wizFixedM2;
       const wizEfAreaM2 = this._wizEfAreaM2 ?? wizAreaM2;
       const wizEfFixedYear = this._wizEfFixedYear ?? wizFixedYear;
+      const wizEfAcontoYear = this._wizEfAcontoYear ?? wizAcontoYear;
       const mitidLiveBox = !hasMitid ? "" : otpCode
         ? `<div class="mitid-box otp" role="region" aria-live="polite"><div>🔑 Indtast denne 4-cifrede engangskode i MitID-appen:</div><div class="otp-digits">${esc(otpCode.split("").join(" "))}</div></div>`
         : (qrSvg ? `<div class="mitid-box qr" role="region" aria-live="polite"><div>📲 Scan QR-koden med MitID-appen på din telefon:</div><div class="qr-wrap"><img id="mitidQrImg" src="${esc(this._qrDataUrl((this._mitidQrFrames || [])[this._mitidQrIdx || 0] || qrSvg))}" alt="MitID QR-kode" /></div><div class="qr-hint">Koden skifter hvert sekund — hold telefonen roligt foran skærmen. Står kortet på samme telefon som MitID-appen, kan QR-koden ikke scannes — slå i stedet engangskoder til i MitID-appen (Menu → Godkend med QR- eller engangskoder → Engangskoder).</div></div>` : "");
@@ -1098,6 +1105,9 @@
                     <input id="efFixedYearInput" type="number" step="0.01" value="${esc(wizEfFixedYear)}" placeholder="${stdFixedTxt !== null ? `Standard ${stdFixedTxt} kr./år (valgfri)` : "f.eks. 787.5 (0 = ingen)"}" />
                     ${(suggestedFixedYear !== null && !(Number(curFixedYear) > 0)) ? `<button type="button" class="link-btn" id="useEfStdFixedYearBtn" style="align-self:flex-start;font-size:11px">↳ Brug standard (${esc(stdFixedTxt)} kr./år)</button>` : ""}
                   </div>
+                  <label class="ob-field">Årlig aconto inkl. moms (kr./år)
+                    <input id="efAcontoYearInput" type="number" step="1" value="${esc(wizEfAcontoYear)}" placeholder="${backend === "eforsyning" ? (typeof stl.aconto_total_dkk === "number" && stl.aconto_total_dkk > 0 ? `Auto (${fmtInt(stl.aconto_total_dkk)} kr./år fra E|Forsyning)` : "Auto fra E|Forsyning (0 = auto)") : "f.eks. 12000 (0 = skjul)"}" />
+                  </label>
                 </div>
                 <div class="tb-actions">
                   <button class="btn" id="saveTariffBtn">💾 Gem pris &amp; returkrav</button>
@@ -1442,6 +1452,11 @@
                   <input id="fixedYearInput" type="number" step="0.01" value="${esc(wizFixedYear)}" placeholder="${stdFixedTxt !== null ? `Standard ${stdFixedTxt} kr./år (valgfri)` : "kr./år (valgfri)"}" />
                   ${(suggestedFixedYear !== null && !(Number(curFixedYear) > 0)) ? `<button type="button" class="link-btn" id="useStdFixedYearBtn" style="align-self:flex-start;font-size:11px">↳ Brug standard (${esc(stdFixedTxt)} kr./år)</button>` : ""}
                 </div>
+                <div class="ob-field">
+                  <label for="acontoYearInput">Årlig aconto inkl. moms (kr./år)</label>
+                  <input id="acontoYearInput" type="number" step="1" value="${esc(wizAcontoYear)}" placeholder="f.eks. 12000 (0 = skjul)" />
+                  ${(hasBillTotal && billTotalRaw > 0 && !(Number(curAcontoYear) > 0)) ? `<button type="button" class="link-btn" id="useBilledAcontoBtn" style="align-self:flex-start;font-size:11px">↳ Brug faktureret i ${esc(curYr)} (${esc(fmtInt(billTotalRaw))} kr./år)</button>` : ""}
+                </div>
               </div>
             </details>
             <div class="ob-step">2. Forbind med 1-klik MitID-synkronisering (Anbefalet — 100% i Home Assistant)</div>
@@ -1538,13 +1553,38 @@
             ${showForecastKpi ? `<div class="kpi">
               <div class="k-lbl">${esc(t.kpi_fc)}</div>
               <div class="k-val good">${fmtInt(expK)} kWh</div>
-              <div class="k-sub">${budK > 0 ? `${fcPct}% mod budget (${fmtInt(budK)} kWh)` : esc(fc.period || (lang === "en" ? "Current period" : "Aktuel periode"))}</div>
+              <div class="k-sub">${budK > 0 ? `${fcPct > 0 ? "+" : ""}${fcPct}% ${lang === "en" ? "vs. budget" : "mod budget"} (${fmtInt(budK)} kWh)${fc.period ? ` · ${esc(fc.period)}` : ""}` : esc(fc.period || (lang === "en" ? "Current period" : "Aktuel periode"))}</div>
             </div>` : ""}
             ${showBillingKpi ? `<div class="kpi">
               <div class="k-lbl">${esc(t.kpi_bill)} ${curYr}</div>
               <div class="k-val">${hasBillTotal ? `${fmtInt(billTotalRaw)} kr.` : `${fmtDec(bl.saldo_kr, 2)} kr.`}</div>
               <div class="k-sub">${hasBillTotal ? `${hasSaldo ? `Saldo ${fmtDec(bl.saldo_kr, 2)} kr.` : (lang === "en" ? "Billed this year" : "Faktureret i år")}` : (lang === "en" ? "Current balance" : "Aktuel saldo")}${bl.last_bill_date ? ` · ${esc(bl.last_bill_date)}` : ""}</div>
             </div>` : ""}
+            ${hasSettlementKpi ? (() => {
+              const rem = Number(stl.remaining_dkk);
+              const cls = rem < -50 ? "good" : (rem > 50 ? "bad" : "");
+              const valTxt = rem < 0
+                ? `-${fmtInt(Math.abs(rem))} kr.`
+                : (rem > 0 ? `+${fmtInt(rem)} kr.` : "0 kr.");
+              const statusLbl = rem < -50
+                ? (lang === "en" ? "🟢 Est. refund" : "🟢 Til gode")
+                : (rem > 50
+                  ? (lang === "en" ? "🔴 Est. extra bill" : "🔴 Efterbetaling")
+                  : (lang === "en" ? "🟢 On target" : "🟢 Passer med aconto"));
+              const hasPair = typeof stl.expected_total_dkk === "number" && Number.isFinite(stl.expected_total_dkk)
+                && typeof stl.aconto_total_dkk === "number" && Number.isFinite(stl.aconto_total_dkk);
+              const pairTxt = hasPair
+                ? ` · ${lang === "en" ? "est." : "regning"} ~${fmtInt(stl.expected_total_dkk)} ${lang === "en" ? "vs. aconto" : "mod aconto"} ${fmtInt(stl.aconto_total_dkk)} kr.`
+                : "";
+              const fixedNote = stl.excludes_fixed_fees === true
+                ? ` (${lang === "en" ? "excl. fixed fees" : "ekskl. faste bidrag"})`
+                : "";
+              return `<div class="kpi" data-kpi="settlement">
+                <div class="k-lbl">${esc(t.kpi_stl)}</div>
+                <div class="k-val ${cls}">${esc(valTxt)}</div>
+                <div class="k-sub">${esc(statusLbl + pairTxt + fixedNote)}</div>
+              </div>`;
+            })() : ""}
           </div>` : ""}
 
           ${(has("cost") && (
@@ -1818,6 +1858,8 @@
         if (areaM2Val !== null) p.heated_area_m2 = areaM2Val;
         const fixedYearVal = numOrNull("fixedYearInput");
         if (fixedYearVal !== null) p.fixed_fee_dkk_per_year = fixedYearVal;
+        const acontoYearVal = numOrNull("acontoYearInput");
+        if (acontoYearVal !== null) p.aconto_dkk_per_year = acontoYearVal;
         const mu = this.shadowRoot.getElementById("mitidUserInput")?.value?.trim();
         if (mu) p.mitid_username = mu;
         return p;
@@ -1846,6 +1888,7 @@
         ["fixedM2Input", "_wizFixedM2"],
         ["areaM2Input", "_wizAreaM2"],
         ["fixedYearInput", "_wizFixedYear"],
+        ["acontoYearInput", "_wizAcontoYear"],
         ["efPriceInput", "_wizEfPrice"],
         ["efBonusInput", "_wizEfBonus"],
         ["efPenaltyInput", "_wizEfPenalty"],
@@ -1854,6 +1897,7 @@
         ["efFixedM2Input", "_wizEfFixedM2"],
         ["efAreaM2Input", "_wizEfAreaM2"],
         ["efFixedYearInput", "_wizEfFixedYear"],
+        ["efAcontoYearInput", "_wizEfAcontoYear"],
         ["notifyInput", "_wizNotify"],
       ].forEach(([id, prop]) => {
         const el = this.shadowRoot.getElementById(id);
@@ -1873,6 +1917,15 @@
           });
         }
       });
+      const useBilledAcontoBtn = this.shadowRoot.getElementById("useBilledAcontoBtn");
+      if (useBilledAcontoBtn && hasBillTotal && billTotalRaw > 0) {
+        useBilledAcontoBtn.addEventListener("click", () => {
+          const valStr = String(Math.round(billTotalRaw));
+          this._wizAcontoYear = valStr;
+          const inp = this.shadowRoot.getElementById("acontoYearInput");
+          if (inp) inp.value = valStr;
+        });
+      }
       const saveTariffBtn = this.shadowRoot.getElementById("saveTariffBtn");
       if (saveTariffBtn && this._hass) {
         saveTariffBtn.addEventListener("click", () => {
@@ -1899,6 +1952,8 @@
           if (areaM2Val !== null) payload.heated_area_m2 = areaM2Val;
           const fixedYearVal = numOrNull("efFixedYearInput");
           if (fixedYearVal !== null) payload.fixed_fee_dkk_per_year = fixedYearVal;
+          const acontoYearVal = numOrNull("efAcontoYearInput");
+          if (acontoYearVal !== null) payload.aconto_dkk_per_year = acontoYearVal;
           this._setupOpen = false;
           this._hass.callService("kmd_easy_energy", "configure_utility", payload);
           this._render();
@@ -1996,7 +2051,7 @@
           }
         });
       }
-      ["efPriceInput", "efMotivPctInput", "efBonusInput", "efPenaltyInput", "efForwardInput"].forEach((id) => {
+      ["efPriceInput", "efMotivPctInput", "efBonusInput", "efPenaltyInput", "efForwardInput", "efFixedM2Input", "efAreaM2Input", "efFixedYearInput", "efAcontoYearInput"].forEach((id) => {
         const el = this.shadowRoot.getElementById(id);
         if (el && saveTariffBtn) {
           el.addEventListener("keydown", (ev) => {
@@ -2283,6 +2338,14 @@
     );
   };
 
+  const dfEnergyKwhFactor = (unit) => {
+    const raw = String(unit || "").trim().toLowerCase().replace(/\s+/g, "");
+    if (raw === "wh" || raw === "watthour" || raw === "watt-hour") return 0.001;
+    if (raw === "mwh" || raw === "megawatthour" || raw === "megawatt-hour") return 1000;
+    if (raw === "gj" || raw === "gigajoule") return 1 / 0.0036;
+    return 1;
+  };
+
   class DanskForbrugCard extends HTMLElement {
     setConfig(config) {
       this._config = { language: "da", ...(config || {}) };
@@ -2348,7 +2411,7 @@
             s.entity_id.startsWith("sensor.") &&
             s.attributes?.device_class === "energy" &&
             ["total", "total_increasing"].includes(s.attributes?.state_class) &&
-            s.attributes?.unit_of_measurement === "kWh" &&
+            ["Wh", "kWh", "MWh", "GJ"].includes(s.attributes?.unit_of_measurement) &&
             /(watts_live|p1.*import|grid.*import|elmaaler|total_energy_import)/i.test(s.entity_id)
           );
       const priceSt = states["sensor.stromligning_current_price_vat"]
@@ -2427,12 +2490,13 @@
       const watchSig = watchIds.map((id) => {
         const s = st[id];
         if (!s) return `${id}=?`;
+        const uom = s.attributes?.unit_of_measurement || "";
         const extra = id === elTotalId ? `@${s.attributes?.metering_date || s.attributes?.["Metering date"] || ""}` : "";
-        return `${id}=${s.state}${extra}`;
+        return `${id}=${s.state}[${uom}]${extra}`;
       }).join("|");
       const ha = heatSt?.attributes || {};
       const heatSig = heatSt
-        ? `${heatSt.entity_id}|${heatSt.state}|${ha.updated || ""}|${ha.cost_estimate?.current_month_kwh ?? ""}|${ha.daily?.latest_complete ?? ""}|${(ha.capabilities || []).join(",")}`
+        ? `${heatSt.entity_id}|${heatSt.state}|${ha.updated || ""}|${ha.cost_estimate?.current_month_kwh ?? ""}|${ha.daily?.latest_complete ?? ""}|${ha.settlement?.remaining_dkk ?? ""}|${(ha.capabilities || []).join(",")}`
         : "noheat";
       return `${VER}|${cfg.language || "da"}|${this._activeDetail || ""}|${this._hass?.user?.id || ""}|${Boolean(this._hass?.user?.is_admin)}|${this._statsCacheKey || ""}|${this._statsRev}|${Boolean(this._statsLoading)}|${heatSig}|${watchSig}`;
     }
@@ -2457,17 +2521,22 @@
       const hass = this._hass;
       const cfg = this._config || {};
       if (!hass || typeof hass.callWS !== "function") return;
+      const st = hass.states || {};
       const elId = String(cfg.el_entity || "").trim();
       const priceId = String(cfg.el_price_entity || "").trim();
       const evId = String(cfg.ev_entity || "").trim();
+      const elUnit = st[elId]?.attributes?.unit_of_measurement || "";
+      const evUnit = st[evId]?.attributes?.unit_of_measurement || "";
       const wInfo = this._resolveWaterEntities();
       const wStatsId = wInfo?.statsEntity || "";
       const bucket = Math.floor(Date.now() / 300000);
       const cacheKey = JSON.stringify([
         elId,
+        elUnit,
         priceId,
         cfg.el_fixed_price ?? "",
         evId,
+        evUnit,
         cfg.ev_hour_offset ?? "",
         wStatsId,
         bucket,
@@ -2496,6 +2565,7 @@
             end_time: new Date(nowMs + 86400000).toISOString(),
             statistic_ids: hourIds,
             period: "hour",
+            units: { energy: "kWh" },
             types: ["change", "state", "mean"],
           }).then((res) => ["hour", res || {}])
         );
@@ -2615,7 +2685,7 @@
           : "sensor.eloverblik";
         const totalSt = st[`${elPrefix}_energy_total`];
         const mDate = String(totalSt?.attributes?.metering_date || totalSt?.attributes?.["Metering date"] || "").trim();
-        const mTotal = parseFloat(totalSt?.state);
+        const mTotal = parseFloat(totalSt?.state) * dfEnergyKwhFactor(totalSt?.attributes?.unit_of_measurement);
         if (
           /^\d{4}-\d{2}-\d{2}$/.test(mDate) &&
           mDate < todayYmd &&
@@ -2630,7 +2700,7 @@
           let sumAny = 0;
           for (let h = 0; h < 24; h++) {
             const hSt = st[`${elPrefix}_energy_${h}_${h + 1}`];
-            const hv = parseFloat(hSt?.state);
+            const hv = parseFloat(hSt?.state) * dfEnergyKwhFactor(hSt?.attributes?.unit_of_measurement);
             const hDate = String(hSt?.attributes?.metering_date || hSt?.attributes?.["Metering date"] || "").trim();
             if (Number.isFinite(hv) && hv >= 0) {
               fallbackHours.push({ h, hv });
@@ -3621,6 +3691,7 @@
       const kFc = ka.forecast || {};
       const kTar = ka.tariff || {};
       const kBill = ka.billing || {};
+      const kStl = ka.settlement || {};
 
       const vRawState = parseFloat(heatSt?.state);
       const vAnnCur = Number(ka.annual?.[curYr]);
@@ -3704,6 +3775,16 @@
         const billingSuffix = hasBillingCap
           ? ` · ${isEn ? "billed" : "opkrævet"} ${fmtNum(billTotal, 0)} kr.`
           : (fixedFee > 0 ? ` · ${isEn ? "fixed fee" : "fast bidrag"} ~${fmtNum(fixedFee, 0)} ${isEn ? "kr./yr" : "kr./år"}` : "");
+        const hasSettlementCap = kCaps.has("settlement") && kStl.remaining_dkk !== null && kStl.remaining_dkk !== undefined && Number.isFinite(Number(kStl.remaining_dkk));
+        const stlSuffix = hasSettlementCap
+          ? (() => {
+            const rem = Number(kStl.remaining_dkk);
+            const remAbs = fmtNum(Math.abs(rem), 0);
+            if (rem < -50) return ` · ${isEn ? `est. -${remAbs} kr. refund` : `~${remAbs} kr. til gode`}`;
+            if (rem > 50) return ` · ${isEn ? `est. +${remAbs} kr. extra` : `~+${remAbs} kr. efterbetaling`}`;
+            return ` · ${isEn ? "on target vs. aconto" : "passer med aconto"}`;
+          })()
+          : "";
 
         const heatBtnHtml = cfg.heat_link
           ? `<button type="button" class="foot-btn" data-href="${esc(cfg.heat_link)}">🔥 ${isEn ? "Open Heating card" : "Åbn Fjernvarme-kortet"}</button><button type="button" class="foot-btn" data-detail="heat">📊 ${isEn ? "Quick view" : "Hurtig-visning"}</button>`
@@ -3747,7 +3828,7 @@
                 <div class="ins"><span class="ins-ico">🎯</span><span><strong>${isEn ? "Return temp:" : "Returtemperatur:"}</strong> ${Number.isFinite(vRetTemp) ? `${esc(fmtNum(vRetTemp, 1))} °C` : "–"} ${allowBonus ? `(${isEn ? "bonus" : "bonus"} &lt; ${esc(fmtNum(vBonus, 0))} °C · ${isEn ? "penalty" : "tillæg"} &gt; ${esc(fmtNum(vPenalty, 0))} °C)` : `(${isEn ? "target" : "krav"} ≤ ${esc(fmtNum(vPenalty, 0))} °C)`}</span></div>
               ` : ""}
               <div class="ins"><span class="ins-ico">🌡️</span><span><strong>${isEn ? "Weather efficiency:" : "Klimastyret forbrug:"}</strong> ${vHddCur ? `${esc(fmtNum(vHddCur, 2))} kWh/${isEn ? "HDD" : "graddag"}` : "–"}${vR2 ? ` (R² ${esc(fmtNum(vR2, 0))} %)` : ""}${vFcDiffPct !== null ? ` · ${isEn ? "forecast" : "prognose"} ${vFcDiffPct > 0 ? "+" : ""}${vFcDiffPct} % vs. budget` : ""}</span></div>
-              <div class="ins"><span class="ins-ico">🧾</span><span><strong>${esc(curYr)} ${isEn ? (hasBillingCap ? "variable / bills:" : "variable:") : (hasBillingCap ? "variabelt / regninger:" : "variabelt:")}</strong> ${Number.isFinite(ytdCost) ? `~${esc(fmtNum(ytdCost, 0))} kr.` : "–"}${vPriceKwh > 0 ? ` (${esc(fmtNum(vPriceKwh, 3))} kr/kWh)` : ""}${esc(billingSuffix)}</span></div>
+              <div class="ins"><span class="ins-ico">🧾</span><span><strong>${esc(curYr)} ${isEn ? (hasBillingCap ? "variable / bills:" : "variable:") : (hasBillingCap ? "variabelt / regninger:" : "variabelt:")}</strong> ${Number.isFinite(ytdCost) ? `~${esc(fmtNum(ytdCost, 0))} kr.` : "–"}${vPriceKwh > 0 ? ` (${esc(fmtNum(vPriceKwh, 3))} kr/kWh)` : ""}${esc(billingSuffix)}${esc(stlSuffix)}</span></div>
             </div>
 
             <div class="ufoot">
@@ -4367,7 +4448,7 @@
         `<datalist id="${id}">${items.map((s) => `<option value="${esc(s.entity_id)}">${esc(s.attributes?.friendly_name || s.entity_id)}</option>`).join("")}</datalist>`;
 
       const heatOpts = all.filter((s) => s.entity_id.startsWith("sensor.") && (s.attributes?.utility_id || s.attributes?.portal_url || /fjernvarme|_overview|_overblik/i.test(s.entity_id)));
-      const energyOpts = all.filter((s) => s.entity_id.startsWith("sensor.") && (s.attributes?.device_class === "energy" || s.attributes?.unit_of_measurement === "kWh"));
+      const energyOpts = all.filter((s) => s.entity_id.startsWith("sensor.") && (s.attributes?.device_class === "energy" || ["Wh", "kWh", "MWh", "GJ"].includes(s.attributes?.unit_of_measurement)));
       const priceOpts = all.filter((s) => s.entity_id.startsWith("sensor.") && /(price|pris|stromligning|energi_data_service|nordpool)/i.test(s.entity_id));
       const waterOpts = all.filter((s) => s.entity_id.startsWith("sensor.") && (s.attributes?.device_class === "water" || /water|vand/i.test(s.entity_id)));
       const flowOpts = all.filter((s) => s.entity_id.startsWith("sensor.") && /min_flow|flow/i.test(s.entity_id));
@@ -4387,7 +4468,7 @@
             <input id="df_entity" list="dl_heat" value="${esc(c.entity || "")}" placeholder="Auto-find (*_overview)" />
           </label>
           <div class="row">
-            <label>⚡ Elforbrug-sensor (kWh)
+            <label>⚡ Elforbrug-sensor (kWh / Wh)
               <input id="df_el_entity" list="dl_energy" value="${esc(c.el_entity || "")}" placeholder="f.eks. sensor.eloverblik_energy_statistic" />
             </label>
             <label>⏱️ Elpris-sensor (kr/kWh)
@@ -4395,7 +4476,7 @@
             </label>
           </div>
           <div class="row">
-            <label>🚗 Elbil-lader (kWh, valgfri)
+            <label>🚗 Elbil-lader (kWh / Wh, valgfri)
               <input id="df_ev_entity" list="dl_energy" value="${esc(c.ev_entity || "")}" placeholder="Ladeboks kWh-tæller" />
             </label>
             <label>💰 Fast elpris fallback (kr/kWh)

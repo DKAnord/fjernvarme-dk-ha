@@ -123,3 +123,21 @@ async def test_diagnostics_redacts_entry_secrets() -> None:
     assert "access_token" in TO_REDACT
     assert "InstallationId" in TO_REDACT
     assert "Address" in TO_REDACT
+
+
+def test_diagnostics_summarizes_eforsyning_billing_summary() -> None:
+    summary = _summarize_coordinator(
+        {
+            "backend": "eforsyning",
+            "eforsyning": {
+                "years": [2026],
+                "readings_last_fetch": 10,
+                "billing_summary": {"remaining_dkk": -120.0},
+            },
+        }
+    )
+    assert summary["eforsyning"] == {
+        "years": [2026],
+        "readings_last_fetch": 10,
+        "has_billing_summary": True,
+    }

@@ -25,6 +25,7 @@ from kmd_easy_energy.api.eforsyning_client import (
     is_uuid,
     normalize_eforsyning_url,
     normalize_eforsyning_login,
+    parse_billing_summary,
     parse_eforsyning_directory,
     parse_monthly_temperatures,
     parse_number,
@@ -1326,3 +1327,118 @@ def test_services_and_notice() -> None:
     header = (ROOT / "custom_components/kmd_easy_energy/api/eforsyning_client.py").read_text()[:1500]
     assert "kpoppel/homeassistant-eforsyning" in header and "Apache License" in header
     assert "changes" in header.lower()
+
+
+def test_parse_billing_summary_variants_and_pii_safety() -> None:
+    # 1) Standard MWh + "Til indbetaling", ignoring Restance & meter text
+    mwh = parse_billing_summary(fx.billing_response())
+    assert mwh["remaining_dkk"] == 1011.45
+    assert mwh["expected_total_dkk"] == 5781.45
+    assert mwh["aconto_paid_dkk"] == 4770.0  # Restance 1590 excluded
+    assert mwh["aconto_total_dkk"] == 4770.0
+    assert mwh["energy_ytd_kwh"] == 3361.0
+    assert mwh["energy_remaining_kwh"] == 2144.0
+    assert mwh["energy_forecast_kwh"] == 5505.0
+    assert mwh["fixed_ex_vat_dkk"] == 2237.09
+    assert mwh["vat_dkk"] == 1156.29
+    assert "999999" not in json.dumps(mwh)
+    assert "tekst" not in json.dumps(mwh)
+
+    # 2) kWh + "Total med moms" + "Årets forventede beløb til opkrævning" (Sorø #85)
+    soroe = parse_billing_summary(
+        fx.billing_response(
+            [
+                {"linieType": "3", "antalEnheder": "4.200", "enhed": "kWh", "tekst": "88776655", "ialt": "2.940,00"},
+                {"linieType": "3", "antalEnheder": "1.800", "enhed": "kWh", "tekst": "Forventet forbrug: 01-10-2026 til 31-12-2026", "ialt": "1.260,00"},
+                {"linieType": "12", "tekst": "Total med moms", "ialt": "7.500,00"},
+                {"linieType": "18", "tekst": "Opkrævet aconto", "ialt": "-6.000,00"},
+                {"linieType": "20", "tekst": "Forventet indbetalt", "ialt": "-2.000,00"},
+                {"linieType": "12", "tekst": "Årets forventede beløb til opkrævning", "ialt": "-500,00"},
+            ]
+        )
+    )
+    assert soroe["energy_ytd_kwh"] == 4200.0
+    assert soroe["energy_forecast_kwh"] == 6000.0
+    assert soroe["expected_total_dkk"] == 7500.0
+    assert soroe["aconto_total_dkk"] == 8000.0
+    assert soroe["remaining_dkk"] == -500.0
+    assert "88776655" not in json.dumps(soroe)
+
+    # 3) GJ exact 1/0.0036 conversion + mid-year split + motivation + "Til udbetaling"
+    gj = parse_billing_summary(
+        fx.billing_response(
+            [
+                {"linieType": "3", "antalEnheder": "1,8", "enhed": "Gj", "tekst": "11122233", "ialt": "300,00"},
+                {"linieType": "3", "antalEnheder": "1,8", "enhed": "Gj", "tekst": "11122233", "ialt": "320,00"},
+                {"linieType": "3", "antalEnheder": "3,6", "enhed": "Gj", "tekst": "Prognose: 01-07-2026 til 31-12-2026", "ialt": "640,00"},
+                {"linieType": "22", "tekst": "Bonus", "ialt": "-100,00"},
+                {"linieType": "12", "tekst": "Total, inkl. moms", "ialt": "3.000,00"},
+                {"linieType": "18", "tekst": "Opkrævet aconto", "ialt": "-3.400,00"},
+                {"linieType": "12", "tekst": "Til udbetaling", "ialt": "400,00"},
+            ]
+        )
+    )
+    assert gj["energy_ytd_kwh"] == 1000.0
+    assert gj["energy_remaining_kwh"] == 1000.0
+    assert gj["energy_forecast_kwh"] == 2000.0
+    assert gj["motivation_ex_vat_dkk"] == -100.0
+    assert gj["remaining_dkk"] == -400.0
+
+    # 4) Signed "Årets forventede resultat" (#56)
+    signed = parse_billing_summary(
+        fx.billing_response(
+            [
+                {"linieType": "3", "antalEnheder": "5,290", "enhed": "MWh", "tekst": "6464705", "ialt": "2.073,68"},
+                {"linieType": "12", "tekst": "Total med moms", "ialt": "8.324,46"},
+                {"linieType": "18", "tekst": "Opkrævet acontorate (med moms)", "ialt": "-1.700,00"},
+                {"linieType": "20", "tekst": "Forventet indbetalt", "ialt": "-6.800,00"},
+                {"linieType": "12", "tekst": "Årets forventede resultat", "ialt": "-175,54"},
+            ]
+        )
+    )
+    assert signed["expected_total_dkk"] == 8324.46
+    assert signed["aconto_paid_dkk"] == 1700.0
+    assert signed["aconto_upcoming_dkk"] == 6800.0
+    assert signed["aconto_total_dkk"] == 8500.0
+    assert signed["remaining_dkk"] == -175.54
+
+    assert parse_billing_summary(fx.NO_DATA_ERROR) == {}
+    assert parse_billing_summary({"faktlini": []}) == {}
+
+
+@pytest.mark.asyncio
+async def test_eforsyning_billing_summary_aktivnr_fallback_and_reload(tmp_path: Path) -> None:
+    calls: list[dict[str, Any]] = []
+
+    def billing_route(method, url, kwargs):
+        body = json.loads(kwargs["data"])
+        calls.append(body)
+        if body["aktivnr"] != 0:
+            return {"faktlini": []}
+        return fx.billing_response()
+
+    session = fx.FakeSession({"getberegnregnskab": billing_route})
+    out = await _client(session).async_fetch(date(2026, 11, 5), years_back=0)
+    assert [c["aktivnr"] for c in calls] == [1, 0]
+    assert out["billing_summary"]["remaining_dkk"] == 1011.45
+
+    # Sync triggers one reload when CAP_SETTLEMENT unlocks, and preserves on transient error
+    coord, hass, _, store = _ef_coord(tmp_path, FakeStore({}))
+    with patch("kmd_easy_energy.coordinator.EforsyningClient.async_fetch", AsyncMock(return_value=out)), patch(
+        "kmd_easy_energy.coordinator.copenhagen_today", return_value=date(2026, 11, 5)
+    ), patch("kmd_easy_energy.coordinator.async_get_clientsession"):
+        await coord.async_sync_eforsyning()
+    hass.config_entries.async_schedule_reload.assert_called_once_with("entry-1")
+    assert store.data["settlement"]["remaining_dkk"] == 1011.45
+    assert "settlement" in store.data["capabilities"]
+
+    hass.config_entries.async_schedule_reload.reset_mock()
+    coord.registered_entity_capabilities = frozenset(store.data["backend_capabilities"])
+    second = dict(out)
+    second.pop("billing_summary", None)  # same aarsmaerke -> carry forward
+    with patch("kmd_easy_energy.coordinator.EforsyningClient.async_fetch", AsyncMock(return_value=second)), patch(
+        "kmd_easy_energy.coordinator.copenhagen_today", return_value=date(2026, 11, 6)
+    ), patch("kmd_easy_energy.coordinator.async_get_clientsession"):
+        await coord.async_sync_eforsyning()
+    hass.config_entries.async_schedule_reload.assert_not_called()
+    assert store.data["settlement"]["remaining_dkk"] == 1011.45

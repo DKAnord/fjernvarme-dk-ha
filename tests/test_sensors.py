@@ -177,3 +177,48 @@ def test_last_sync_timestamp_sensor() -> None:
     assert sensor.translation_key == "last_sync"
     assert sensor.extra_state_attributes["days_since_sync"] == 1
     assert KMDLastSyncSensor(_coord(), _entry()).native_value is None
+
+
+def test_settlement_sensor_and_translations() -> None:
+    import json
+    from pathlib import Path
+    from kmd_easy_energy.sensor import KMDSettlementSensor
+
+    root = Path(__file__).resolve().parents[1] / "custom_components/kmd_easy_energy"
+    strings = json.loads((root / "strings.json").read_text())
+    da = json.loads((root / "translations/da.json").read_text())
+    en = json.loads((root / "translations/en.json").read_text())
+    assert set(strings["entity"]["sensor"]) == set(da["entity"]["sensor"]) == set(en["entity"]["sensor"])
+    assert "aconto_dkk_per_year" in strings["options"]["step"]["init"]["data"]
+    assert "aconto_dkk_per_year" in da["options"]["step"]["init"]["data"]
+    assert "aconto_dkk_per_year" in en["options"]["step"]["init"]["data"]
+
+    stl_payload = {
+        "remaining_dkk": -420.25,
+        "status": "credit",
+        "expected_total_dkk": 9579.75,
+        "aconto_total_dkk": 10000.0,
+        "aconto_paid_dkk": 7500.0,
+        "aconto_upcoming_dkk": 2500.0,
+        "ytd_cost_dkk": 6800.0,
+        "ytd_vs_paid_dkk": -700.0,
+        "energy_ytd_kwh": 7200.0,
+        "energy_forecast_kwh": 9500.0,
+        "excludes_fixed_fees": False,
+        "source": "eforsyning",
+    }
+    sensor = KMDSettlementSensor(_coord({"settlement": stl_payload}), _entry())
+    assert sensor.unique_id == "test-entry_settlement"
+    assert sensor.translation_key == "settlement"
+    assert sensor.device_class == SensorDeviceClass.MONETARY
+    assert sensor.state_class is None
+    assert sensor.native_unit_of_measurement == "DKK"
+    assert sensor.native_value == -420.25
+    assert sensor.extra_state_attributes["status"] == "credit"
+    assert sensor.extra_state_attributes["aconto_total_dkk"] == 10000.0
+    assert sensor.extra_state_attributes["source"] == "eforsyning"
+    assert "settlement" in KMDOverviewSensor._unrecorded_attributes
+    assert KMDOverviewSensor(_coord({"settlement": stl_payload}), _entry()).extra_state_attributes["settlement"] == stl_payload
+
+    pos = KMDSettlementSensor(_coord({"settlement": {"remaining_dkk": 650.0, "status": "debit"}}), _entry())
+    assert pos.native_value == 650.0

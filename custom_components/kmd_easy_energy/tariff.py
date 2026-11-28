@@ -14,6 +14,7 @@ from typing import Any
 from homeassistant.config_entries import ConfigEntry
 
 from .const import (
+    CONF_ACONTO_DKK_PER_YEAR,
     CONF_BONUS_TEMP,
     CONF_EF_SUPPLIER_ID,
     CONF_FIXED_FEE_DKK_PER_M2_YEAR,
@@ -66,6 +67,7 @@ class ResolvedTariff:
     motivation_bonus_pct_per_k: float | None = None
     motivation_penalty_pct_per_k: float | None = None
     suggested_fixed_fee_dkk_per_year: float | None = None
+    aconto_dkk_per_year: float | None = None
 
 
 def _parse_forward_curve(raw: Any) -> list[list[float]] | None:
@@ -413,6 +415,10 @@ def resolve_tariff(
         else 0.0
     )
     annual_fixed_fee = round(annual_area_fee + (fixed_fee_year or 0.0), 2)
+    opt_aconto = _opt_float(entry, CONF_ACONTO_DKK_PER_YEAR, None)
+    aconto_dkk_per_year = (
+        round(opt_aconto, 2) if (opt_aconto is not None and opt_aconto > 0) else None
+    )
 
     return ResolvedTariff(
         price_dkk_per_kwh=price,
@@ -440,4 +446,5 @@ def resolve_tariff(
         motivation_bonus_pct_per_k=bonus_pct,
         motivation_penalty_pct_per_k=penalty_pct,
         suggested_fixed_fee_dkk_per_year=suggested_fixed_fee_year,
+        aconto_dkk_per_year=aconto_dkk_per_year,
     )

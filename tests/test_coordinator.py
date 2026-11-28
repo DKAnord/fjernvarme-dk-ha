@@ -1349,3 +1349,212 @@ async def test_odder_coordinator_uses_annual_return_temp_for_ytd_and_forecast(
     assert est["forecast_annual_dkk"] == int(
         round(est["forecast_annual_kwh"] * est["effective_price_dkk_per_kwh"] + 5705.0)
     )
+
+
+@pytest.mark.asyncio
+async def test_settlement_derivation_across_backends(tmp_path: Path) -> None:
+    import datetime as dt
+    from kmd_easy_energy.insights import DK_TZ
+
+    fixed_now = dt.datetime(2026, 11, 27, 12, 0, tzinfo=DK_TZ)
+
+    # 1) KMD without aconto -> empty settlement, no settlement capability
+    base_state = {
+        "annual": {"2026": 8000.0},
+        "monthly": {"2026": {"Jan": 2000.0, "Nov": 1000.0}},
+        "daily": {"month": "November 2026", "days": {"26": 50.0}, "total": 1000.0, "latest_complete": True, "latest_date": "2026-11-26"},
+        "daily_kwh_history": {f"2026-11-{d:02d}": 40.0 for d in range(1, 27)},
+        "weather": {"daily_temp": {f"2026-11-{d:02d}": 7.0 for d in range(1, 27)}},
+        "billing": {"total_2026_kr": 9000.0, "saldo_kr": 0.0},
+    }
+    coord, _, _, _ = make_coordinator(tmp_path, store=FakeStore(dict(base_state)))
+    with (
+        patch("kmd_easy_energy.coordinator.dt_util.now", return_value=fixed_now),
+        patch("kmd_easy_energy.coordinator.copenhagen_today", return_value=dt.date(2026, 11, 27)),
+        patch("kmd_easy_energy.tariff.copenhagen_today", return_value=dt.date(2026, 11, 27)),
+    ):
+        state_no = await coord._async_update_data()
+    assert state_no["settlement"] == {}
+    assert "settlement" not in state_no["capabilities"]
+
+    # 2) KMD with manual aconto (no heated area -> excludes_fixed_fees=True)
+    coord.entry.options = {"aconto_dkk_per_year": 12000.0}
+    with (
+        patch("kmd_easy_energy.coordinator.dt_util.now", return_value=fixed_now),
+        patch("kmd_easy_energy.coordinator.copenhagen_today", return_value=dt.date(2026, 11, 27)),
+        patch("kmd_easy_energy.tariff.copenhagen_today", return_value=dt.date(2026, 11, 27)),
+    ):
+        state_kmd = await coord._async_update_data()
+    stl_kmd = state_kmd["settlement"]
+    assert stl_kmd["source"] == "manual_aconto"
+    assert stl_kmd["excludes_fixed_fees"] is True
+    assert stl_kmd["aconto_paid_dkk"] == 9000.0
+    assert stl_kmd["ytd_vs_paid_dkk"] is None
+    assert stl_kmd["remaining_dkk"] == round(state_kmd["cost_estimate"]["forecast_annual_dkk"] - 12000.0, 2)
+    assert "settlement" in state_kmd["capabilities"]
+
+    # 3) KMD with heated_area_m2 -> excludes_fixed_fees=False and ytd_vs_paid_dkk computed
+    coord.entry.options = {"aconto_dkk_per_year": 12000.0, "heated_area_m2": 150.0, "fixed_fee_dkk_per_m2_year": 30.0}
+    with (
+        patch("kmd_easy_energy.coordinator.dt_util.now", return_value=fixed_now),
+        patch("kmd_easy_energy.coordinator.copenhagen_today", return_value=dt.date(2026, 11, 27)),
+        patch("kmd_easy_energy.tariff.copenhagen_today", return_value=dt.date(2026, 11, 27)),
+    ):
+        state_kmd_fixed = await coord._async_update_data()
+    assert state_kmd_fixed["settlement"]["excludes_fixed_fees"] is False
+    assert state_kmd_fixed["settlement"]["ytd_vs_paid_dkk"] == round(
+        state_kmd_fixed["cost_estimate"]["ytd_dkk"] - 9000.0, 2
+    )
+
+    # 4) E|Forsyning automatic vs manual aconto override vs manual price override
+    ef_state = dict(base_state)
+    ef_state["eforsyning"] = {
+        "billing_summary": {
+            "remaining_dkk": -320.5,
+            "expected_total_dkk": 9679.5,
+            "aconto_total_dkk": 10000.0,
+            "aconto_paid_dkk": 7500.0,
+            "aconto_upcoming_dkk": 2500.0,
+            "energy_ytd_kwh": 8000.0,
+            "energy_forecast_kwh": 9500.0,
+        }
+    }
+    coord_ef, _, _, _ = make_coordinator(
+        tmp_path,
+        store=FakeStore(ef_state),
+        backend="eforsyning",
+        utility="Sorø Fjernvarme",
+        utility_id="soroe-fjernvarme",
+    )
+    with (
+        patch("kmd_easy_energy.coordinator.dt_util.now", return_value=fixed_now),
+        patch("kmd_easy_energy.coordinator.copenhagen_today", return_value=dt.date(2026, 11, 27)),
+        patch("kmd_easy_energy.tariff.copenhagen_today", return_value=dt.date(2026, 11, 27)),
+    ):
+        s_auto = await coord_ef._async_update_data()
+    assert s_auto["settlement"]["source"] == "eforsyning"
+    assert s_auto["settlement"]["status"] == "credit"
+    assert s_auto["settlement"]["remaining_dkk"] == -320.5
+
+    coord_ef.entry.options = {"aconto_dkk_per_year": 9000.0}
+    with (
+        patch("kmd_easy_energy.coordinator.dt_util.now", return_value=fixed_now),
+        patch("kmd_easy_energy.coordinator.copenhagen_today", return_value=dt.date(2026, 11, 27)),
+        patch("kmd_easy_energy.tariff.copenhagen_today", return_value=dt.date(2026, 11, 27)),
+    ):
+        s_man_aconto = await coord_ef._async_update_data()
+    assert s_man_aconto["settlement"]["source"] == "eforsyning_manual_aconto"
+    assert s_man_aconto["settlement"]["remaining_dkk"] == 679.5
+    assert s_man_aconto["settlement"]["status"] == "debit"
+
+    coord_ef.entry.options = {"aconto_dkk_per_year": 9000.0, "price_dkk_per_kwh": 0.9}
+    with (
+        patch("kmd_easy_energy.coordinator.dt_util.now", return_value=fixed_now),
+        patch("kmd_easy_energy.coordinator.copenhagen_today", return_value=dt.date(2026, 11, 27)),
+        patch("kmd_easy_energy.tariff.copenhagen_today", return_value=dt.date(2026, 11, 27)),
+    ):
+        s_man_price = await coord_ef._async_update_data()
+    assert s_man_price["settlement"]["source"] == "manual_aconto"
+
+    # 5) Watts On with manual aconto
+    coord_w, _, _, _ = make_coordinator(
+        tmp_path,
+        store=FakeStore(dict(base_state)),
+        backend="wattson",
+        utility="Aalborg Forsyning",
+        utility_id="aalborg-forsyning",
+    )
+    coord_w.entry.options = {"aconto_dkk_per_year": 11000.0}
+    with (
+        patch("kmd_easy_energy.coordinator.dt_util.now", return_value=fixed_now),
+        patch("kmd_easy_energy.coordinator.copenhagen_today", return_value=dt.date(2026, 11, 27)),
+        patch("kmd_easy_energy.tariff.copenhagen_today", return_value=dt.date(2026, 11, 27)),
+    ):
+        s_w = await coord_w._async_update_data()
+    assert s_w["settlement"]["source"] == "manual_aconto"
+    assert "settlement" in s_w["capabilities"]
+
+
+@pytest.mark.asyncio
+async def test_fetch_from_kmd_prefers_unrounded_total_on_mwh_meter(tmp_path: Path) -> None:
+    """Use KMD Total.Value on MWh meters so rounded 0.01 MWh bars do not drift totals (#24)."""
+    import datetime as dt
+    from kmd_easy_energy.insights import DK_TZ
+
+    coord, _, _, _ = make_coordinator(
+        tmp_path,
+        utility="Frederikshavn Forsyning",
+        utility_id="frederikshavn-forsyning",
+        portal_url="https://www.forsyningen.dk/selvbetjening",
+    )
+    mwh_unit = {"Id": "u-mwh", "Name": "MWh", "Description": "Megawatttimer", "Decimals": 3, "Order": 1}
+    fake_client = MagicMock()
+    fake_client.discover_accounts = AsyncMock(
+        return_value=[
+            {
+                "customer": {"CustomerId": "c1", "CustomerNumber": "cn1"},
+                "customer_index": 1,
+                "customer_id": "c1",
+                "customer_number": "cn1",
+                "meters": [
+                    {
+                        "InstallationId": "inst1",
+                        "MeasurementPointId": "mp1",
+                        "ConsumptionType": 5,
+                        "Units": [mwh_unit],
+                    }
+                ],
+            }
+        ]
+    )
+    fake_client.set_customer = MagicMock()
+
+    async def fake_ts(inst, mp, unit, zoom, d_from, d_to):
+        if zoom == 1 and d_from.year == 2026:
+            return {
+                "Total": {"Value": 7.71},
+                "Series": [
+                    {
+                        "Data": [
+                            {"DateFrom": "2026-01-01T00:00:00", "Value": 6.84},
+                            {"DateFrom": "2026-11-01T00:00:00", "Value": 0.84},
+                        ]
+                    }
+                ],
+            }
+        if zoom == 2 and d_from == dt.datetime(2026, 11, 1):
+            return {
+                "Total": {"Value": 0.843},
+                "Series": [
+                    {
+                        "Data": [
+                            {"DateFrom": "2026-11-22T00:00:00", "Value": 0.43, "IsComplete": True},
+                            {"DateFrom": "2026-11-23T00:00:00", "Value": 0.42, "IsComplete": True},
+                        ]
+                    }
+                ],
+            }
+        return {"Series": []}
+
+    fake_client.get_consumption_timeseries = AsyncMock(side_effect=fake_ts)
+    fake_client.get_hourly_with_fallback = AsyncMock(return_value=[])
+    fake_client.get_current_settlement_period = AsyncMock(
+        return_value={"DateFrom": "2026-11-01T00:00:00Z", "DateTo": "2026-11-30T00:00:00Z"}
+    )
+    fake_client.get_consumption_overview = AsyncMock(
+        return_value={"Actual": {"Value": 1.1}, "Expected": {"Value": 0.224}}
+    )
+    fake_client.get_balance = AsyncMock(return_value={})
+    fake_client.get_balance_statement = AsyncMock(return_value=[])
+
+    coord.client = fake_client
+    coord._async_update_weather = AsyncMock()
+    fixed_now = dt.datetime(2026, 11, 24, 12, 0, tzinfo=DK_TZ)
+    with patch("kmd_easy_energy.coordinator.dt_util.now", return_value=fixed_now):
+        state = await coord._async_fetch_from_kmd({})
+
+    assert state["annual"]["2026"] == 7710
+    assert state["daily"]["total"] == 843.0
+    assert state["forecast"]["expected_kwh"] == 1100
+    assert state["forecast"]["budget_kwh"] == 224
+    assert state["forecast"]["period"] == "01.11.2026 - 30.11.2026"

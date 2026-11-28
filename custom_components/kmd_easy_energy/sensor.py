@@ -18,7 +18,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util import dt as dt_util
 
 from .const import DOMAIN
-from .capabilities import CAP_BILLING, CAP_COST, CAP_TEMPERATURES, CAP_VOLUME
+from .capabilities import CAP_BILLING, CAP_COST, CAP_SETTLEMENT, CAP_TEMPERATURES, CAP_VOLUME
 from .coordinator import KMDEasyEnergyCoordinator
 from .insights import DK_TZ
 
@@ -38,6 +38,7 @@ SENSOR_CAPABILITY: dict[str, str] = {
     "KMDVolumeSensor": CAP_VOLUME,
     "KMDReturnTempSensor": CAP_TEMPERATURES,
     "KMDBalanceSensor": CAP_BILLING,
+    "KMDSettlementSensor": CAP_SETTLEMENT,
     "KMDMotivationStatusSensor": CAP_TEMPERATURES,
     "KMDMotivationAdjustmentSensor": CAP_TEMPERATURES,
     "KMDEnergyPriceSensor": CAP_COST,
@@ -51,12 +52,14 @@ SENSOR_CAPABILITY: dict[str, str] = {
 def sensors_for(coordinator: KMDEasyEnergyCoordinator, entry: ConfigEntry) -> list[SensorEntity]:
     """Only create sensors the backend can fill (no permanently 'unknown' entities)."""
     caps = coordinator.backend_capabilities
+    coordinator.registered_entity_capabilities = frozenset(caps)
     classes = [
         KMDOverviewSensor,
         KMDEnergySensor,
         KMDVolumeSensor,
         KMDReturnTempSensor,
         KMDBalanceSensor,
+        KMDSettlementSensor,
         KMDHDDSensor,
         KMDEnergyPriceSensor,
         KMDEffectivePriceSensor,
@@ -99,6 +102,7 @@ class KMDBaseSensor(CoordinatorEntity[KMDEasyEnergyCoordinator], SensorEntity):
             "insights",
             "forecast",
             "billing",
+            "settlement",
             "meters",
             "available_units",
             "hourly_kwh_points",
@@ -245,6 +249,7 @@ class KMDOverviewSensor(KMDBaseSensor):
             "insights": data.get("insights") or {},
             "forecast": data.get("forecast") or {},
             "billing": data.get("billing") or {},
+            "settlement": data.get("settlement") or {},
             "cost_estimate": data.get("cost_estimate") or {},
             "available_units": data.get("available_units") or [],
             **_sync_attrs(self.coordinator),
@@ -360,6 +365,46 @@ class KMDBalanceSensor(KMDBaseSensor):
         return (data.get("billing") or {}).get("saldo_kr")
 
 
+class KMDSettlementSensor(KMDBaseSensor):
+    """Expected year-end settlement balance against aconto (negative = refund)."""
+
+    _attr_translation_key = "settlement"
+    _attr_native_unit_of_measurement = "DKK"
+    _attr_device_class = SensorDeviceClass.MONETARY
+    _attr_state_class = None
+    _attr_suggested_display_precision = 0
+    _attr_icon = "mdi:scale-balance"
+
+    @property
+    def unique_id(self) -> str:
+        return f"{self._entry.entry_id}_settlement"
+
+    @property
+    def native_value(self) -> float | None:
+        stl = (self.coordinator.data or {}).get("settlement") or {}
+        val = stl.get("remaining_dkk")
+        if isinstance(val, (int, float)) and not isinstance(val, bool):
+            return float(val)
+        return None
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        stl = (self.coordinator.data or {}).get("settlement") or {}
+        return {
+            "status": stl.get("status"),
+            "expected_total_dkk": stl.get("expected_total_dkk"),
+            "aconto_total_dkk": stl.get("aconto_total_dkk"),
+            "aconto_paid_dkk": stl.get("aconto_paid_dkk"),
+            "aconto_upcoming_dkk": stl.get("aconto_upcoming_dkk"),
+            "ytd_cost_dkk": stl.get("ytd_cost_dkk"),
+            "ytd_vs_paid_dkk": stl.get("ytd_vs_paid_dkk"),
+            "energy_ytd_kwh": stl.get("energy_ytd_kwh"),
+            "energy_forecast_kwh": stl.get("energy_forecast_kwh"),
+            "excludes_fixed_fees": stl.get("excludes_fixed_fees", False),
+            "source": stl.get("source"),
+        }
+
+
 class KMDHDDSensor(KMDBaseSensor):
     _attr_translation_key = "heating_degree_days"
     _attr_native_unit_of_measurement = "°C·d"
@@ -407,6 +452,7 @@ class KMDEnergyPriceSensor(KMDBaseSensor):
             "fixed_fee_dkk_per_year": tariff.get("fixed_fee_dkk_per_year"),
             "suggested_fixed_fee_dkk_per_year": tariff.get("suggested_fixed_fee_dkk_per_year"),
             "annual_fixed_fee_dkk": tariff.get("annual_fixed_fee_dkk", 0.0),
+            "aconto_dkk_per_year": tariff.get("aconto_dkk_per_year"),
         }
 
 

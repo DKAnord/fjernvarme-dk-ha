@@ -19,6 +19,7 @@ from homeassistant.helpers.service import async_register_admin_service
 
 from .const import (
     CONF_ACCESS_TOKEN,
+    CONF_ACONTO_DKK_PER_YEAR,
     CONF_BONUS_TEMP,
     CONF_FIXED_FEE_DKK_PER_M2_YEAR,
     CONF_FIXED_FEE_DKK_PER_YEAR,
@@ -103,6 +104,7 @@ SERVICE_CONFIGURE_UTILITY_SCHEMA = vol.Schema(
         vol.Optional(CONF_FIXED_FEE_DKK_PER_M2_YEAR): vol.Coerce(float),
         vol.Optional(CONF_HEATED_AREA_M2): vol.Coerce(float),
         vol.Optional(CONF_FIXED_FEE_DKK_PER_YEAR): vol.Coerce(float),
+        vol.Optional(CONF_ACONTO_DKK_PER_YEAR): vol.Coerce(float),
         vol.Optional("start_sync"): cv.boolean,
         vol.Optional("complete_setup"): cv.boolean,
     }
@@ -245,6 +247,7 @@ async def _async_setup_services(hass: HomeAssistant) -> None:
             CONF_FIXED_FEE_DKK_PER_M2_YEAR,
             CONF_HEATED_AREA_M2,
             CONF_FIXED_FEE_DKK_PER_YEAR,
+            CONF_ACONTO_DKK_PER_YEAR,
         ):
             if call.data.get(key) is not None:
                 tariff_updates[key] = float(call.data[key])
@@ -379,6 +382,11 @@ async def _async_entry_updated(hass: HomeAssistant, entry: ConfigEntry) -> None:
         # Auto-sync on/off or hour changed: re-create the timer via reload.
         hass.config_entries.async_schedule_reload(entry.entry_id)
         return
+    prev_caps = set(
+        coord.registered_entity_capabilities
+        if coord.registered_entity_capabilities is not None
+        else ((coord.data or {}).get("backend_capabilities") or ())
+    )
     coord._reminder_sig = None
     if coord.weather_signature != (coord.data or {}).get("weather_source_sig", coord.weather_signature):
         # Outdoor temperature source changed (sensor / location): recompute the
@@ -388,6 +396,8 @@ async def _async_entry_updated(hass: HomeAssistant, entry: ConfigEntry) -> None:
         except Exception as err:  # noqa: BLE001
             _LOGGER.warning("Could not refresh outdoor temperatures: %s", err)
     await coord.async_request_refresh()
+    if set(coord.backend_capabilities) - prev_caps:
+        hass.config_entries.async_schedule_reload(entry.entry_id)
 
 
 async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:

@@ -36,6 +36,7 @@ CONF_MOTIVATION_PCT_PER_K = "motivation_pct_per_k"
 CONF_FIXED_FEE_DKK_PER_M2_YEAR = "fixed_fee_dkk_per_m2_year"
 CONF_HEATED_AREA_M2 = "heated_area_m2"
 CONF_FIXED_FEE_DKK_PER_YEAR = "fixed_fee_dkk_per_year"
+CONF_ACONTO_DKK_PER_YEAR = "aconto_dkk_per_year"
 CONF_NORMAL_HDD_YEAR = "normal_hdd_year"
 CONF_SYNC_REMINDER = "sync_reminder"
 DEFAULT_SYNC_REMINDER = True

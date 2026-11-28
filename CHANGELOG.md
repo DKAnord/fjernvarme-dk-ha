@@ -2,6 +2,23 @@
 
 Alle væsentlige ændringer i **Dansk Fjernvarme** (tidligere *Fjernvarme (KMD Easy Energy)*) dokumenteres her.
 
+## [1.5.0] - 2026-11-28
+
+### Tilføjet
+- **Restbeløb til fakturering / Forventet årsafregning vs. aconto (`settlement`-capability):**
+  - **E|Forsyning (`api/getberegnregnskab`):** Integrationen henter nu automatisk værkets *Beregnet varmeregnskab* (`beregnetVarmeRegnskab: "faktisk"`) under daglig synkronisering og sammenligner faktisk forbrug + værkets årsprognose + faste bidrag + motivationsregulering + moms mod opkrævet og forventet aconto. Understøtter både `MWh`, `kWh`, `GJ` (`1 / 0,0036`), takstskift midt på året samt alle varianter af resultatekster (`"Til udbetaling"`, `"Til indbetaling"`, `"Årets forventede beløb til opkrævning"`, `"Årets forventede resultat"` m.fl.) uden at gemme personhenførbare måler-/kundenumre eller rå linjetekster i cache eller attributter.
+  - **Ny dynamisk sensor (`sensor.<værk>_restbelob_til_fakturering` / `KMDSettlementSensor`):** Viser forventet restbeløb i `DKK` (`SensorDeviceClass.MONETARY` — negativt tal = til gode / sparer penge, positivt tal = forventet efterbetaling) med detaljerede attributter (`expected_total_dkk`, `aconto_total_dkk`, `aconto_paid_dkk`, `aconto_upcoming_dkk`, `ytd_vs_paid_dkk`, `energy_forecast_kwh` m.fl.). Oprettes automatisk via `settlement`-capability, når data eller aconto er konfigureret (aldrig permanente `"unknown"`-entiteter).
+  - **KMD Easy Energy, Watts On & valgfri aconto-overstyring (`aconto_dkk_per_year`):** Nyt valgfrit felt **Årlig aconto inkl. moms (kr./år)** i integrationens indstillinger, `kmd_easy_energy.configure_utility` og kortets `⚙️`-panel (inkl. 1-klik genvej til årets fakturerede beløb på KMD), så også KMD- og Watts On-brugere kan sammenligne forventet årsudgift mod aconto.
+  - **Dashboard-kort (`custom:kmd-easy-energy-card` & `custom:dansk-forbrug-card`):** Ny farvekodet KPI-flise **`⚖️ Restbeløb vs. aconto`** (`🟢 Til gode` / `🔴 Efterbetaling` / `🟢 Passer med aconto`) samt aconto-opsummering på Fjernvarme-linjen i `Samlet Forbrug`-kortet.
+  - **Kortressource:** Opdateret cache-busting ressource-URL til `/kmd_easy_energy/kmd-easy-energy-card.js?v=1.5.0`.
+
+### Rettet
+- **KMD totalpræcision på `MWh`/`GJ`-målere & tydelig periode på `Prognose` ([issue #24](https://github.com/DKAnord/fjernvarme-dk-ha/issues/24)):**
+  - `annual` og `daily.total` bruger nu KMD's uafrundede `Total.Value` fra `consumptionTimeSeries` (omregnet til `kWh`), når værket leverer den — så års- og månedstotaler på `MWh`-målere ikke længere påvirkes af summen af individuelt afrundede `0,01 MWh` (`10 kWh`) søjler.
+  - KPI-flisen **Prognose** viser nu afregningsperioden (`fc.period`, fx `01.11.2026 - 30.11.2026` ved månedsafregning) direkte ved siden af `% mod budget` samt fortegn (`+391% mod budget`).
+- **`custom:dansk-forbrug-card` enhedskonvertering for `Wh`/`MWh`/`GJ`-elmålere ([issue #88](https://github.com/DKAnord/fjernvarme-dk-ha/issues/88)):**
+  - `DanskForbrugCard` sender nu `units: { energy: "kWh" }` til Home Assistants `recorder/statistics_during_period` og skalerer evt. live Eloverblik-redningsværdier automatisk (`Wh`/`MWh`/`GJ` → `kWh`), så fx SaveEye-sensorer i `Wh` vises korrekt uden faktor-1000-fejl. Kortets editor og `getStubConfig()` opdager desuden nu `Wh`/`MWh`/`GJ`-energisensorer direkte.
+
 ## [1.4.4] - 2026-11-28
 
 ### Tilføjet & Bekræftet

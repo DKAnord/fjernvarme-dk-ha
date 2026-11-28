@@ -125,6 +125,7 @@ def _summarize_coordinator(data: dict[str, Any] | None) -> dict[str, Any]:
         "eforsyning": {
             "years": (data.get("eforsyning") or {}).get("years"),
             "readings_last_fetch": (data.get("eforsyning") or {}).get("readings_last_fetch"),
+            "has_billing_summary": bool((data.get("eforsyning") or {}).get("billing_summary")),
         }
         if data.get("eforsyning")
         else None,

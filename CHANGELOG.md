@@ -2,6 +2,12 @@
 
 Alle væsentlige ændringer i **Dansk Fjernvarme** (tidligere *Fjernvarme (KMD Easy Energy)*) dokumenteres her.
 
+## [1.4.2] - 2026-11-28
+
+### Tilføjet & Bekræftet
+- **Helsinge Fjernvarme a.m.b.a. tilføjet og bekræftet live + 2026-takster ([issue #86](https://github.com/DKAnord/fjernvarme-dk-ha/issues/86), tak til `@GGBMLC`):** Tilføjet som dedikeret ✅ **Bekræftet** E|Forsyning-værk (`helsinge-fjernvarme`, `forsyningId: 478043AB-B215-4E8D-B300-F2934C6E64CC`, `https://eforsyning.dk/helsingefjernvarme/`, verificeret med `kWh` og `m³`, inkl. automatisk opgradering fra `eforsyning-custom` — nu **46** live-bekræftede værker og **79/79** forudfyldte værker) med officielle 2026-takster inkl. moms: forbrugsbidrag `0,875 kr./kWh` (`875,00 kr./MWh`), BBR bolig- og erhvervsareal `26,25 kr./m²/år` (kælder/opvarmede garager/udhuse/udestuer `13,13 kr./m²/år`) samt målerbidrag `625,00 kr./år` (årsafkølingsordning ΔT dokumenteret i værknoten).
+- **Kortressource:** Opdateret cache-busting ressource-URL til `/kmd_easy_energy/kmd-easy-energy-card.js?v=1.4.2`.
+
 ## [1.4.1] - 2026-11-28
 
 ### Bekræftet

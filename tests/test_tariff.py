@@ -837,10 +837,10 @@ def test_bundled_utilities_json_all_69_have_tariffs_and_spot_checks() -> None:
     from kmd_easy_energy.tariff import load_utilities
 
     utilities = load_utilities()
-    assert len(utilities) == 78
+    assert len(utilities) == 79
     with_tariffs = [u for u in utilities if u.get("tariffs")]
-    assert len(with_tariffs) == len(utilities) == 78
-    assert len({u["id"] for u in utilities}) == 78
+    assert len(with_tariffs) == len(utilities) == 79
+    assert len({u["id"] for u in utilities}) == 79
 
     backends = {}
     for u in utilities:
@@ -849,7 +849,7 @@ def test_bundled_utilities_json_all_69_have_tariffs_and_spot_checks() -> None:
         for t in u["tariffs"]:
             assert t["price_dkk_per_kwh"] > 0, u["id"]
             assert str(t.get("source", "")).startswith("https://"), u["id"]
-    assert backends == {"kmd": 18, "eforsyning": 56, "wattson": 4}
+    assert backends == {"kmd": 18, "eforsyning": 57, "wattson": 4}
 
     by_id = {u["id"]: u for u in utilities}
     assert "hoje-taastrup-fjernvarme" not in by_id
@@ -2527,3 +2527,51 @@ def test_fors_roskilde_2026_tariff_curve_asymmetric_motivation_and_custom_matchi
             utilities,
         )
         assert matched is not None and matched["id"] == "fors-roskilde", url
+
+
+def test_helsinge_fjernvarme_confirmed_2026_and_custom_matching() -> None:
+    from kmd_easy_energy.tariff import load_utilities, match_utility_for_entry
+
+    utilities = load_utilities()
+    by_id = {u["id"]: u for u in utilities}
+    helsinge = by_id["helsinge-fjernvarme"]
+    assert helsinge["status"] == "confirmed"
+    assert helsinge["tier"] == "confirmed"
+    assert helsinge["eforsyning_supplier_id"] == "478043AB-B215-4E8D-B300-F2934C6E64CC"
+    assert helsinge["portal_url"] == "https://eforsyning.dk/helsingefjernvarme/"
+
+    by_supplier = match_utility_for_entry(
+        {
+            "utility_id": "eforsyning-custom",
+            "eforsyning_supplier_id": "478043ab-b215-4e8d-b300-f2934c6e64cc",
+            "portal_url": "https://eforsyning.dk/",
+        },
+        utilities,
+    )
+    assert by_supplier is not None and by_supplier["id"] == "helsinge-fjernvarme"
+
+    by_portal = match_utility_for_entry(
+        {
+            "utility_id": "eforsyning-custom",
+            "portal_url": "https://eforsyning.dk/helsingefjernvarme",
+        },
+        utilities,
+    )
+    assert by_portal is not None and by_portal["id"] == "helsinge-fjernvarme"
+
+    r_26 = resolve_tariff(
+        _entry(
+            data={
+                "utility_id": "eforsyning-custom",
+                "portal_url": "https://eforsyning.dk/helsingefjernvarme/",
+            },
+        ),
+        today=date(2026, 11, 28),
+        utilities=utilities,
+    )
+    assert r_26.utility_id == "helsinge-fjernvarme"
+    assert r_26.price_dkk_per_kwh == 0.875
+    assert r_26.fixed_fee_dkk_per_m2_year == 26.25
+    assert r_26.suggested_fixed_fee_dkk_per_year == 625.0
+    assert r_26.motivation_dkk_per_kwh_per_k is None
+    assert r_26.motivation_pct_per_k is None

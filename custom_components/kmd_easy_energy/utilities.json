@@ -1809,6 +1809,32 @@
       ]
     },
     {
+      "id": "helsinge-fjernvarme",
+      "name": "Helsinge Fjernvarme a.m.b.a.",
+      "city": "Helsinge",
+      "portal_url": "https://eforsyning.dk/helsingefjernvarme/",
+      "status": "confirmed",
+      "tier": "confirmed",
+      "auth_method": "Forbrugernummer + webpinkode",
+      "backend": "eforsyning",
+      "eforsyning_supplier_id": "478043AB-B215-4E8D-B300-F2934C6E64CC",
+      "latitude": 56.022,
+      "longitude": 12.198,
+      "notes": "E|Forsyning (bekræftet live via issue #86 af @GGBMLC — kWh og m³, ingen direkte temperaturmåler). forsyningid og AppServerUri (https://apiapp.dff-edb.dk/helsinge/) bekræftet live via GetVaerkSettings; login med forbrugernummer + webpinkode eller e-mail + adgangskode; daglige aflæsninger. Takstblad gældende fra 01.01.2026 (inkl. moms): forbrugsbidrag 875,00 kr./MWh (0,875 kr./kWh), BBR bolig- og erhvervsareal 26,25 kr./m²/år (kælderareal samt opvarmede garager/udhuse/udestuer: 13,13 kr./m²/år) og målerbidrag 625,00 kr./år. Afkølingsordning på årsafkøling (ΔT): rabat på 1 % af MWh-prisen pr. °C over 35 °C; tillæg på 1 % pr. °C under 25 °C (p.t. ikke opkrævet for 1-strengs anlæg udført før 1984) samt ekstra tillæg på 1,5 % pr. °C under 15 °C for alle anlæg.",
+      "tariffs": [
+        {
+          "year": 2026,
+          "effective_from": "2026-01-01",
+          "price_dkk_per_kwh": 0.875,
+          "price_dkk_per_m3": null,
+          "fixed_fee_dkk_per_m2_year": 26.25,
+          "fixed_fee_dkk_per_year": 625.0,
+          "source": "https://www.helsingefjernvarme.dk/p/Helsinge%20Fjernvarme/Takstblade/Takstblad-2026_ny.pdf",
+          "source_note": "Takstblad gældende fra 01-01-2026 (Helsinge Fjernvarme A.m.b.a., vedtaget 10-12-2025, inkl. moms): Forbrugsbidrag 875,00 kr./MWh (0,875 kr./kWh). Effektbidrag efter BBR-areal: bolig- og erhvervsarealer 26,25 kr./m²/år, kælderarealer (inkl. opvarmede garager, udhuse og udestuer) 13,13 kr./m²/år. Målerbidrag: 625,00 kr./år. Afkølingsordning på gennemsnitlig årsafkøling (ΔT): rabat på 1 % af MWh-prisen pr. °C over 35 °C, tillæg på 1 % pr. °C under 25 °C (indtil videre ikke opkrævet for 1-strengs anlæg udført før 1984) samt ekstra tillæg på 1,5 % pr. °C under 15 °C for alle anlæg."
+        }
+      ]
+    },
+    {
       "id": "aalestrup-norager-energi",
       "name": "Aalestrup-Nørager Energi a.m.b.a.",
       "city": "Aalestrup / Nørager",

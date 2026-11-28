@@ -2,6 +2,11 @@
 
 Alle væsentlige ændringer i **Dansk Fjernvarme** (tidligere *Fjernvarme (KMD Easy Energy)*) dokumenteres her.
 
+## [1.3.23] - 2026-11-28
+
+### Forbedret
+- **E|Forsyning login med e-mail og adgangskode (`euser` / `user`):** `EforsyningClient` og opsætningsguiden understøtter nu både klassisk **forbrugernummer + webpinkode** (`consumer`) og **e-mail + adgangskode** (`euser`, f.eks. på Næstved Fjernvarme og øvrige værker hvor kunden har oprettet e-mail-login på `eforsyning.dk`) samt ikke-numerisk bruger-ID (`user`), inkl. automatisk casing-normalisering (`lower()` på e-mail / `upper()` på ID), opslag af installationens `EjendomNr` fra `FindInstallationer` til `getforbrug`, entydig valgmulighed ved flere ejendomme med ens `InstallationNr`, opdaterede danske og engelske guidetekster samt cache-busting ressource-URL `/kmd_easy_energy/kmd-easy-energy-card.js?v=1.3.23`.
+
 ## [1.3.22] - 2026-11-27
 
 ### Tilføjet & Bekræftet

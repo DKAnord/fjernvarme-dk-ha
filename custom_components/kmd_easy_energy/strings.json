@@ -46,16 +46,16 @@
       },
       "eforsyning": {
         "title": "E|Forsyning login ({utility_name})",
-        "description": "Status: {status_badge}\n\n⚠️ Experimental: E|Forsyning support has been verified live at Sorø Fjernvarme; other E|Forsyning utilities await a first test — beta testers wanted.\n\nLog in with the **forbrugernummer** (consumer number) and **webpinkode** (web PIN) from your heating bill (same as on {portal_url}). No MitID is used. The credentials are stored in Home Assistant like other integrations' passwords, never logged and redacted in diagnostics.\n\n**Portal URL, slug, or supplier id** (only for 'Other E|Forsyning utility'): paste your utility's portal URL (e.g. {example_url}), just the slug (`horsens`), or the supplier UUID — the rest is resolved automatically without F12.",
+        "description": "Status: {status_badge}\n\n⚠️ Experimental: E|Forsyning support has been verified live at Sorø Fjernvarme and others; remaining E|Forsyning utilities await a first test — beta testers wanted.\n\nLog in with the **forbrugernummer** (consumer number) and **webpinkode** (web PIN) from your heating bill — or with your **e-mail** and **password** if you use an e-mail login on {portal_url}. No MitID is used. Credentials are stored only in Home Assistant, never logged and redacted in diagnostics.\n\n**Portal URL, slug, or supplier id** (only for 'Other E|Forsyning utility'): paste your utility's portal URL (e.g. {example_url}), just the slug (`horsens`), or the supplier UUID — the rest is resolved automatically without F12.",
         "data": {
-          "eforsyning_username": "Consumer number (forbrugernummer)",
-          "eforsyning_password": "Web PIN (webpinkode)",
+          "eforsyning_username": "Consumer number or e-mail",
+          "eforsyning_password": "Web PIN or password",
           "eforsyning_supplier_id": "Portal URL, slug, or supplier id",
           "location_name": "City / location name"
         },
         "data_description": {
-          "eforsyning_username": "Printed on your heating bill.",
-          "eforsyning_password": "The web PIN from your bill (stored only in Home Assistant).",
+          "eforsyning_username": "Printed on your heating bill — or the e-mail address linked to your E|Forsyning login.",
+          "eforsyning_password": "The web PIN from your bill or your E|Forsyning password (stored only in Home Assistant).",
           "eforsyning_supplier_id": "Utility portal address (e.g. eforsyning.dk/horsens), slug (horsens), or UUID like B30A6948-2461-4827-B8EB-5D93169CCB8B."
         }
       },
@@ -68,10 +68,10 @@
       },
       "reconfigure_eforsyning": {
         "title": "Update E|Forsyning login ({utility_name})",
-        "description": "Leave the web PIN empty to keep the stored one.",
+        "description": "Update consumer number / e-mail or password. Leave the password empty to keep the stored one.",
         "data": {
-          "eforsyning_username": "Consumer number",
-          "eforsyning_password": "Web PIN (empty = keep)",
+          "eforsyning_username": "Consumer number or e-mail",
+          "eforsyning_password": "Web PIN / password (empty = keep)",
           "eforsyning_supplier_id": "Supplier id"
         }
       },
@@ -108,10 +108,10 @@
       "already_configured": "This utility is already configured"
     },
     "error": {
-      "invalid_auth": "E|Forsyning rejected the consumer number / web PIN.",
+      "invalid_auth": "E|Forsyning rejected the login (check consumer number / e-mail and web PIN / password).",
       "cannot_connect": "Could not connect to E|Forsyning (check the supplier id and network).",
       "unknown": "Unexpected error — see the log.",
-      "eforsyning_missing": "Enter both consumer number and web PIN.",
+      "eforsyning_missing": "Enter both consumer number / e-mail and web PIN / password.",
       "eforsyning_supplier_required": "The supplier id or portal URL is required for this utility.",
       "eforsyning_supplier_lookup_failed": "Could not resolve a valid supplier id from that URL/slug. Check the portal address (e.g. eforsyning.dk/horsens) or paste the supplier UUID directly.",
       "eforsyning_directory_failed": "Could not fetch the utility list from eforsyning.dk — enter the utility URL, slug, or supplier id instead.",

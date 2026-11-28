@@ -21,8 +21,10 @@ from kmd_easy_energy.api.eforsyning_client import (
     EforsyningLoginError,
     access_token_for,
     async_resolve_supplier_input,
+    installation_option_id,
     is_uuid,
     normalize_eforsyning_url,
+    normalize_eforsyning_login,
     parse_eforsyning_directory,
     parse_monthly_temperatures,
     parse_number,
@@ -1100,6 +1102,154 @@ async def test_diagnostics_redact_eforsyning_credentials() -> None:
     out = await async_get_config_entry_diagnostics(hass, entry)
     dumped = json.dumps(out, default=str)
     assert fx.PASSWORD not in dumped and fx.USERNAME not in dumped
+    assert out["entry"]["data"]["eforsyning_password"] == "**REDACTED**"
+
+
+def test_normalize_eforsyning_login_modes() -> None:
+    assert normalize_eforsyning_login(" 123456 ") == ("consumer", "123456")
+    assert normalize_eforsyning_login("0042") == ("consumer", "0042")
+    assert normalize_eforsyning_login("  Hans.Nielsen+1@Example.DK ") == (
+        "euser",
+        "hans.nielsen+1@example.dk",
+    )
+    assert normalize_eforsyning_login("bruger1") == ("user", "BRUGER1")
+    assert normalize_eforsyning_login("") == ("consumer", "")
+
+
+@pytest.mark.asyncio
+async def test_euser_email_login_sequence_and_ejendom_nr_in_getforbrug() -> None:
+    email_raw = "  Hans.Nielsen@Example.DK "
+    email_norm = "hans.nielsen@example.dk"
+    installs = {
+        "Installationer": [
+            dict(
+                fx.INSTALLATIONS["Installationer"][0],
+                EjendomNr=54321,
+                AktivNr=1,
+                InstallationNr=1,
+            )
+        ]
+    }
+    session = fx.FakeSession({"FindInstallationer": installs})
+    client = EforsyningClient(session, email_raw, fx.PASSWORD, fx.SUPPLIER_ID)
+    out = await client.async_fetch(date(2026, 11, 5), years_back=0)
+
+    urls = [c["url"] for c in session.calls]
+    assert urls[1] == f"{fx.APP_SERVER}system/getsecuritytoken/project/app/euser/{email_norm}"
+    assert (
+        urls[2]
+        == f"{fx.APP_SERVER}system/login/project/app/euser/{email_norm}/installation/1/id/{ACCESS}"
+    )
+
+    forbrug_calls = [c for c in session.calls if "getforbrug" in c["url"]]
+    assert forbrug_calls
+    for call in forbrug_calls:
+        assert "&unr=54321&anr=1&inr=1" in call["url"]
+        body = json.loads(call["data"])
+        assert body["Ejendomnr"] == "54321"
+        serialized_call = json.dumps(call, default=str)
+        assert email_norm not in serialized_call and "Hans.Nielsen" not in serialized_call
+        assert fx.PASSWORD not in serialized_call
+
+    serialized_out = json.dumps(out, default=str, ensure_ascii=False)
+    assert email_norm not in serialized_out
+    assert fx.PASSWORD not in serialized_out
+
+
+@pytest.mark.asyncio
+async def test_euser_missing_ejendom_nr_raises_error() -> None:
+    bad_installs = {
+        "Installationer": [
+            {
+                "EjendomNr": None,
+                "Adresse": "Testvej 1",
+                "InstallationNr": 1,
+                "AktivNr": 1,
+            }
+        ]
+    }
+    session = fx.FakeSession({"FindInstallationer": bad_installs})
+    client = EforsyningClient(session, "hans@example.dk", fx.PASSWORD, fx.SUPPLIER_ID)
+    with pytest.raises(EforsyningError, match="ejendomsnummer"):
+        await client.async_fetch(date(2026, 11, 5), years_back=0)
+    assert not any("getforbrug" in c["url"] for c in session.calls)
+
+
+@pytest.mark.asyncio
+async def test_euser_multi_property_duplicate_installation_nr_selection() -> None:
+    two_props = [
+        {"EjendomNr": 1001, "AktivNr": 1, "InstallationNr": 1, "Adresse": "Vej 1"},
+        {"EjendomNr": 2002, "AktivNr": 1, "InstallationNr": 1, "Adresse": "Vej 2"},
+    ]
+    assert installation_option_id(two_props[1], include_ejendom=True) == "2002:1:1"
+    flow = _flow(dict(HJ))
+    with patch(
+        "kmd_easy_energy.config_flow.async_validate_eforsyning",
+        AsyncMock(return_value=two_props),
+    ):
+        step = await flow.async_step_eforsyning(
+            {"eforsyning_username": "Hans@Example.DK", "eforsyning_password": fx.PASSWORD}
+        )
+    assert step["step_id"] == "eforsyning_installation"
+    field_schema = next(iter(step["data_schema"].schema.values()))
+    option_values = [opt["value"] for opt in field_schema.config["options"]]
+    assert option_values == ["1001:1:1", "2002:1:1"]
+
+    res = await flow.async_step_eforsyning_installation({"eforsyning_installation_id": "2002:1:1"})
+    assert res["type"] == "create_entry"
+    assert res["data"]["eforsyning_username"] == "hans@example.dk"
+    assert res["data"]["eforsyning_installation_id"] == "2002:1:1"
+
+    session = fx.FakeSession({"FindInstallationer": {"Installationer": two_props}})
+    client = EforsyningClient(
+        session, "Hans@Example.DK", fx.PASSWORD, fx.SUPPLIER_ID, installation_id="2002:1:1"
+    )
+    await client.async_fetch(date(2026, 11, 5), years_back=0)
+    assert client.installation["EjendomNr"] == 2002
+    forbrug_calls = [c for c in session.calls if "getforbrug" in c["url"]]
+    assert forbrug_calls and "&unr=2002&anr=1&inr=1" in forbrug_calls[0]["url"]
+
+
+def test_eforsyning_unique_id_preserves_consumer_and_normalizes_email() -> None:
+    from kmd_easy_energy.config_flow import eforsyning_unique_id
+
+    expected_legacy = (
+        f"eforsyning:{fx.SUPPLIER_ID.lower()}:"
+        + hashlib.sha256(f"{fx.SUPPLIER_ID.lower()}|123456".encode()).hexdigest()[:12]
+    )
+    assert eforsyning_unique_id(fx.SUPPLIER_ID, "123456") == expected_legacy
+
+    uid_upper = eforsyning_unique_id(fx.SUPPLIER_ID, "User@Example.DK")
+    uid_lower = eforsyning_unique_id(fx.SUPPLIER_ID, " user@example.dk ")
+    assert uid_upper == uid_lower
+    assert "user@example.dk" not in uid_lower.lower()
+
+
+@pytest.mark.asyncio
+async def test_diagnostics_redact_eforsyning_email_credentials() -> None:
+    from kmd_easy_energy.diagnostics import async_get_config_entry_diagnostics
+
+    email = "hans.nielsen@example.dk"
+    entry = SimpleNamespace(
+        entry_id="e1",
+        title="Næstved Fjernvarme",
+        unique_id="eforsyning:euser",
+        domain="kmd_easy_energy",
+        version=1,
+        data=dict(
+            EF_ENTRY,
+            eforsyning_username=email,
+            eforsyning_installation_id="1001:1:1",
+        ),
+        options={},
+    )
+    hass = MagicMock()
+    hass.data = {"kmd_easy_energy": {}}
+    out = await async_get_config_entry_diagnostics(hass, entry)
+    dumped = json.dumps(out, default=str)
+    assert email not in dumped
+    assert fx.PASSWORD not in dumped
+    assert out["entry"]["data"]["eforsyning_username"] == "**REDACTED**"
     assert out["entry"]["data"]["eforsyning_password"] == "**REDACTED**"
 
 

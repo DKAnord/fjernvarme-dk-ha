@@ -3,7 +3,7 @@
  * Zero external dependencies, Shadow DOM, responsive, interactive tooltips, DA/EN i18n.
  */
 (() => {
-  const VER = "1.3.22";
+  const VER = "1.3.23";
   const MONTHS = ["Jan", "Feb", "Mar", "Apr", "Maj", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Dec"];
   const DAYS_IN_MONTH = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
   const isLeapYear = (y) => (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0;
@@ -815,7 +815,7 @@
       const dataSource = a.data_source || ({ eforsyning: "E|Forsyning", wattson: "Watts On" }[backend] || "KMD Easy Energy");
       const loginHow = backend === "wattson"
         ? "Login med din Watts On-konto (browser-login, din adgangskode gemmes ikke)"
-        : "Login med forbrugernummer og webpinkode";
+        : "Login med forbrugernummer/webpinkode eller e-mail/adgangskode";
       const rawStateNum = st && st.state !== "unknown" && st.state !== "unavailable" && st.state !== "" && st.state !== null && st.state !== undefined
         ? Number(st.state)
         : NaN;
@@ -2039,7 +2039,7 @@
         const authMethodLabel = backend === "wattson"
           ? "Watts On (OAuth PKCE)"
           : backend === "eforsyning"
-            ? "E|Forsyning (Forbrugernummer + webpinkode)"
+            ? "E|Forsyning (Forbrugernummer / e-mail)"
             : "Pure-HA MitID (SRP + OIDC PKCE)";
         const integrationVer = a.integration_version ? String(a.integration_version) : "ukendt";
         const lines = [

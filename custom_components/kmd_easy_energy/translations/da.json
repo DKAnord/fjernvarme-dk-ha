@@ -46,16 +46,16 @@
       },
       "eforsyning": {
         "title": "E|Forsyning-login ({utility_name})",
-        "description": "Status: {status_badge}\n\n⚠️ Eksperimentel: E|Forsyning-understøttelsen er bekræftet live hos Sorø Fjernvarme; øvrige E|Forsyning-værker afventer første test — vi søger beta-testere.\n\nLog ind med **forbrugernummer** og **webpinkode** fra din varmeregning (samme som på {portal_url}). Der bruges ikke MitID. Oplysningerne gemmes i Home Assistant som andre integrationers adgangskoder, logges aldrig og fjernes i diagnostik.\n\n**Portal-URL, slug eller forsyningid** (kun for 'Andet E|Forsyning-værk'): Indsæt værkets portal-URL (f.eks. {example_url}), blot navnet efter skråstregen (f.eks. `horsens`), eller værkets forsyningid (UUID) — så slås resten op automatisk uden F12.",
+        "description": "Status: {status_badge}\n\n⚠️ Eksperimentel: E|Forsyning-understøttelsen er bekræftet live hos bl.a. Sorø Fjernvarme; øvrige E|Forsyning-værker afventer første test — vi søger beta-testere.\n\nLog ind med **forbrugernummer** og **webpinkode** fra din varmeregning — eller med din **e-mail** og **adgangskode**, hvis du har oprettet e-mail-login på {portal_url}. Der bruges ikke MitID. Oplysningerne gemmes kun i Home Assistant, logges aldrig og fjernes i diagnostik.\n\n**Portal-URL, slug eller forsyningid** (kun for 'Andet E|Forsyning-værk'): Indsæt værkets portal-URL (f.eks. {example_url}), blot navnet efter skråstregen (f.eks. `horsens`), eller værkets forsyningid (UUID) — så slås resten op automatisk uden F12.",
         "data": {
-          "eforsyning_username": "Forbrugernummer",
-          "eforsyning_password": "Webpinkode",
+          "eforsyning_username": "Forbrugernummer eller e-mail",
+          "eforsyning_password": "Webpinkode eller adgangskode",
           "eforsyning_supplier_id": "Portal-URL, slug eller forsyningid",
           "location_name": "By / Lokationsnavn"
         },
         "data_description": {
-          "eforsyning_username": "Står på din varmeregning.",
-          "eforsyning_password": "Webpinkoden fra regningen (gemmes kun i Home Assistant).",
+          "eforsyning_username": "Forbrugernummer fra varmeregningen — eller din e-mail, hvis du logger ind med e-mail på E|Forsyning.",
+          "eforsyning_password": "Webpinkoden fra regningen eller din selvvalgte E|Forsyning-adgangskode (gemmes kun i Home Assistant).",
           "eforsyning_supplier_id": "Værkets portaladresse (f.eks. eforsyning.dk/horsens), slug (horsens) eller en UUID som B30A6948-2461-4827-B8EB-5D93169CCB8B."
         }
       },
@@ -68,10 +68,10 @@
       },
       "reconfigure_eforsyning": {
         "title": "Opdater E|Forsyning-login ({utility_name})",
-        "description": "Lad webpinkode stå tom for at beholde den gemte.",
+        "description": "Opdater forbrugernummer/e-mail eller kode. Lad kodefeltet stå tomt for at beholde den gemte.",
         "data": {
-          "eforsyning_username": "Forbrugernummer",
-          "eforsyning_password": "Webpinkode (tom = behold)",
+          "eforsyning_username": "Forbrugernummer eller e-mail",
+          "eforsyning_password": "Webpinkode / adgangskode (tom = behold)",
           "eforsyning_supplier_id": "Forsyningid"
         }
       },
@@ -108,10 +108,10 @@
       "already_configured": "Dette værk er allerede konfigureret"
     },
     "error": {
-      "invalid_auth": "E|Forsyning afviste forbrugernummer/webpinkode.",
+      "invalid_auth": "E|Forsyning afviste login (tjek forbrugernummer/e-mail og webpinkode/adgangskode).",
       "cannot_connect": "Kunne ikke forbinde til E|Forsyning (tjek forsyningid og netværk).",
       "unknown": "Uventet fejl — se loggen.",
-      "eforsyning_missing": "Udfyld både forbrugernummer og webpinkode.",
+      "eforsyning_missing": "Udfyld både forbrugernummer/e-mail og webpinkode/adgangskode.",
       "eforsyning_supplier_required": "Forsyningid eller portal-URL skal udfyldes for dette værk.",
       "eforsyning_supplier_lookup_failed": "Kunne ikke finde et gyldigt forsyningid fra denne URL/slug. Tjek portaladressen (f.eks. eforsyning.dk/horsens) eller indsæt værkets forsyningid (UUID) direkte.",
       "eforsyning_directory_failed": "Kunne ikke hente værkslisten fra eforsyning.dk — indtast i stedet værkets URL, slug eller forsyningid.",

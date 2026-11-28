@@ -18,18 +18,23 @@ no personal installation data (address, meter or customer number) returned.
 Modifications Copyright (c) 2026 Daniel / DKAnord, also available under the
 Apache License, Version 2.0 for this file.
 
-Protocol (as handled by kpoppel's client):
+Protocol (as handled by kpoppel's client + euser/user support from E|Forsyning SPA):
   1. GET  https://eforsyning.dk/umbraco/dff/dffapi/GetVaerkSettings?forsyningid=<id>
      -> {"AppServerUri": "https://<server>/<vaerk>/", ...}  (public, no login)
-  2. GET  <AppServerUri>system/getsecuritytoken/project/app/consumer/<forbrugernr>
+  2. GET  <AppServerUri>system/getsecuritytoken/project/app/<kind>/<user>
      -> {"Token": "<server token>"}
-  3. access = md5( md5(webpinkode) + Token )   (hex digests)
-  4. GET  <AppServerUri>system/login/project/app/consumer/<forbrugernr>/installation/1/id/<access>
+     where <kind> is:
+       - "euser"    if username contains '@' (lowercased e-mail)
+       - "consumer" if username starts with an optional +/- and digit (forbrugernummer)
+       - "user"     otherwise (uppercased user ID)
+  3. access = md5( md5(password) + Token )   (hex digests)
+  4. GET  <AppServerUri>system/login/project/app/<kind>/<user>/installation/1/id/<access>
      -> {"Result": 1} on success
   5. GET  api/getebrugerinfo?id=<access>          -> {"id": .., "indflyttet": "dd-mm-yyyy"}
      POST api/FindInstallationer?id=<access>      -> {"Installationer": [...]}
      POST api/getaktuelaarsmaerke?id=<access>     -> {"aarsmaerke": 2026, ...}
-     POST api/getforbrug?id=<access>&unr=..&anr=..&inr=..  -> ForbrugsLinjer / IaltLinje
+     POST api/getforbrug?id=<access>&unr=<EjendomNr>&anr=..&inr=..  -> ForbrugsLinjer / IaltLinje
+     (uses installation's EjendomNr from FindInstallationer for euser/user)
 """
 
 from __future__ import annotations
@@ -44,7 +49,7 @@ import secrets
 import string
 from datetime import date, datetime, timedelta
 from typing import Any
-from urllib.parse import urlparse, urlunparse
+from urllib.parse import quote, urlparse, urlunparse
 
 import aiohttp
 
@@ -73,6 +78,36 @@ _SELECT_PLANT_RE = re.compile(
 )
 _EXCLUDED_DIRECTORY_SLUGS = {"albertslund", "htf"}
 _NON_FILE_EXT_RE = re.compile(r"\.(?:php|html?|aspx)$", re.IGNORECASE)
+_CONSUMER_ID_RE = re.compile(r"^[+-]?\d")
+
+
+def normalize_eforsyning_login(username: str) -> tuple[str, str]:
+    """Classify and normalize an E|Forsyning login identifier.
+
+    Matches E|Forsyning's Angular SPA (fixCasing + getSecurityTokenUrl):
+    - Contains '@': ('euser', lowercased)
+    - Starts with digit (JS !isNaN(parseInt(x, 10))): ('consumer', uppercased)
+    - Otherwise: ('user', uppercased)
+    """
+    raw = str(username or "").strip()
+    if not raw:
+        return ("consumer", "")
+    if "@" in raw:
+        return ("euser", raw.lower())
+    norm = raw.upper()
+    if _CONSUMER_ID_RE.match(norm):
+        return ("consumer", norm)
+    return ("user", norm)
+
+
+def installation_option_id(inst: dict[str, Any], include_ejendom: bool = False) -> str:
+    """Stable installation selector value (composite only when InstallationNr collides)."""
+    inr = str(inst.get("InstallationNr") if inst.get("InstallationNr") is not None else 1).strip()
+    if not include_ejendom:
+        return inr
+    ej = str(inst.get("EjendomNr") if inst.get("EjendomNr") is not None else "").strip()
+    anr = str(inst.get("AktivNr") if inst.get("AktivNr") is not None else 1).strip()
+    return f"{ej}:{anr}:{inr}" if ej else inr
 
 
 def is_uuid(value: str) -> bool:
@@ -530,7 +565,8 @@ class EforsyningClient:
         base_url: str = EFORSYNING_BASE_URL,
     ) -> None:
         self._session = session
-        self._username = str(username).strip()
+        self._login_kind, self._login_id = normalize_eforsyning_login(username)
+        self._username = self._login_id
         self._password = str(password)
         self._supplier_id = str(supplier_id).strip()
         self._configured_installation = str(installation_id).strip() if installation_id else None
@@ -582,10 +618,21 @@ class EforsyningClient:
         # The access token is part of the URL: never log the full URL.
         return f"{self._api}{path}{self._access}"
 
+    def _ejendom_nr(self) -> str:
+        if self._login_kind == "consumer":
+            return self._login_id
+        inst = self.installation or {}
+        for key in ("EjendomNr", "Ejendomnr", "ForbrugerNr"):
+            val = inst.get(key)
+            if val is not None and str(val).strip():
+                return str(val).strip()
+        raise EforsyningError("E|Forsyning returnerede intet ejendomsnummer for installationen")
+
     def _consumer_query(self) -> str:
         inst = self.installation or {}
+        ej = quote(self._ejendom_nr(), safe="")
         return (
-            f"&unr={self._username}&anr={inst.get('AktivNr', 1)}"
+            f"&unr={ej}&anr={inst.get('AktivNr', 1)}"
             f"&inr={inst.get('InstallationNr', 1)}"
         )
 
@@ -603,27 +650,28 @@ class EforsyningClient:
         return self._api
 
     async def async_login(self) -> None:
-        if not self._username or not self._password:
-            raise EforsyningLoginError("Forbrugernummer og webpinkode skal udfyldes")
+        if not self._login_id or not self._password:
+            raise EforsyningLoginError("Forbrugernummer/e-mail og kode skal udfyldes")
         if not self._api:
             await self.async_get_app_server()
+        encoded_user = quote(self._login_id, safe="@._+-")
         tok = await self._request(
             "GET",
-            f"{self._api}system/getsecuritytoken/project/app/consumer/{self._username}",
+            f"{self._api}system/getsecuritytoken/project/app/{self._login_kind}/{encoded_user}",
             what="getsecuritytoken",
         )
         server_token = str((tok or {}).get("Token") or "")
         if not server_token:
-            raise EforsyningLoginError("E|Forsyning afviste forbrugernummeret")
+            raise EforsyningLoginError("E|Forsyning afviste forbrugernummer/e-mail")
         self._access = access_token_for(self._password, server_token)
         res = await self._request(
             "GET",
-            f"{self._api}system/login/project/app/consumer/{self._username}/installation/1/id/{self._access}",
+            f"{self._api}system/login/project/app/{self._login_kind}/{encoded_user}/installation/1/id/{self._access}",
             what="login",
         )
         if (res or {}).get("Result") != 1:
             self._access = ""
-            raise EforsyningLoginError("E|Forsyning afviste forbrugernummer/webpinkode")
+            raise EforsyningLoginError("E|Forsyning afviste forbrugernummer/e-mail eller kode")
 
     def discard_credentials(self) -> None:
         self._access = ""
@@ -651,7 +699,16 @@ class EforsyningClient:
         chosen = installs[0]
         if self._configured_installation:
             chosen = next(
-                (i for i in installs if str(i.get("InstallationNr")) == self._configured_installation),
+                (
+                    i
+                    for i in installs
+                    if installation_option_id(i, include_ejendom=True)
+                    == self._configured_installation
+                    or (
+                        i.get("InstallationNr") is not None
+                        and str(i.get("InstallationNr")) == self._configured_installation
+                    )
+                ),
                 chosen,
             )
         self.installation = chosen
@@ -667,7 +724,7 @@ class EforsyningClient:
     async def _async_get_forbrug(self, year: int, flt: str) -> dict[str, Any]:
         inst = self.installation or {}
         body = {
-            "Ejendomnr": self._username,
+            "Ejendomnr": self._ejendom_nr(),
             "AktivNr": str(inst.get("AktivNr", 1)),
             "I_Nr": str(inst.get("InstallationNr", 1)),
             "AarsMaerke": year,
@@ -700,6 +757,7 @@ class EforsyningClient:
         """Login and fetch daily readings for the current (+ previous) billing year."""
         await self.async_login()
         await self.async_get_installations()
+        self._ejendom_nr()
         marker = await self.async_get_year_marker()
         try:
             latest = int(marker.get("aarsmaerke"))

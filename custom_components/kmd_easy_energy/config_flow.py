@@ -35,7 +35,9 @@ from .api.eforsyning_client import (
     EforsyningLoginError,
     async_fetch_eforsyning_directory,
     async_resolve_supplier_input,
+    installation_option_id,
     is_uuid,
+    normalize_eforsyning_login,
 )
 from .api.wattson_client import (
     PkceLogin,
@@ -190,9 +192,14 @@ def _watts_device_label(dev: dict[str, Any]) -> str:
 
 
 def eforsyning_unique_id(supplier_id: str, username: str) -> str:
-    """One entry per supplier + forbrugernummer, without storing the number in clear."""
-    digest = hashlib.sha256(f"{supplier_id.strip().lower()}|{username.strip()}".encode()).hexdigest()
+    """One entry per supplier + login, without storing the username in clear."""
+    _, norm_user = normalize_eforsyning_login(username)
+    digest = hashlib.sha256(f"{supplier_id.strip().lower()}|{norm_user}".encode()).hexdigest()
     return f"eforsyning:{supplier_id.strip().lower()}:{digest[:12]}"
+
+
+def _has_duplicate_installation_nr(installs: list[dict[str, Any]]) -> bool:
+    return len(installs) > 1 and len({str(i.get("InstallationNr")) for i in installs}) < len(installs)
 
 
 async def async_validate_eforsyning(
@@ -639,13 +646,14 @@ class KMDEasyEnergyConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     async def async_step_eforsyning(
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
-        """E|Forsyning: forbrugernummer + webpinkode instead of MitID."""
+        """E|Forsyning: forbrugernummer/webpinkode or e-mail/password instead of MitID."""
         errors: dict[str, str] = {}
         u = self._selected_utility
         known_supplier = str(u.get("eforsyning_supplier_id") or "").strip()
 
         if user_input is not None:
-            username = str(user_input.get(CONF_EF_USERNAME) or "").strip()
+            raw_username = str(user_input.get(CONF_EF_USERNAME) or "").strip()
+            _, username = normalize_eforsyning_login(raw_username)
             password = str(user_input.get(CONF_EF_PASSWORD) or "")
             raw_supplier = (
                 known_supplier or str(user_input.get(CONF_EF_SUPPLIER_ID) or "").strip()
@@ -745,8 +753,12 @@ class KMDEasyEnergyConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         if user_input is not None:
             self._ef_pending[CONF_EF_INSTALLATION_ID] = str(user_input[CONF_EF_INSTALLATION_ID])
             return self._create_eforsyning_entry()
+        dup_inr = _has_duplicate_installation_nr(self._ef_installations)
         options = [
-            SelectOptionDict(value=str(i.get("InstallationNr")), label=_installation_label(i))
+            SelectOptionDict(
+                value=installation_option_id(i, include_ejendom=dup_inr),
+                label=_installation_label(i),
+            )
             for i in self._ef_installations
         ]
         return self.async_show_form(
@@ -1042,12 +1054,13 @@ class KMDEasyEnergyConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     async def async_step_reconfigure_eforsyning(
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
-        """Change forbrugernummer / webpinkode / forsyningid (empty pinkode = keep)."""
+        """Change forbrugernummer / e-mail / password / forsyningid (empty password = keep)."""
         errors: dict[str, str] = {}
         entry = self._get_reconfigure_entry()
         data = dict(entry.data)
         if user_input is not None:
-            username = str(user_input.get(CONF_EF_USERNAME) or "").strip()
+            raw_username = str(user_input.get(CONF_EF_USERNAME) or "").strip()
+            _, username = normalize_eforsyning_login(raw_username)
             password = str(user_input.get(CONF_EF_PASSWORD) or "") or str(
                 data.get(CONF_EF_PASSWORD) or ""
             )
@@ -1068,7 +1081,9 @@ class KMDEasyEnergyConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         errors[CONF_EF_SUPPLIER_ID] = "eforsyning_supplier_lookup_failed"
             if not errors:
                 try:
-                    await async_validate_eforsyning(self.hass, username, password, supplier_id)
+                    installs = await async_validate_eforsyning(
+                        self.hass, username, password, supplier_id
+                    )
                 except EforsyningLoginError:
                     errors["base"] = "invalid_auth"
                 except EforsyningError:
@@ -1077,13 +1092,20 @@ class KMDEasyEnergyConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     _LOGGER.exception("Unexpected E|Forsyning error during reconfigure")
                     errors["base"] = "unknown"
                 else:
+                    updates: dict[str, Any] = {
+                        CONF_EF_USERNAME: username,
+                        CONF_EF_PASSWORD: password,
+                        CONF_EF_SUPPLIER_ID: supplier_id,
+                    }
+                    if (
+                        len(installs) == 1
+                        and installs[0].get("InstallationNr") is not None
+                        and not data.get(CONF_EF_INSTALLATION_ID)
+                    ):
+                        updates[CONF_EF_INSTALLATION_ID] = str(installs[0]["InstallationNr"])
                     return self.async_update_reload_and_abort(
                         entry,
-                        data_updates={
-                            CONF_EF_USERNAME: username,
-                            CONF_EF_PASSWORD: password,
-                            CONF_EF_SUPPLIER_ID: supplier_id,
-                        },
+                        data_updates=updates,
                     )
         schema = vol.Schema(
             {

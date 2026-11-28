@@ -837,10 +837,10 @@ def test_bundled_utilities_json_all_69_have_tariffs_and_spot_checks() -> None:
     from kmd_easy_energy.tariff import load_utilities
 
     utilities = load_utilities()
-    assert len(utilities) == 73
+    assert len(utilities) == 74
     with_tariffs = [u for u in utilities if u.get("tariffs")]
-    assert len(with_tariffs) == len(utilities) == 73
-    assert len({u["id"] for u in utilities}) == 73
+    assert len(with_tariffs) == len(utilities) == 74
+    assert len({u["id"] for u in utilities}) == 74
 
     backends = {}
     for u in utilities:
@@ -849,7 +849,7 @@ def test_bundled_utilities_json_all_69_have_tariffs_and_spot_checks() -> None:
         for t in u["tariffs"]:
             assert t["price_dkk_per_kwh"] > 0, u["id"]
             assert str(t.get("source", "")).startswith("https://"), u["id"]
-    assert backends == {"kmd": 17, "eforsyning": 52, "wattson": 4}
+    assert backends == {"kmd": 17, "eforsyning": 53, "wattson": 4}
 
     by_id = {u["id"]: u for u in utilities}
     assert "hoje-taastrup-fjernvarme" not in by_id
@@ -2108,3 +2108,60 @@ def test_hornslet_gladsaxe_and_norfors_confirmed_tariffs_and_matching() -> None:
         utilities=utilities,
     )
     assert r_norfors_27.price_dkk_per_kwh == 0.99384
+
+
+def test_holme_lundshoj_fjernvarme_confirmed_2026_2027_and_custom_matching() -> None:
+    from kmd_easy_energy.tariff import load_utilities, match_utility_for_entry
+
+    utilities = load_utilities()
+    by_id = {u["id"]: u for u in utilities}
+    holme = by_id["holme-lundshoj-fjernvarme"]
+    assert holme["status"] == "confirmed"
+    assert holme["tier"] == "confirmed"
+    assert holme["eforsyning_supplier_id"] == "A9427320-591C-4FA4-9D05-30D223C17CB5"
+    assert holme["portal_url"] == "https://eforsyning.dk/hl-fjernvarme-lundshoej/"
+
+    by_supplier = match_utility_for_entry(
+        {
+            "utility_id": "eforsyning-custom",
+            "eforsyning_supplier_id": "a9427320-591c-4fa4-9d05-30d223c17cb5",
+            "portal_url": "https://eforsyning.dk/",
+        },
+        utilities,
+    )
+    assert by_supplier is not None and by_supplier["id"] == "holme-lundshoj-fjernvarme"
+
+    by_portal = match_utility_for_entry(
+        {
+            "utility_id": "eforsyning-custom",
+            "portal_url": "https://eforsyning.dk/hl-fjernvarme-lundshoej",
+        },
+        utilities,
+    )
+    assert by_portal is not None and by_portal["id"] == "holme-lundshoj-fjernvarme"
+
+    r_26 = resolve_tariff(
+        _entry(
+            data={
+                "utility_id": "eforsyning-custom",
+                "portal_url": "https://eforsyning.dk/hl-fjernvarme-lundshoej/",
+            },
+        ),
+        today=date(2026, 11, 28),
+        utilities=utilities,
+    )
+    assert r_26.utility_id == "holme-lundshoj-fjernvarme"
+    assert r_26.price_dkk_per_kwh == 0.91375
+    assert r_26.fixed_fee_dkk_per_m2_year == 20.0
+    assert r_26.suggested_fixed_fee_dkk_per_year == 200.0
+    assert r_26.motivation_dkk_per_kwh_per_k is None
+    assert r_26.motivation_pct_per_k is None
+
+    r_27 = resolve_tariff(
+        _entry(data={"utility_id": "holme-lundshoj-fjernvarme"}),
+        today=date(2027, 2, 1),
+        utilities=utilities,
+    )
+    assert r_27.price_dkk_per_kwh == 0.96625
+    assert r_27.fixed_fee_dkk_per_m2_year == 20.0
+    assert r_27.suggested_fixed_fee_dkk_per_year == 200.0

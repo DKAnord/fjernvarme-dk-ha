@@ -1508,6 +1508,42 @@
       ]
     },
     {
+      "id": "holme-lundshoj-fjernvarme",
+      "name": "Holme Lundshøj Fjernvarme amba",
+      "city": "Højbjerg",
+      "portal_url": "https://eforsyning.dk/hl-fjernvarme-lundshoej/",
+      "status": "confirmed",
+      "tier": "confirmed",
+      "auth_method": "Forbrugernummer + webpinkode",
+      "backend": "eforsyning",
+      "eforsyning_supplier_id": "A9427320-591C-4FA4-9D05-30D223C17CB5",
+      "latitude": 56.114,
+      "longitude": 10.176,
+      "notes": "E|Forsyning (bekræftet live via issue #73 af @sorentorp — kWh, m³ og °C). forsyningid og AppServerUri (https://apiapp.dff-edb.dk/holmelundshoj/) bekræftet live via GetVaerkSettings; login med forbrugernummer + webpinkode eller e-mail + adgangskode; daglige aflæsninger. Prisblad 2026: 913,75 kr./MWh inkl. moms (0,91375 kr./kWh), effektbidrag 20,00 kr./m²/år, abonnementsbidrag 200,00 kr./år (1,5–2,5 m³ alm. bolig/lejlighed) samt afkølingstillæg 6,70 kr./°C/MWh inkl. moms ved årsafkøling (ΔT) under 30 °C. Pr. 1. januar 2027 stiger forbrugsbidraget til 966,25 kr./MWh inkl. moms (0,96625 kr./kWh) med uændret effekt- og abonnementsbidrag.",
+      "tariffs": [
+        {
+          "year": 2026,
+          "effective_from": "2026-01-01",
+          "price_dkk_per_kwh": 0.91375,
+          "price_dkk_per_m3": null,
+          "fixed_fee_dkk_per_m2_year": 20.0,
+          "fixed_fee_dkk_per_year": 200.0,
+          "source": "https://hl-fjernvarme.dk/p/Holme%20Lundsh%C3%B8j%20Fjernvarme/Priser/Prisblad-HLF-2026.pdf",
+          "source_note": "Prisblad 2026 (Holme-Lundshøj Fjernvarme AMBA, gældende pr. 01.01.2026, inkl. moms): Forbrugspris 731,00 ekskl. / 913,75 kr./MWh inkl. moms (0,91375 kr./kWh). Årligt effektbidrag 16,00 ekskl. / 20,00 kr./m²/år inkl. moms. Årligt abonnementsbidrag (1,5–2,5 m³ alm. bolig og lejlighed) 160,00 ekskl. / 200,00 kr./år inkl. moms (mindre erhverv 2,5–10 m³: 2.500,00 kr./år; større erhverv 10–60 m³: 3.250,00 kr./år). Betaling for dårlig afkøling (kun straf på årsafkøling ΔT): 5,36 ekskl. / 6,70 kr./°C/MWh inkl. moms ved gennemsnitlig afkøling under 30 °C pr. år."
+        },
+        {
+          "year": 2027,
+          "effective_from": "2027-01-01",
+          "price_dkk_per_kwh": 0.96625,
+          "price_dkk_per_m3": null,
+          "fixed_fee_dkk_per_m2_year": 20.0,
+          "fixed_fee_dkk_per_year": 200.0,
+          "source": "https://hl-fjernvarme.dk/nyheder/varsling-fjernvarmepriser-2027",
+          "source_note": "Varsling fjernvarmepriser 2027 (Holme-Lundshøj Fjernvarme AMBA, gældende pr. 01.01.2027, inkl. moms): Forbrugsbidrag stiger fra 913,75 til 966,25 kr./MWh inkl. moms (773,00 ekskl. / 0,96625 kr./kWh inkl. moms). Effektbidrag (20,00 kr./m²/år) og abonnementsbidrag (200,00 kr./år for alm. bolig/lejlighed) er uændrede. Afkølingstillæg (årsafkøling ΔT under 30 °C): 6,70 kr./°C/MWh inkl. moms."
+        }
+      ]
+    },
+    {
       "id": "aalestrup-norager-energi",
       "name": "Aalestrup-Nørager Energi a.m.b.a.",
       "city": "Aalestrup / Nørager",

@@ -2,6 +2,12 @@
 
 Alle væsentlige ændringer i **Dansk Fjernvarme** (tidligere *Fjernvarme (KMD Easy Energy)*) dokumenteres her.
 
+## [1.3.25] - 2026-11-28
+
+### Tilføjet & Bekræftet
+- **Holme Lundshøj Fjernvarme amba tilføjet og bekræftet live + 2026/2027-takster ([issue #73](https://github.com/DKAnord/fjernvarme-dk-ha/issues/73), tak til `@sorentorp`):** Tilføjet som dedikeret ✅ **Bekræftet** E|Forsyning-værk (`holme-lundshoj-fjernvarme`, `forsyningId: A9427320-591C-4FA4-9D05-30D223C17CB5`, `https://eforsyning.dk/hl-fjernvarme-lundshoej/`, verificeret med `kWh`, `m³` og `°C`, inkl. automatisk opgradering fra `eforsyning-custom` — nu **38** live-bekræftede værker og **74/74** forudfyldte værker) med officielle takster inkl. moms: 2026 (`0,91375 kr./kWh` / `913,75 kr./MWh`), 2027 fra `2027-01-01` (`0,96625 kr./kWh` / `966,25 kr./MWh`), fast effektbidrag `20,00 kr./m²/år` samt abonnementsbidrag `200,00 kr./år` (alm. bolig/lejlighed 1,5–2,5 m³; ΔT-baseret afkølingstillæg på `6,70 kr./°C/MWh` under `30 °C` årsafkøling er dokumenteret i værknoten).
+- **Kortressource:** Opdateret cache-busting ressource-URL til `/kmd_easy_energy/kmd-easy-energy-card.js?v=1.3.25`.
+
 ## [1.3.24] - 2026-11-28
 
 ### Forbedret

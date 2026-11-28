@@ -1570,6 +1570,42 @@
       ]
     },
     {
+      "id": "hadsten-varmevaerk",
+      "name": "Hadsten Varmeværk a.m.b.a.",
+      "city": "Hadsten",
+      "portal_url": "https://eforsyning.dk/hadstenvarme/",
+      "status": "confirmed",
+      "tier": "confirmed",
+      "auth_method": "Forbrugernummer + webpinkode",
+      "backend": "eforsyning",
+      "eforsyning_supplier_id": "E75C66C7-CAEB-40E3-A0C3-AA7D5FF9940F",
+      "latitude": 56.328,
+      "longitude": 10.049,
+      "notes": "E|Forsyning (bekræftet live via issue #76 af @clausn78 — kWh, m³ og °C). forsyningid og AppServerUri (https://apiapp.dff-edb.dk/hadsten/) bekræftet live via GetVaerkSettings; login med forbrugernummer + webpinkode eller e-mail + adgangskode; daglige aflæsninger. Takstblad 2026 (inkl. moms): forbrugsbidrag 737,50 kr./MWh (0,7375 kr./kWh), m²-bidrag 25,00 kr./m²/år og abonnementbidrag 1.250,00 kr./år (50 % på abonnement og m²-bidrag ved byggeri efter BR20; grønt omstillingsbidrag i Hadbjerg +10,00 kr./m²/år 2024–2044 og i Selling +25,00 kr./m²/år 2025–2045). Afkølingstarif (kun straf på årsopgørelsen): 3,02 ekskl. / 3,78 kr./MWh/°C inkl. moms ved gennemsnitlig afkøling (ΔT) under 26 °C. Pr. 1. januar 2027 stiger forbrugsbidraget til 826,25 kr./MWh inkl. moms (0,82625 kr./kWh) med uændrede faste bidrag.",
+      "tariffs": [
+        {
+          "year": 2026,
+          "effective_from": "2026-01-01",
+          "price_dkk_per_kwh": 0.7375,
+          "price_dkk_per_m3": null,
+          "fixed_fee_dkk_per_m2_year": 25.0,
+          "fixed_fee_dkk_per_year": 1250.0,
+          "source": "https://hadstenvarme.dk/p/Hadsten%20Varmev%C3%A6rk/Filer/Priser/Tarifblad-2026.pdf",
+          "source_note": "Takstblad 2026 (Hadsten Varmeværk a.m.b.a., gældende fra 01.01.2026, inkl. moms): Forbrugsbidrag 590,00 ekskl. / 737,50 kr./MWh inkl. moms (0,7375 kr./kWh). M²-bidrag 20,00 ekskl. / 25,00 kr./m²/år inkl. moms og abonnementbidrag 1.000,00 ekskl. / 1.250,00 kr./år inkl. moms (ved byggeri efter BR20 betales 50 % af abonnementbidrag og m²-bidrag; grønt omstillingsbidrag i Hadbjerg +8,00 ekskl. / 10,00 kr./m²/år 01.01.2024–01.01.2044 og i Selling +20,00 ekskl. / 25,00 kr./m²/år 01.01.2025–01.01.2045). Afkølingstarif (kun straf på årsopgørelsen ved gennemsnitlig ΔT under 26 °C): 3,02 ekskl. / 3,78 kr./MWh/°C inkl. moms."
+        },
+        {
+          "year": 2027,
+          "effective_from": "2027-01-01",
+          "price_dkk_per_kwh": 0.82625,
+          "price_dkk_per_m3": null,
+          "fixed_fee_dkk_per_m2_year": 25.0,
+          "fixed_fee_dkk_per_year": 1250.0,
+          "source": "https://hadstenvarme.dk/nyheder/varsling-af-prisstigning-i-2027",
+          "source_note": "Varsling af prisstigning i 2027 (Hadsten Varmeværk a.m.b.a., gældende pr. 01.01.2027, inkl. moms): Forbrugsbidraget stiger fra 737,50 til 826,25 kr./MWh inkl. moms (661,00 ekskl. / 0,82625 kr./kWh inkl. moms). Faste bidrag (25,00 kr./m²/år og 1.250,00 kr./år inkl. moms) er uændrede (bekræftet af værkets officielle 2027-eksempler: 13,4 MWh × 88,75 kr. = 1.189,25 kr. og 7,8 MWh × 88,75 kr. = 692,25 kr.)."
+        }
+      ]
+    },
+    {
       "id": "aalestrup-norager-energi",
       "name": "Aalestrup-Nørager Energi a.m.b.a.",
       "city": "Aalestrup / Nørager",

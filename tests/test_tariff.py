@@ -837,10 +837,10 @@ def test_bundled_utilities_json_all_69_have_tariffs_and_spot_checks() -> None:
     from kmd_easy_energy.tariff import load_utilities
 
     utilities = load_utilities()
-    assert len(utilities) == 75
+    assert len(utilities) == 76
     with_tariffs = [u for u in utilities if u.get("tariffs")]
-    assert len(with_tariffs) == len(utilities) == 75
-    assert len({u["id"] for u in utilities}) == 75
+    assert len(with_tariffs) == len(utilities) == 76
+    assert len({u["id"] for u in utilities}) == 76
 
     backends = {}
     for u in utilities:
@@ -849,7 +849,7 @@ def test_bundled_utilities_json_all_69_have_tariffs_and_spot_checks() -> None:
         for t in u["tariffs"]:
             assert t["price_dkk_per_kwh"] > 0, u["id"]
             assert str(t.get("source", "")).startswith("https://"), u["id"]
-    assert backends == {"kmd": 17, "eforsyning": 54, "wattson": 4}
+    assert backends == {"kmd": 17, "eforsyning": 55, "wattson": 4}
 
     by_id = {u["id"]: u for u in utilities}
     assert "hoje-taastrup-fjernvarme" not in by_id
@@ -2213,3 +2213,66 @@ def test_losning_fjernvarme_confirmed_2026_and_custom_matching() -> None:
     assert r_26.suggested_fixed_fee_dkk_per_year == 562.5
     assert r_26.motivation_dkk_per_kwh_per_k is None
     assert r_26.motivation_pct_per_k is None
+
+
+def test_hadsten_varmevaerk_confirmed_2026_2027_and_custom_matching() -> None:
+    from kmd_easy_energy.tariff import load_utilities, match_utility_for_entry
+
+    utilities = load_utilities()
+    by_id = {u["id"]: u for u in utilities}
+    hadsten = by_id["hadsten-varmevaerk"]
+    assert hadsten["status"] == "confirmed"
+    assert hadsten["tier"] == "confirmed"
+    assert hadsten["eforsyning_supplier_id"] == "E75C66C7-CAEB-40E3-A0C3-AA7D5FF9940F"
+    assert hadsten["portal_url"] == "https://eforsyning.dk/hadstenvarme/"
+
+    by_supplier = match_utility_for_entry(
+        {
+            "utility_id": "eforsyning-custom",
+            "eforsyning_supplier_id": "e75c66c7-caeb-40e3-a0c3-aa7d5ff9940f",
+            "portal_url": "https://eforsyning.dk/",
+        },
+        utilities,
+    )
+    assert by_supplier is not None and by_supplier["id"] == "hadsten-varmevaerk"
+
+    by_portal = match_utility_for_entry(
+        {
+            "utility_id": "eforsyning-custom",
+            "portal_url": "https://eforsyning.dk/hadstenvarme",
+        },
+        utilities,
+    )
+    assert by_portal is not None and by_portal["id"] == "hadsten-varmevaerk"
+
+    r_26 = resolve_tariff(
+        _entry(
+            data={
+                "utility_id": "eforsyning-custom",
+                "portal_url": "https://eforsyning.dk/hadstenvarme/",
+            },
+        ),
+        today=date(2026, 11, 28),
+        utilities=utilities,
+    )
+    assert r_26.utility_id == "hadsten-varmevaerk"
+    assert r_26.price_dkk_per_kwh == 0.7375
+    assert r_26.fixed_fee_dkk_per_m2_year == 25.0
+    assert r_26.suggested_fixed_fee_dkk_per_year == 1250.0
+    assert r_26.motivation_dkk_per_kwh_per_k is None
+    assert r_26.motivation_pct_per_k is None
+
+    r_27 = resolve_tariff(
+        _entry(
+            data={
+                "utility_id": "eforsyning-custom",
+                "portal_url": "https://eforsyning.dk/hadstenvarme/",
+            },
+        ),
+        today=date(2027, 1, 15),
+        utilities=utilities,
+    )
+    assert r_27.utility_id == "hadsten-varmevaerk"
+    assert r_27.price_dkk_per_kwh == 0.82625
+    assert r_27.fixed_fee_dkk_per_m2_year == 25.0
+    assert r_27.suggested_fixed_fee_dkk_per_year == 1250.0

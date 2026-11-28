@@ -2,6 +2,12 @@
 
 Alle væsentlige ændringer i **Dansk Fjernvarme** (tidligere *Fjernvarme (KMD Easy Energy)*) dokumenteres her.
 
+## [1.3.27] - 2026-11-28
+
+### Tilføjet & Bekræftet
+- **Hadsten Varmeværk a.m.b.a. tilføjet og bekræftet live + 2026/2027-takster ([issue #76](https://github.com/DKAnord/fjernvarme-dk-ha/issues/76), tak til `@clausn78`):** Tilføjet som dedikeret ✅ **Bekræftet** E|Forsyning-værk (`hadsten-varmevaerk`, `forsyningId: E75C66C7-CAEB-40E3-A0C3-AA7D5FF9940F`, `https://eforsyning.dk/hadstenvarme/`, verificeret med `kWh`, `m³` og `°C`, inkl. automatisk opgradering fra `eforsyning-custom` — nu **40** live-bekræftede værker og **76/76** forudfyldte værker) med officielle takster inkl. moms: 2026 (`0,7375 kr./kWh` / `737,50 kr./MWh`), 2027 fra `2027-01-01` (`0,82625 kr./kWh` / `826,25 kr./MWh`), årligt m²-bidrag `25,00 kr./m²/år` og abonnementbidrag `1.250,00 kr./år` (BR20-halvering, grønt omstillingsbidrag for Hadbjerg/Selling samt ΔT-afkølingstarif på `3,78 kr./MWh/°C` under `26 °C` er dokumenteret i værknoten).
+- **Kortressource:** Opdateret cache-busting ressource-URL til `/kmd_easy_energy/kmd-easy-energy-card.js?v=1.3.27`.
+
 ## [1.3.26] - 2026-11-28
 
 ### Tilføjet & Bekræftet

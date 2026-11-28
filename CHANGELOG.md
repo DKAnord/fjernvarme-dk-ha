@@ -2,6 +2,14 @@
 
 Alle væsentlige ændringer i **Dansk Fjernvarme** (tidligere *Fjernvarme (KMD Easy Energy)*) dokumenteres her.
 
+## [1.3.24] - 2026-11-28
+
+### Forbedret
+- **Mere robust Watts On PKCE-login (`state`-cache på tværs af dialoger & DevTools-hærdning):**
+  - Kortlivet in-memory PKCE `state`-cache i `hass.data` (maks. 16 ventende states, 30 min TTL, engangsbrug, aldrig på disk eller i log), så `msauth://`-redirectet stadig godkendes med den rigtige `code_verifier`, hvis brugeren lukker og genåbner Home Assistant-dialogen, åbner login-linket mere end én gang, eller skifter mellem mobil og PC.
+  - Beskyttelse mod genafspilning af allerede brugte engangskoder (`used_codes` SHA-256 i RAM), mens et aktivt login-`state` bevares i cachen ved fejlet kodebytte, så et nyt loginforsøg i samme åbne fane lykkes.
+  - Hærdet `parse_redirect` mod linjeskift/tabs fra DevTools Response Headers (`\r`/`\t`) samt afkortede Console-kopier med `…`, og opdaterede danske/engelske fejltekster med tydelig henvisning til at rulle op til punkt 1 samt cache-busting ressource-URL `/kmd_easy_energy/kmd-easy-energy-card.js?v=1.3.24`.
+
 ## [1.3.23] - 2026-11-28
 
 ### Forbedret

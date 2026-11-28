@@ -139,6 +139,36 @@ def new_login() -> PkceLogin:
     return PkceLogin(verifier=verifier, state=state, url=f"{WATTS_AUTHORIZE_URL}?{query}")
 
 
+def parse_redirect(pasted: str) -> tuple[str, str]:
+    """Extract ``(code, state)`` from a pasted ``msauth://...?code=...&state=...`` URL.
+
+    Accepts the full URL, just the query string, a Chrome console line
+    ("Failed to launch 'msauth://...' because ..."), or a multi-line DevTools
+    Response Headers copy. Raises WattsOnAuthError with a short reason
+    ("no_code", "b2c_error").
+    """
+    text = (pasted or "").strip().strip("'\"<>")
+    if "msauth://" in text:
+        text = text[text.index("msauth://") :]
+        for stop in ("'", '"', " ", "\r", "\n", "\t"):
+            if stop in text:
+                text = text.split(stop, 1)[0]
+    else:
+        for stop in ("\r", "\n", "\t"):
+            if stop in text:
+                text = text.split(stop, 1)[0]
+        text = text.strip().strip("'\"<>")
+    query = urlparse(text).query if "?" in text else text.lstrip("?#")
+    params = parse_qs(query)
+    if params.get("error"):
+        raise WattsOnAuthError("b2c_error")
+    code = (params.get("code") or [""])[0].strip()
+    state = (params.get("state") or [""])[0].strip()
+    if not code or "\u2026" in code or "\u2026" in state:
+        raise WattsOnAuthError("no_code")
+    return code, state
+
+
 def code_from_redirect(pasted: str, expected_state: str | None) -> str:
     """Extract ``code`` from the pasted ``msauth://...?code=...&state=...`` URL.
 
@@ -146,20 +176,7 @@ def code_from_redirect(pasted: str, expected_state: str | None) -> str:
     ("Failed to launch 'msauth://...' because ..."). Raises WattsOnAuthError
     with a short reason ("no_code", "state_mismatch", "b2c_error").
     """
-    text = (pasted or "").strip().strip("'\"<>")
-    if "msauth://" in text:
-        text = text[text.index("msauth://") :]
-        for stop in ("'", '"', " ", "\n"):
-            if stop in text:
-                text = text.split(stop, 1)[0]
-    query = urlparse(text).query if "?" in text else text.lstrip("?#")
-    params = parse_qs(query)
-    if params.get("error"):
-        raise WattsOnAuthError("b2c_error")
-    code = (params.get("code") or [""])[0].strip()
-    if not code:
-        raise WattsOnAuthError("no_code")
-    state = (params.get("state") or [""])[0]
+    code, state = parse_redirect(pasted)
     if expected_state and state and state != expected_state:
         raise WattsOnAuthError("state_mismatch")
     return code

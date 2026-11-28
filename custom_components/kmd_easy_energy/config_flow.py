@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import time
 from pathlib import Path
 from typing import Any
 
@@ -45,8 +46,8 @@ from .api.wattson_client import (
     WattsOnClient,
     WattsOnError,
     async_exchange_code,
-    code_from_redirect,
     new_login,
+    parse_redirect,
 )
 
 from .const import (
@@ -175,6 +176,9 @@ def utility_backend(u: dict[str, Any] | None) -> str:
 
 
 CONF_WATTS_REDIRECT_URL = "wattson_redirect_url"
+_WATTS_PKCE_DATA_KEY = f"{DOMAIN}_wattson_pkce"
+_WATTS_PKCE_TTL_SECONDS = 1800.0
+_WATTS_PKCE_MAX_PENDING = 16
 
 
 def wattson_unique_id(user_id: str) -> str:
@@ -392,6 +396,7 @@ class KMDEasyEnergyConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self._ef_candidates: list[dict[str, str]] = []
         self._ef_manual_creds: dict[str, Any] | None = None
         self._watts_login: PkceLogin | None = None
+        self._watts_local_pkce_store: dict[str, dict[str, Any]] = {"pending": {}, "used_codes": {}}
         self._watts_pending: dict[str, Any] = {}
         self._watts_devices: list[dict[str, Any]] = []
 
@@ -788,9 +793,57 @@ class KMDEasyEnergyConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     # ------------------------------------------------------------------
     # Watts On: browser login, paste the msauth:// redirect
     # ------------------------------------------------------------------
+    def _watts_pkce_store(self) -> dict[str, dict[str, Any]]:
+        """Short-lived in-memory cache of active Watts On PKCE states & used codes."""
+        hass_data = getattr(self.hass, "data", None)
+        if isinstance(hass_data, dict):
+            store = hass_data.get(_WATTS_PKCE_DATA_KEY)
+            if not isinstance(store, dict):
+                store = {"pending": {}, "used_codes": {}}
+                hass_data[_WATTS_PKCE_DATA_KEY] = store
+            else:
+                store.setdefault("pending", {})
+                store.setdefault("used_codes", {})
+            return store
+        return self._watts_local_pkce_store
+
+    def _prune_watts_pkce_store(self, store: dict[str, dict[str, Any]]) -> None:
+        now = time.monotonic()
+        pending = store["pending"]
+        expired_states = [
+            st
+            for st, item in pending.items()
+            if now - float(item.get("created_at", 0.0)) >= _WATTS_PKCE_TTL_SECONDS
+        ]
+        for st in expired_states:
+            pending.pop(st, None)
+        while len(pending) > _WATTS_PKCE_MAX_PENDING:
+            oldest_state = min(pending, key=lambda st: float(pending[st].get("created_at", 0.0)))
+            pending.pop(oldest_state, None)
+
+        used_codes = store["used_codes"]
+        expired_codes = [
+            digest
+            for digest, ts in used_codes.items()
+            if now - float(ts) >= _WATTS_PKCE_TTL_SECONDS
+        ]
+        for digest in expired_codes:
+            used_codes.pop(digest, None)
+        while len(used_codes) > _WATTS_PKCE_MAX_PENDING * 2:
+            oldest_digest = min(used_codes, key=lambda d: float(used_codes[d]))
+            used_codes.pop(oldest_digest, None)
+
     def _watts_form_login(self) -> PkceLogin:
-        if self._watts_login is None:
-            self._watts_login = new_login()
+        store = self._watts_pkce_store()
+        self._prune_watts_pkce_store(store)
+        if self._watts_login is None or self._watts_login.state not in store["pending"]:
+            login = new_login()
+            self._watts_login = login
+            store["pending"][login.state] = {
+                "login": login,
+                "created_at": time.monotonic(),
+            }
+            self._prune_watts_pkce_store(store)
         return self._watts_login
 
     async def _async_watts_login(
@@ -805,20 +858,38 @@ class KMDEasyEnergyConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         pasted = str(user_input.get(CONF_WATTS_REDIRECT_URL) or "").strip()
         token = str(user_input.get(CONF_WATTS_REFRESH_TOKEN) or "").strip()
         expires: str | None = None
-        login = self._watts_form_login()
+        current_login = self._watts_form_login()
+        store = self._watts_pkce_store()
+        matched_login = current_login
         try:
             if pasted:
                 try:
-                    code = code_from_redirect(pasted, login.state)
+                    code, state = parse_redirect(pasted)
                 except WattsOnAuthError as err:
+                    if str(err) == "b2c_error":
+                        self._watts_login = None
                     return None, [], None, {
                         "no_code": "wattson_no_code",
                         "state_mismatch": "wattson_state_mismatch",
                         "b2c_error": "wattson_login_cancelled",
                     }.get(str(err), "wattson_no_code")
-                # The code is single-use: a fresh login link is made after any attempt.
+                if state:
+                    pending_item = store["pending"].get(state)
+                    if pending_item is None:
+                        return None, [], None, "wattson_state_mismatch"
+                    matched_login = pending_item["login"]
+                else:
+                    matched_login = current_login
+                code_digest = hashlib.sha256(code.encode("utf-8")).hexdigest()
+                if code_digest in store["used_codes"]:
+                    self._watts_login = None
+                    return None, [], None, "wattson_code_rejected"
+                store["used_codes"][code_digest] = time.monotonic()
+                # The code is single-use: rotate the form's login link on any
+                # attempt, while keeping matched_login.state in pending until
+                # completion/TTL in case the user logs in again in the open tab.
                 self._watts_login = None
-                tokens = await async_exchange_code(session, code, login.verifier)
+                tokens = await async_exchange_code(session, code, matched_login.verifier)
                 expires = tokens.get("refresh_expires_at")
                 client = WattsOnClient(
                     session,
@@ -839,6 +910,8 @@ class KMDEasyEnergyConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         except Exception:  # noqa: BLE001
             _LOGGER.exception("Unexpected Watts On error during login")
             return None, [], None, "unknown"
+        if pasted:
+            store["pending"].pop(matched_login.state, None)
         return client, devices, expires, None
 
     def _watts_schema(self) -> vol.Schema:

@@ -32,6 +32,7 @@ from kmd_easy_energy.api.wattson_client import (
     code_from_redirect,
     new_login,
     parse_heat_items,
+    parse_redirect,
 )
 from kmd_easy_energy.capabilities import effective_capabilities, entity_capabilities
 from kmd_easy_energy.wattson_mapping import apply_wattson_data
@@ -61,10 +62,13 @@ def test_login_url_is_pkce_s256_for_the_watts_app_registration() -> None:
         "msauth://com.seasnve.watts/fsJnZjQxAH1FUDb0pBECue0g650%3D?state=S1&code=abc123",
         "Failed to launch 'msauth://com.seasnve.watts/x?code=abc123&state=S1' because the scheme does not have a registered handler.",
         "  code=abc123&state=S1 ",
+        "location: msauth://com.seasnve.watts/x?state=S1&code=abc123\r\nstrict-transport-security: max-age=31536000",
+        "location\tmsauth://com.seasnve.watts/x?code=abc123&state=S1\tcontent-length\t0",
     ],
 )
 def test_code_from_redirect_accepts_url_console_line_and_query(pasted: str) -> None:
     assert code_from_redirect(pasted, "S1") == "abc123"
+    assert parse_redirect(pasted) == ("abc123", "S1")
 
 
 @pytest.mark.parametrize(
@@ -72,6 +76,8 @@ def test_code_from_redirect_accepts_url_console_line_and_query(pasted: str) -> N
     [
         ("msauth://com.seasnve.watts/x?state=S1", "no_code"),
         ("https://example.invalid/", "no_code"),
+        ("msauth://com.seasnve.watts/x?state=S1&code=abc\u2026xyz", "no_code"),
+        ("msauth://com.seasnve.watts/x?code=abc&state=S1\u2026", "no_code"),
         ("msauth://com.seasnve.watts/x?code=abc&state=OTHER", "state_mismatch"),
         ("msauth://com.seasnve.watts/x?error=access_denied&error_description=AADB2C90091", "b2c_error"),
     ],
@@ -781,6 +787,97 @@ async def test_flow_wattson_new_link_after_failed_code_exchange() -> None:
     ):
         res = await flow.async_step_wattson({"wattson_redirect_url": "msauth://x?code=a"})
     assert res["description_placeholders"]["auth_url"] != first
+
+
+@pytest.mark.asyncio
+async def test_flow_wattson_accepts_prior_state_across_reopened_dialogs() -> None:
+    from kmd_easy_energy.config_flow import _WATTS_PKCE_DATA_KEY
+    from kmd_easy_energy.const import DOMAIN
+
+    hass = SimpleNamespace(data={})
+    flow1 = _flow()
+    flow1.hass = hass
+    form1 = await flow1.async_step_wattson()
+    url1 = form1["description_placeholders"]["auth_url"]
+    state1 = parse_qs(urlparse(url1).query)["state"][0]
+    challenge1 = parse_qs(urlparse(url1).query)["code_challenge"][0]
+
+    # User closes/reopens dialog (or switches device) -> new flow instance on same hass
+    flow2 = _flow()
+    flow2.hass = hass
+    form2 = await flow2.async_step_wattson()
+    state2 = parse_qs(urlparse(form2["description_placeholders"]["auth_url"]).query)["state"][0]
+    assert state2 != state1
+
+    session = fx.FakeSession({"oauth2/v2.0/token": fx.token_body(fx.REFRESH_1)})
+    with patch("kmd_easy_energy.config_flow.async_get_clientsession", return_value=session):
+        res = await flow2.async_step_wattson(
+            {"wattson_redirect_url": f"msauth://com.seasnve.watts/x?code=c0de&state={state1}"}
+        )
+    assert res["type"] == "create_entry"
+    exchange = [c for c in session.calls if c["method"] == "POST"][0]["data"]
+    expected_challenge = (
+        base64.urlsafe_b64encode(hashlib.sha256(exchange["code_verifier"].encode()).digest())
+        .rstrip(b"=")
+        .decode()
+    )
+    assert expected_challenge == challenge1
+    assert state1 not in hass.data[_WATTS_PKCE_DATA_KEY]["pending"]
+    assert DOMAIN not in hass.data
+
+
+@pytest.mark.asyncio
+async def test_flow_wattson_same_tab_retry_and_replay_protection() -> None:
+    hass = SimpleNamespace(data={})
+    flow = _flow()
+    flow.hass = hass
+    form1 = await flow.async_step_wattson()
+    state1 = parse_qs(urlparse(form1["description_placeholders"]["auth_url"]).query)["state"][0]
+
+    # First submit fails token exchange (400) -> rotates form link, keeps state1 in cache
+    fail_session = fx.FakeSession({"oauth2/v2.0/token": (400, {})})
+    with patch("kmd_easy_energy.config_flow.async_get_clientsession", return_value=fail_session):
+        res1 = await flow.async_step_wattson(
+            {"wattson_redirect_url": f"msauth://com.seasnve.watts/x?code=bad1&state={state1}"}
+        )
+    assert res1["type"] == "form" and res1["errors"]["base"] == "wattson_code_rejected"
+    state2 = parse_qs(urlparse(res1["description_placeholders"]["auth_url"]).query)["state"][0]
+    assert state2 != state1
+
+    # Resubmitting the exact same code is blocked immediately without hitting the token endpoint
+    replay_session = fx.FakeSession({"oauth2/v2.0/token": fx.token_body(fx.REFRESH_1)})
+    with patch("kmd_easy_energy.config_flow.async_get_clientsession", return_value=replay_session):
+        res2 = await flow.async_step_wattson(
+            {"wattson_redirect_url": f"msauth://com.seasnve.watts/x?code=bad1&state={state1}"}
+        )
+    assert res2["type"] == "form" and res2["errors"]["base"] == "wattson_code_rejected"
+    assert replay_session.calls == []
+
+    # Fresh code obtained in the already-open state1 tab still succeeds
+    ok_session = fx.FakeSession({"oauth2/v2.0/token": fx.token_body(fx.REFRESH_1)})
+    with patch("kmd_easy_energy.config_flow.async_get_clientsession", return_value=ok_session):
+        res3 = await flow.async_step_wattson(
+            {"wattson_redirect_url": f"msauth://com.seasnve.watts/x?code=fresh2&state={state1}"}
+        )
+    assert res3["type"] == "create_entry"
+
+
+@pytest.mark.asyncio
+async def test_flow_wattson_prunes_expired_pkce_state() -> None:
+    from kmd_easy_energy.config_flow import _WATTS_PKCE_DATA_KEY, _WATTS_PKCE_TTL_SECONDS
+
+    hass = SimpleNamespace(data={})
+    flow = _flow()
+    flow.hass = hass
+    form1 = await flow.async_step_wattson()
+    state1 = parse_qs(urlparse(form1["description_placeholders"]["auth_url"]).query)["state"][0]
+
+    hass.data[_WATTS_PKCE_DATA_KEY]["pending"][state1]["created_at"] -= _WATTS_PKCE_TTL_SECONDS + 1.0
+    with patch("kmd_easy_energy.config_flow.async_get_clientsession", return_value=fx.FakeSession()):
+        res = await flow.async_step_wattson(
+            {"wattson_redirect_url": f"msauth://com.seasnve.watts/x?code=c0de&state={state1}"}
+        )
+    assert res["type"] == "form" and res["errors"]["base"] == "wattson_state_mismatch"
 
 
 @pytest.mark.asyncio

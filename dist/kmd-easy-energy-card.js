@@ -3,7 +3,7 @@
  * Zero external dependencies, Shadow DOM, responsive, interactive tooltips, DA/EN i18n.
  */
 (() => {
-  const VER = "1.4.3";
+  const VER = "1.4.4";
   const MONTHS = ["Jan", "Feb", "Mar", "Apr", "Maj", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Dec"];
   const DAYS_IN_MONTH = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
   const isLeapYear = (y) => (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0;
@@ -80,7 +80,7 @@
     { id: "galten-varmevaerk", name: "Galten Varmeværk", city: "Galten", url: "https://minvarme.kredslob.dk/", status: "pending_test" },
     { id: "energi-ikast", name: "Energi Ikast", city: "Ikast", url: "https://energi-ikast.dk/", status: "confirmed" },
     { id: "struer-energi", name: "Struer Energi", city: "Struer", url: "https://struerenergi.dk/selvbetjening/", status: "pending_test" },
-    { id: "envafors", name: "Envafors / SK Forsyning", city: "Slagelse / Korsør", url: "https://www.envafors.dk/slagelse/selvbetjening/min-side", status: "pending_test" },
+    { id: "envafors", name: "Envafors / SK Forsyning", city: "Slagelse / Korsør", url: "https://www.envafors.dk/slagelse/selvbetjening/min-side", status: "confirmed" },
     { id: "frederikshavn-forsyning", name: "Frederikshavn Forsyning", city: "Frederikshavn", url: "https://www.forsyningen.dk/selvbetjening", status: "confirmed" },
     { id: "vestforsyning", name: "Vestforsyning", city: "Holstebro", url: "https://www.vestforsyning.dk/selvbetjening/", status: "confirmed" },
     { id: "beof", name: "Bornholms Energi & Forsyning", city: "Bornholm", url: "https://minforsyning.beof.dk/", status: "confirmed" },
@@ -129,6 +129,7 @@
     { id: "skanderborg-horning-fjernvarme", name: "Skanderborg-Hørning Fjernvarme", city: "Skanderborg / Hørning", url: "https://eforsyning.dk/skanderborghorning/", status: "confirmed", backend: "eforsyning" },
     { id: "helsinge-fjernvarme", name: "Helsinge Fjernvarme a.m.b.a.", city: "Helsinge", url: "https://eforsyning.dk/helsingefjernvarme/", status: "confirmed", backend: "eforsyning" },
     { id: "praestoe-fjernvarme", name: "Præstø Fjernvarme a.m.b.a.", city: "Præstø", url: "https://eforsyning.dk/praestoe-fjernvarme/", status: "confirmed", backend: "eforsyning" },
+    { id: "vraa-varmevaerk", name: "Vrå Varmeværk a.m.b.a.", city: "Vrå", url: "https://eforsyning.dk/vraa-varmevaerk/", status: "confirmed", backend: "eforsyning" },
     { id: "hjorring-varmeforsyning", name: "Hjørring Varmeforsyning", city: "Hjørring", url: "https://eforsyning.dk/hjvarme/", status: "pending_test", backend: "eforsyning" },
     { id: "aalborg-forsyning", name: "Aalborg Forsyning", city: "Aalborg", url: "https://aalborgforsyning.dk/services/forbrug/watts-on/", status: "confirmed", backend: "wattson" },
     { id: "fjernvarme-fyn", name: "Fjernvarme Fyn", city: "Odense / Fyn", url: "https://www.fjernvarmefyn.dk/spar-paa-energien/overblik/watts-on-app/", status: "confirmed", backend: "wattson" },

@@ -837,10 +837,10 @@ def test_bundled_utilities_json_all_69_have_tariffs_and_spot_checks() -> None:
     from kmd_easy_energy.tariff import load_utilities
 
     utilities = load_utilities()
-    assert len(utilities) == 80
+    assert len(utilities) == 81
     with_tariffs = [u for u in utilities if u.get("tariffs")]
-    assert len(with_tariffs) == len(utilities) == 80
-    assert len({u["id"] for u in utilities}) == 80
+    assert len(with_tariffs) == len(utilities) == 81
+    assert len({u["id"] for u in utilities}) == 81
 
     backends = {}
     for u in utilities:
@@ -849,11 +849,13 @@ def test_bundled_utilities_json_all_69_have_tariffs_and_spot_checks() -> None:
         for t in u["tariffs"]:
             assert t["price_dkk_per_kwh"] > 0, u["id"]
             assert str(t.get("source", "")).startswith("https://"), u["id"]
-    assert backends == {"kmd": 18, "eforsyning": 58, "wattson": 4}
+    assert backends == {"kmd": 18, "eforsyning": 59, "wattson": 4}
 
     by_id = {u["id"]: u for u in utilities}
     assert "hoje-taastrup-fjernvarme" not in by_id
     assert by_id["envafors"]["portal_url"] == "https://www.envafors.dk/slagelse/selvbetjening/min-side"
+    assert by_id["envafors"]["status"] == "confirmed"
+    assert by_id["envafors"]["tier"] == "confirmed"
 
     # nykobing-sj migrated from kmd candidate to verified eforsyning
     ny = by_id["nykobing-sj"]
@@ -2626,3 +2628,54 @@ def test_praestoe_fjernvarme_confirmed_2026_and_custom_matching() -> None:
     assert r_26.motivation_pct_per_k == 1.0
     assert r_26.motivation_bonus is True
     assert r_26.motivation_dkk_per_kwh_per_k == 0.007462
+
+
+def test_vraa_varmevaerk_confirmed_2026_and_custom_matching() -> None:
+    from kmd_easy_energy.tariff import load_utilities, match_utility_for_entry
+
+    utilities = load_utilities()
+    by_id = {u["id"]: u for u in utilities}
+    vraa = by_id["vraa-varmevaerk"]
+    assert vraa["status"] == "confirmed"
+    assert vraa["tier"] == "confirmed"
+    assert vraa["eforsyning_supplier_id"] == "84B22C9D-D752-48EF-B675-C6BCF6942D46"
+    assert vraa["portal_url"] == "https://eforsyning.dk/vraa-varmevaerk/"
+
+    by_supplier = match_utility_for_entry(
+        {
+            "utility_id": "eforsyning-custom",
+            "eforsyning_supplier_id": "84b22c9d-d752-48ef-b675-c6bcf6942d46",
+            "portal_url": "https://eforsyning.dk/",
+        },
+        utilities,
+    )
+    assert by_supplier is not None and by_supplier["id"] == "vraa-varmevaerk"
+
+    by_portal = match_utility_for_entry(
+        {
+            "utility_id": "eforsyning-custom",
+            "portal_url": "https://eforsyning.dk/vraa-varmevaerk",
+        },
+        utilities,
+    )
+    assert by_portal is not None and by_portal["id"] == "vraa-varmevaerk"
+
+    r_26 = resolve_tariff(
+        _entry(
+            data={
+                "utility_id": "eforsyning-custom",
+                "portal_url": "https://eforsyning.dk/vraa-varmevaerk/",
+            },
+        ),
+        today=date(2026, 11, 28),
+        utilities=utilities,
+    )
+    assert r_26.utility_id == "vraa-varmevaerk"
+    assert r_26.price_dkk_per_kwh == 0.68125
+    assert r_26.fixed_fee_dkk_per_m2_year == 28.75
+    assert r_26.suggested_fixed_fee_dkk_per_year == 2062.5
+    assert r_26.bonus_temp == 27.0
+    assert r_26.penalty_temp == 35.0
+    assert r_26.motivation_pct_per_k == 1.5
+    assert r_26.motivation_bonus is True
+    assert r_26.motivation_dkk_per_kwh_per_k == 0.010219

@@ -166,13 +166,13 @@
       "name": "Envafors / SK Forsyning",
       "city": "Slagelse / Korsør",
       "portal_url": "https://www.envafors.dk/slagelse/selvbetjening/min-side",
-      "status": "pending_test",
-      "tier": "verified_portal",
+      "status": "confirmed",
+      "tier": "confirmed",
       "auth_method": "MitID",
       "backend": "kmd",
       "latitude": 55.403,
       "longitude": 11.354,
-      "notes": "Min Forsyning 2 (minforsyning-2.kmd.dk, plant 984) via Envafors / SK Varme A/S for fjernvarme i Slagelse og Korsør (Næstved og Sorø forsynes af separate fjernvarmeværker på E|Forsyning).",
+      "notes": "Min Forsyning 2 (minforsyning-2.kmd.dk, plant 984) via Envafors / SK Varme A/S for fjernvarme i Slagelse og Korsør (Næstved og Sorø forsynes af separate fjernvarmeværker på E|Forsyning). Bekræftet live via issue #91 af @kristianvh med lokalt MitID (Pure-HA SRP + OIDC PKCE) og MWh/m³-måling (direct_temp_unit: false).",
       "tariffs": [
         {
           "year": 2026,
@@ -1859,6 +1859,35 @@
           "fixed_fee_dkk_per_year": 1500.0,
           "source": "https://praestoe-fjernvarme.dk/p/Pr%C3%A6st%C3%B8%20Fjernvarme/Takstblade/Takstblad-2026.pdf",
           "source_note": "Takstblad 2026 (Præstø Fjernvarme a.m.b.a., gældende 01-01-2026 til 31-12-2026): Forbrugsafgift 597,00 kr./MWh ekskl. moms / 746,25 kr./MWh inkl. moms (0,74625 kr./kWh). Faste afgifter: rumafgift (rumfangsbaseret, ikke m²) 12,00 ekskl. / 15,00 kr./m³ tilsluttet rum/år inkl. moms og målerleje 1.200,00 ekskl. / 1.500,00 kr./år inkl. moms. Motivation/kompensation for afkøling på årlig gennemsnitlig returtemperatur: neutralområde 35 °C ± 2 °C (33–37 °C), bonus -1 %/°C under 33 °C og afgift +1 %/°C over 37 °C."
+        }
+      ]
+    },
+    {
+      "id": "vraa-varmevaerk",
+      "name": "Vrå Varmeværk a.m.b.a.",
+      "city": "Vrå",
+      "portal_url": "https://eforsyning.dk/vraa-varmevaerk/",
+      "status": "confirmed",
+      "tier": "confirmed",
+      "auth_method": "Forbrugernummer + webpinkode",
+      "backend": "eforsyning",
+      "eforsyning_supplier_id": "84B22C9D-D752-48EF-B675-C6BCF6942D46",
+      "latitude": 57.354,
+      "longitude": 9.941,
+      "notes": "E|Forsyning (bekræftet live via issue #89 af @AndreasBu — kWh, m³ og °C, ingen direkte temperaturmåler). forsyningid og AppServerUri (https://apiapp.dff-edb.dk/vraa/) bekræftet live via GetVaerkSettings; login med forbrugernummer + webpinkode eller e-mail + adgangskode; daglige aflæsninger. Prisblad 2026 (gældende fra 01.09.2026 til 31.12.2026, inkl. moms): forbrugsafgift 681,25 kr./MWh (0,68125 kr./kWh), arealbidrag 28,75 kr./m²/år (private maks. 180 m²) og abonnementsbidrag 2.062,50 kr./år. Motivationstarif: ±1,5 %/°C ved afvigelse fra neutralt returtemperatur-område 27,0–35,0 °C ved fremløb >= 63 °C (stiger +0,44 °C pr. °C lavere fremløb ned til 32,72–40,72 °C ved 50 °C).",
+      "tariffs": [
+        {
+          "year": 2026,
+          "effective_from": "2026-09-01",
+          "price_dkk_per_kwh": 0.68125,
+          "price_dkk_per_m3": null,
+          "fixed_fee_dkk_per_m2_year": 28.75,
+          "fixed_fee_dkk_per_year": 2062.5,
+          "bonus_temp": 27.0,
+          "penalty_temp": 35.0,
+          "motivation_pct_per_k": 1.5,
+          "source": "https://vraa-varmevaerk.dk/p/Vr%C3%A5%20Varmev%C3%A6rk/Filer/Priser/VV-Prisblad-2026_V3_010926.pdf",
+          "source_note": "Prisblad 2026 V3 (Vrå Varmeværk A.m.b.a., gældende 01-09-2026 til 31-12-2026): Forbrugsafgift 545,00 kr./MWh ekskl. moms / 681,25 kr./MWh inkl. moms (0,68125 kr./kWh). Arealbidrag: 23,00 ekskl. / 28,75 kr./m²/år inkl. moms (private maks. 180 m², øvrige maks. 10.000 m²). Abonnementsbidrag: 1.650,00 ekskl. / 2.062,50 kr./år inkl. moms. Motivationstarif: ±1,5 %/°C af det variable forbrugsbidrag ved afvigelse fra neutralt returtemperaturområde 27,0–35,0 °C ved fremløb >= 63 °C (+0,44 °C pr. °C lavere fremløb ned til 32,72–40,72 °C ved 50 °C; bonus under nedre grænse og tillæg over øvre grænse)."
         }
       ]
     },

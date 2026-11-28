@@ -2,6 +2,12 @@
 
 Alle væsentlige ændringer i **Dansk Fjernvarme** (tidligere *Fjernvarme (KMD Easy Energy)*) dokumenteres her.
 
+## [1.4.1] - 2026-11-28
+
+### Bekræftet
+- **Fors A/S (Roskilde) bekræftet live ([issue #84](https://github.com/DKAnord/fjernvarme-dk-ha/issues/84), tak til `@hm0hr`):** Opgraderet fra 🧪 **Afventer 1. test** til ✅ **Bekræftet** KMD Easy Energy-værk (`fors-roskilde`, `https://www.fors.dk/login/`, verificeret live med lokalt MitID og `MWh`-måling — nu **45** live-bekræftede værker og **78/78** forudfyldte værker med officielle 2026/2027-takster).
+- **Kortressource:** Opdateret cache-busting ressource-URL til `/kmd_easy_energy/kmd-easy-energy-card.js?v=1.4.1`.
+
 ## [1.4.0] - 2026-11-28
 
 ### Bekræftet & Tilføjet

@@ -742,6 +742,10 @@ def test_utilities_json_backend_field_and_hjorring() -> None:
     assert nyborg["backend"] == "kmd"
     assert nyborg["status"] == "confirmed"
     assert nyborg["tier"] == "confirmed"
+    fors = by_id["fors-roskilde"]
+    assert fors["backend"] == "kmd"
+    assert fors["status"] == "confirmed"
+    assert fors["tier"] == "confirmed"
     for uid in eforsyning:
         u = by_id[uid]
         assert is_uuid(u["eforsyning_supplier_id"]), uid

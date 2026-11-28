@@ -609,13 +609,13 @@
         "https://www.fors.dk/",
         "https://fors.dk/login/min-side/"
       ],
-      "status": "pending_test",
-      "tier": "verified_portal",
+      "status": "confirmed",
+      "tier": "confirmed",
       "auth_method": "MitID",
       "backend": "kmd",
       "latitude": 55.6415,
       "longitude": 12.0803,
-      "notes": "KMD Easy Energy plugin (easy-energy-plugin-settings.kmd.dk, client 640E33BC-0DA6-4507-9659-85759E83613D, utility 0626000) verificeret teknisk mod NemLog-in; afventer 1. live-brugertest med MitID. Officielle 2026-takster for Roskilde indbygget; kunder i Fors' øvrige fjernvarmeområder kan overstyre kWh- og m²-pris under ⚙️ (2026 inkl. moms: Holbæk Have/Kalvehave 0,83031 kr./kWh + 40,00 kr./m²/år, Jyderup 0,7932 kr./kWh + 40,00 kr./m²/år, St. Merløse 0,93518 kr./kWh + 40,00 kr./m²/år; alle 625,00 kr./år i målerabonnement).",
+      "notes": "KMD Easy Energy plugin (easy-energy-plugin-settings.kmd.dk, client 640E33BC-0DA6-4507-9659-85759E83613D, utility 0626000). Bekræftet live i issue #84 af @hm0hr med lokalt MitID (MWh omregnes automatisk til kWh). Officielle 2026-takster for Roskilde indbygget; kunder i Fors' øvrige fjernvarmeområder kan overstyre kWh- og m²-pris under ⚙️ (2026 inkl. moms: Holbæk Have/Kalvehave 0,83031 kr./kWh + 40,00 kr./m²/år, Jyderup 0,7932 kr./kWh + 40,00 kr./m²/år, St. Merløse 0,93518 kr./kWh + 40,00 kr./m²/år; alle 625,00 kr./år i målerabonnement).",
       "tariffs": [
         {
           "year": 2026,

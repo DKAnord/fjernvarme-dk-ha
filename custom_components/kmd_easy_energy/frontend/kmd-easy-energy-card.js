@@ -3,7 +3,7 @@
  * Zero external dependencies, Shadow DOM, responsive, interactive tooltips, DA/EN i18n.
  */
 (() => {
-  const VER = "1.4.0";
+  const VER = "1.4.1";
   const MONTHS = ["Jan", "Feb", "Mar", "Apr", "Maj", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Dec"];
   const DAYS_IN_MONTH = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
   const isLeapYear = (y) => (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0;
@@ -93,7 +93,7 @@
     { id: "halsnaes-forsyning", name: "Halsnæs Forsyning", city: "Frederiksværk / Halsnæs", url: "https://hnf.dk/selvbetjening/", status: "pending_test" },
     { id: "kerteminde-forsyning", name: "Kerteminde Forsyning", city: "Kerteminde", url: "https://www.kertemindeforsyning.dk/minforsyning-forbrugsapp", status: "pending_test" },
     { id: "nyborg-forsyning", name: "Nyborg Forsyning & Service", city: "Nyborg", url: "https://minforsyning-2.kmd.dk/?plant=120&utility=0&plus=True", status: "confirmed" },
-    { id: "fors-roskilde", name: "Fors A/S (Roskilde)", city: "Roskilde / Holbæk", url: "https://www.fors.dk/login/", status: "pending_test" },
+    { id: "fors-roskilde", name: "Fors A/S (Roskilde)", city: "Roskilde / Holbæk", url: "https://www.fors.dk/login/", status: "confirmed" },
     { id: "nykobing-sj", name: "Nykøbing Sjælland Varmeværk", city: "Odsherred", url: "https://eforsyning.dk/nsfv/", status: "pending_test", backend: "eforsyning" },
     { id: "forsyning-helsingor", name: "Forsyning Helsingør", city: "Helsingør", url: "https://www.fh.dk/watts", status: "pending_test", backend: "wattson" },
     { id: "soroe-fjernvarme", name: "Sorø Fjernvarme", city: "Sorø", url: "https://eforsyning.dk/soroe/", status: "confirmed", backend: "eforsyning" },

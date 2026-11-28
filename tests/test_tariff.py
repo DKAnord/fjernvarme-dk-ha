@@ -2446,8 +2446,8 @@ def test_fors_roskilde_2026_tariff_curve_asymmetric_motivation_and_custom_matchi
     by_id = {u["id"]: u for u in utilities}
 
     fors = by_id["fors-roskilde"]
-    assert fors["status"] == "pending_test"
-    assert fors["tier"] == "verified_portal"
+    assert fors["status"] == "confirmed"
+    assert fors["tier"] == "confirmed"
     assert fors["backend"] == "kmd"
     assert fors["portal_url"] == "https://www.fors.dk/login/"
 

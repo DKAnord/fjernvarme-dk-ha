@@ -292,7 +292,7 @@ async function run() {
   await flush();
 
   const html3 = card3.shadowRoot.innerHTML;
-  assert.strictEqual(card3._attrs["data-kmd-card-version"], "1.4.0", "sets version attribute");
+  assert.strictEqual(card3._attrs["data-kmd-card-version"], "1.4.1", "sets version attribute");
   assert.strictEqual(wsCalls.length, 2, "issues hour and day WS queries");
   assert.ok(html3.includes("cols-3"), "3-column layout active");
   const d2Parts = day2Ymd.split("-");

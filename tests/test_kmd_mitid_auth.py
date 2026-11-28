@@ -593,3 +593,42 @@ def test_discovery_ignores_invalid_urls_with_whitespace() -> None:
     cfg = _auth_with(with_mf2)._discover_oidc_config("https://www.nfs.as/min-forsyning/")
     assert cfg["utility_code"] == "0120000"
     assert cfg["client_id"] == MF2_CLIENT
+
+
+def test_fors_root_url_follows_login_path_to_plugin_js() -> None:
+    fors_cid = "640E33BC-0DA6-4507-9659-85759E83613D"
+    fors_js_url = "https://easy-energy-plugin-settings.kmd.dk/plugin/js/640e33bc-0da6-4507-9659-85759e83613d"
+    session = FakeSession(
+        {
+            "https://www.fors.dk/login/": FakeResp(
+                status_code=200,
+                text=f'<html><body><script src="{fors_js_url}"></script></body></html>',
+                url="https://www.fors.dk/login/",
+            ),
+            "https://www.fors.dk/": FakeResp(
+                status_code=200,
+                text='<html><body><a href="/login/">Min side</a></body></html>',
+                url="https://www.fors.dk/",
+            ),
+            fors_js_url: FakeResp(
+                status_code=200,
+                text=(
+                    f'OIDCClientId:"{fors_cid}",'
+                    'OIDCRedirectUri:"https://fors.dk/login/min-side/",'
+                    'OIDCPostLogoutRedirectUri:"https://fors.dk/login/"'
+                ),
+                url=fors_js_url,
+            ),
+            f"https://easy-energy-plugin-api.kmd.dk/api/settings/plugins/client/{fors_cid}": FakeResp(
+                status_code=200,
+                text="{}",
+                url=f"https://easy-energy-plugin-api.kmd.dk/api/settings/plugins/client/{fors_cid}",
+                _json={"PlantNumber": 626, "UtilityNumber": 0},
+            ),
+        }
+    )
+    cfg = _auth_with(session)._discover_oidc_config("https://www.fors.dk/")
+    assert cfg["client_id"] == fors_cid
+    assert cfg["utility_code"] == "0626000"
+    assert cfg["login_type"] == "plugin"
+    assert cfg["redirect_uri"] == "https://fors.dk/login/min-side/"

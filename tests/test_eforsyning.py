@@ -566,6 +566,8 @@ def test_utilities_json_backend_field_and_hjorring() -> None:
         "losning-fjernvarme",
         "hadsten-varmevaerk",
         "auning-varmevaerk",
+        "haderslev-fjernvarme",
+        "skanderborg-horning-fjernvarme",
         "gladsaxe-fjernvarme",
         "aalestrup-norager-energi",
         "greve-fjernvarme",
@@ -708,6 +710,16 @@ def test_utilities_json_backend_field_and_hjorring() -> None:
     assert auning["tier"] == "confirmed"
     assert auning["eforsyning_supplier_id"] == "1E4C4A1C-8846-44E6-8563-9513710E9E3D"
     assert auning["portal_url"] == "https://eforsyning.dk/auningvarme/"
+    haderslev = by_id["haderslev-fjernvarme"]
+    assert haderslev["status"] == "confirmed"
+    assert haderslev["tier"] == "confirmed"
+    assert haderslev["eforsyning_supplier_id"] == "C3FF9A98-84EC-42F7-A7B0-44B1B24F8ACF"
+    assert haderslev["portal_url"] == "https://eforsyning.dk/haderslev-fjernvarme/"
+    skanderborg = by_id["skanderborg-horning-fjernvarme"]
+    assert skanderborg["status"] == "confirmed"
+    assert skanderborg["tier"] == "confirmed"
+    assert skanderborg["eforsyning_supplier_id"] == "FB91926E-E079-470A-B4AA-CD7A42A233D8"
+    assert skanderborg["portal_url"] == "https://eforsyning.dk/skanderborghorning/"
     gladsaxe = by_id["gladsaxe-fjernvarme"]
     assert gladsaxe["status"] == "confirmed"
     assert gladsaxe["tier"] == "confirmed"

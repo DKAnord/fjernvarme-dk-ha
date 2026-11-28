@@ -837,10 +837,10 @@ def test_bundled_utilities_json_all_69_have_tariffs_and_spot_checks() -> None:
     from kmd_easy_energy.tariff import load_utilities
 
     utilities = load_utilities()
-    assert len(utilities) == 77
+    assert len(utilities) == 78
     with_tariffs = [u for u in utilities if u.get("tariffs")]
-    assert len(with_tariffs) == len(utilities) == 77
-    assert len({u["id"] for u in utilities}) == 77
+    assert len(with_tariffs) == len(utilities) == 78
+    assert len({u["id"] for u in utilities}) == 78
 
     backends = {}
     for u in utilities:
@@ -849,7 +849,7 @@ def test_bundled_utilities_json_all_69_have_tariffs_and_spot_checks() -> None:
         for t in u["tariffs"]:
             assert t["price_dkk_per_kwh"] > 0, u["id"]
             assert str(t.get("source", "")).startswith("https://"), u["id"]
-    assert backends == {"kmd": 17, "eforsyning": 56, "wattson": 4}
+    assert backends == {"kmd": 18, "eforsyning": 56, "wattson": 4}
 
     by_id = {u["id"]: u for u in utilities}
     assert "hoje-taastrup-fjernvarme" not in by_id
@@ -2324,3 +2324,206 @@ def test_auning_varmevaerk_confirmed_2026_and_custom_matching() -> None:
     assert r_26.suggested_fixed_fee_dkk_per_year == 2000.0
     assert r_26.motivation_dkk_per_kwh_per_k is None
     assert r_26.motivation_pct_per_k is None
+
+
+def test_haderslev_and_skanderborg_horning_confirmed_2026_2027_and_custom_matching() -> None:
+    from kmd_easy_energy.tariff import load_utilities, match_utility_for_entry
+
+    utilities = load_utilities()
+    by_id = {u["id"]: u for u in utilities}
+
+    haderslev = by_id["haderslev-fjernvarme"]
+    assert haderslev["status"] == "confirmed"
+    assert haderslev["tier"] == "confirmed"
+    assert haderslev["eforsyning_supplier_id"] == "C3FF9A98-84EC-42F7-A7B0-44B1B24F8ACF"
+    assert haderslev["portal_url"] == "https://eforsyning.dk/haderslev-fjernvarme/"
+
+    by_supplier_h = match_utility_for_entry(
+        {
+            "utility_id": "eforsyning-custom",
+            "eforsyning_supplier_id": "c3ff9a98-84ec-42f7-a7b0-44b1b24f8acf",
+            "portal_url": "https://eforsyning.dk/",
+        },
+        utilities,
+    )
+    assert by_supplier_h is not None and by_supplier_h["id"] == "haderslev-fjernvarme"
+
+    by_portal_h = match_utility_for_entry(
+        {
+            "utility_id": "eforsyning-custom",
+            "portal_url": "https://eforsyning.dk/haderslev-fjernvarme",
+        },
+        utilities,
+    )
+    assert by_portal_h is not None and by_portal_h["id"] == "haderslev-fjernvarme"
+
+    h_26 = resolve_tariff(
+        _entry(
+            data={
+                "utility_id": "eforsyning-custom",
+                "portal_url": "https://eforsyning.dk/haderslev-fjernvarme/",
+            },
+        ),
+        today=date(2026, 11, 28),
+        utilities=utilities,
+    )
+    assert h_26.utility_id == "haderslev-fjernvarme"
+    assert h_26.price_dkk_per_kwh == 0.66575
+    assert h_26.fixed_fee_dkk_per_m2_year == 16.5
+    assert h_26.suggested_fixed_fee_dkk_per_year == 992.5
+    assert h_26.motivation_pct_per_k == 1.0
+    assert h_26.bonus_temp == 30.0
+    assert h_26.penalty_temp == 35.0
+
+    h_27 = resolve_tariff(
+        _entry(data={"utility_id": "haderslev-fjernvarme"}),
+        today=date(2027, 2, 1),
+        utilities=utilities,
+    )
+    assert h_27.price_dkk_per_kwh == 0.68
+    assert h_27.fixed_fee_dkk_per_m2_year == 16.5
+    assert h_27.suggested_fixed_fee_dkk_per_year == 992.5
+
+    skanderborg = by_id["skanderborg-horning-fjernvarme"]
+    assert skanderborg["status"] == "confirmed"
+    assert skanderborg["tier"] == "confirmed"
+    assert skanderborg["eforsyning_supplier_id"] == "FB91926E-E079-470A-B4AA-CD7A42A233D8"
+    assert skanderborg["portal_url"] == "https://eforsyning.dk/skanderborghorning/"
+
+    by_supplier_s = match_utility_for_entry(
+        {
+            "utility_id": "eforsyning-custom",
+            "eforsyning_supplier_id": "fb91926e-e079-470a-b4aa-cd7a42a233d8",
+            "portal_url": "https://eforsyning.dk/",
+        },
+        utilities,
+    )
+    assert by_supplier_s is not None and by_supplier_s["id"] == "skanderborg-horning-fjernvarme"
+
+    by_portal_s = match_utility_for_entry(
+        {
+            "utility_id": "eforsyning-custom",
+            "portal_url": "https://eforsyning.dk/skanderborghorning",
+        },
+        utilities,
+    )
+    assert by_portal_s is not None and by_portal_s["id"] == "skanderborg-horning-fjernvarme"
+
+    s_26 = resolve_tariff(
+        _entry(
+            data={
+                "utility_id": "eforsyning-custom",
+                "portal_url": "https://eforsyning.dk/skanderborghorning/",
+            },
+        ),
+        today=date(2026, 11, 28),
+        utilities=utilities,
+    )
+    assert s_26.utility_id == "skanderborg-horning-fjernvarme"
+    assert s_26.price_dkk_per_kwh == 0.5825
+    assert s_26.fixed_fee_dkk_per_m2_year == 15.0
+    assert s_26.motivation_pct_per_k == 1.0
+    assert s_26.bonus_temp == 30.0
+    assert s_26.penalty_temp == 37.0
+
+    s_27 = resolve_tariff(
+        _entry(data={"utility_id": "skanderborg-horning-fjernvarme"}),
+        today=date(2027, 2, 1),
+        utilities=utilities,
+    )
+    assert s_27.price_dkk_per_kwh == 0.597
+    assert s_27.fixed_fee_dkk_per_m2_year == 15.63
+    assert s_27.suggested_fixed_fee_dkk_per_year == 1000.0
+    assert s_27.bonus_temp == 30.0
+    assert s_27.penalty_temp == 36.0
+
+
+def test_fors_roskilde_2026_tariff_curve_asymmetric_motivation_and_custom_matching() -> None:
+    from kmd_easy_energy.insights import estimate_variable_costs
+    from kmd_easy_energy.tariff import load_utilities, match_utility_for_entry
+
+    utilities = load_utilities()
+    by_id = {u["id"]: u for u in utilities}
+
+    fors = by_id["fors-roskilde"]
+    assert fors["status"] == "pending_test"
+    assert fors["tier"] == "verified_portal"
+    assert fors["backend"] == "kmd"
+    assert fors["portal_url"] == "https://www.fors.dk/login/"
+
+    curve = fors["tariffs"][0]["expected_return_by_forward_temp"]
+    assert expected_return_from_forward_temp(55.0, curve) == 47.5
+    assert expected_return_from_forward_temp(62.0, curve) == 44.0
+    assert expected_return_from_forward_temp(70.0, curve) == 40.0
+    assert expected_return_from_forward_temp(78.0, curve) == 38.0
+    assert expected_return_from_forward_temp(85.0, curve) == 36.2
+
+    t26 = resolve_tariff(
+        _entry(data={"utility_id": "fors-roskilde"}),
+        today=date(2026, 11, 28),
+        utilities=utilities,
+    )
+    assert t26.utility_id == "fors-roskilde"
+    assert t26.price_dkk_per_kwh == 0.70409
+    assert t26.fixed_fee_dkk_per_m2_year == 38.45
+    assert t26.suggested_fixed_fee_dkk_per_year == 625.0
+    assert t26.motivation_bonus is True
+    assert t26.motivation_bonus_dkk_per_kwh_per_k == 0.00264
+    assert t26.motivation_penalty_dkk_per_kwh_per_k == 0.00529
+    assert t26.bonus_temp == 40.0
+    assert t26.penalty_temp == 40.0
+
+    t26_dyn = resolve_tariff(
+        _entry(data={"utility_id": "fors-roskilde"}),
+        today=date(2026, 11, 28),
+        utilities=utilities,
+        forward_temp=62.0,
+    )
+    assert t26_dyn.bonus_temp == 44.0
+    assert t26_dyn.penalty_temp == 44.0
+
+    bonus_est = estimate_variable_costs(
+        price_dkk_per_kwh=t26.price_dkk_per_kwh,
+        bonus_temp=t26.bonus_temp,
+        penalty_temp=t26.penalty_temp,
+        motivation_rate=t26.motivation_dkk_per_kwh_per_k,
+        bonus_rate=t26.motivation_bonus_dkk_per_kwh_per_k,
+        penalty_rate=t26.motivation_penalty_dkk_per_kwh_per_k,
+        current_return_temp=38.0,  # -2 °C * 0.00264 = -0.00528 kr./kWh
+        daily={"days": {"1": 50.0}, "latest_complete": True, "month": "Nov"},
+        monthly_cur_year={"Nov": 50.0},
+        return_temp_monthly={"Nov": 38.0},
+        today=date(2026, 11, 28),
+        allow_bonus=t26.motivation_bonus,
+    )
+    assert bonus_est["adjustment_dkk_per_kwh"] == round(-2.0 * 0.00264, 5)
+    assert bonus_est["effective_price_dkk_per_kwh"] == round(0.70409 - 2.0 * 0.00264, 4)
+
+    penalty_est = estimate_variable_costs(
+        price_dkk_per_kwh=t26.price_dkk_per_kwh,
+        bonus_temp=t26.bonus_temp,
+        penalty_temp=t26.penalty_temp,
+        motivation_rate=t26.motivation_dkk_per_kwh_per_k,
+        bonus_rate=t26.motivation_bonus_dkk_per_kwh_per_k,
+        penalty_rate=t26.motivation_penalty_dkk_per_kwh_per_k,
+        current_return_temp=42.0,  # +2 °C * 0.00529 = +0.01058 kr./kWh
+        daily={"days": {"1": 50.0}, "latest_complete": True, "month": "Nov"},
+        monthly_cur_year={"Nov": 50.0},
+        return_temp_monthly={"Nov": 42.0},
+        today=date(2026, 11, 28),
+        allow_bonus=t26.motivation_bonus,
+    )
+    assert penalty_est["adjustment_dkk_per_kwh"] == round(2.0 * 0.00529, 5)
+    assert penalty_est["effective_price_dkk_per_kwh"] == round(0.70409 + 2.0 * 0.00529, 4)
+
+    for url in (
+        "https://www.fors.dk/login/",
+        "https://fors.dk/login",
+        "https://www.fors.dk/",
+        "https://fors.dk/login/min-side/",
+    ):
+        matched = match_utility_for_entry(
+            {"utility_id": "custom", "portal_url": url},
+            utilities,
+        )
+        assert matched is not None and matched["id"] == "fors-roskilde", url

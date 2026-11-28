@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date
@@ -143,7 +144,8 @@ _GENERIC_PORTAL_URLS = {"https:", "http:", "https://eforsyning.dk", "http://efor
 
 
 def _norm_portal_url(url: Any) -> str:
-    return str(url or "").strip().rstrip("/").lower()
+    raw = str(url or "").strip().rstrip("/").lower()
+    return re.sub(r"^(https?://)www\.", r"\1", raw)
 
 
 def match_utility_for_entry(
@@ -179,7 +181,11 @@ def match_utility_for_entry(
                 u
                 for u in utilities
                 if u.get("id") not in _GENERIC_UTILITY_IDS
-                and _norm_portal_url(u.get("portal_url")) == portal_url
+                and portal_url
+                in {
+                    _norm_portal_url(u.get("portal_url")),
+                    *(_norm_portal_url(a) for a in (u.get("portal_aliases") or ())),
+                }
             ),
             None,
         )

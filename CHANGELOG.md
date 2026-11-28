@@ -2,6 +2,18 @@
 
 Alle væsentlige ændringer i **Dansk Fjernvarme** (tidligere *Fjernvarme (KMD Easy Energy)*) dokumenteres her.
 
+## [1.4.0] - 2026-11-28
+
+### Bekræftet & Tilføjet
+- **Haderslev Fjernvarme og Skanderborg-Hørning Fjernvarme bekræftet live (via Facebook — nu 44 live-bekræftede værker og 78/78 forudfyldte værker):**
+  - **Haderslev Fjernvarme** (`haderslev-fjernvarme`, `forsyningId: C3FF9A98-84EC-42F7-A7B0-44B1B24F8ACF`, `https://eforsyning.dk/haderslev-fjernvarme/`, inkl. officielle 2026/2027-takster `0,66575` / `0,68 kr./kWh` og automatisk opgradering fra `eforsyning-custom`) rykket op til ✅ **Bekræftet**.
+  - **Skanderborg-Hørning Fjernvarme** (`skanderborg-horning-fjernvarme`, `forsyningId: FB91926E-E079-470A-B4AA-CD7A42A233D8`, `https://eforsyning.dk/skanderborghorning/`, inkl. officielle 2026/2027-takster `0,5825` / `0,597 kr./kWh` og automatisk opgradering fra `eforsyning-custom`) rykket op til ✅ **Bekræftet**.
+- **Forberedt Fors A/S (Roskilde) (`fors-roskilde`) på KMD Easy Energy + officielle 2026-takster (🧪 afventer 1. live-test):** Tilføjet som forudfyldt værk på `https://www.fors.dk/login/` (KMD Easy Energy plugin `0626000` / client `640E33BC-0DA6-4507-9659-85759E83613D`, inkl. `www.`-uafhængig `portal_aliases`-opgradering fra `custom` samt udvidet OIDC-discovery på `/login` og `/min-side`) med officielle 2026-takster inkl. moms for Roskilde (`0,70409 kr./kWh` / `704,09 kr./MWh`, arealafgift `38,45 kr./m²/år`, målerabonnement `625,00 kr./år` og dynamisk fremløbsafhængig afkølingskurve `47,5 → 40,0 → 36,25 °C` med asymmetrisk bonus `-2,64` og betaling `+5,29 kr./MWh/°C`).
+
+### Valgfrit add-on-kort
+- **Bundlet valgfrit add-on-kort: `Dansk Fjernvarme: Samlet Forbrug (Valgfri add-on)` (`custom:dansk-forbrug-card` + visuel editor):** Valgfrit ekstra-kort ved siden af det primære `Dansk Fjernvarme`-dashboard (`0 YAML` via Home Assistants `recorder/statistics_during_period` WebSocket). Kombinerer brugerens `Dansk Fjernvarme`-sensor (KMD, E|Forsyning eller Watts On med capability-styret visning) med valgfri **⚡ Strøm** (`Eloverblik` m. datovisning `t.o.m. D/M` og automatisk redning fra `energy_total` + timesensorer eller live `P1` + Strømligning / Energi Data Service / Nordpool / fast pris), **🚗 Elbil-opdeling** (hus vs. elbil klippet pr. døgn) og **💧 Vand** (`Målerportal` m. automatisk `0 L/h` lækage-badge eller valgfri måler samt automatisk 2/3-kolonne layout). Indeholder desuden indbyggede detalje-popups med diskrete `‹ Tilbage`-knapper (`#dfModalBack` + bundknap), timepriser, billigste 3-timers vindue, 30-dages grafer og indlejring af det fulde Fjernvarme-kort.
+- **Kortressource:** Opdateret cache-busting ressource-URL til `/kmd_easy_energy/kmd-easy-energy-card.js?v=1.4.0`.
+
 ## [1.3.30] - 2026-11-28
 
 ### Bekræftet

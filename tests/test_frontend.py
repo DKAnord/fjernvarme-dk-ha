@@ -23,10 +23,20 @@ def test_card_uses_event_and_service() -> None:
     assert "start_mitid_sync" not in js
     assert "mitid_otp_code" not in js
     assert "mitid_qr_svg" not in js
-    assert 'VER = "1.3.30"' in js
+    assert 'VER = "1.4.0"' in js
     assert "data-kmd-card-version" in js
     # Must not guess button.<utility_id>_sync as the only path
     assert "button.${activeUtilId" not in js
+
+
+def test_dansk_forbrug_card_registered_and_clean() -> None:
+    js = CARD.read_text()
+    assert 'customElements.define("dansk-forbrug-card"' in js
+    assert 'customElements.define("dansk-forbrug-card-editor"' in js
+    assert "Valgfri add-on" in js
+    assert "recorder/statistics_during_period" in js
+    for personal in ("forbrug_overblik", "elforbrug_data", "vandpris_kr_pr_m3", "ses_ladestander", "udenfor_", "ntfy." + "sh", "192." + "168."):
+        assert personal not in js.lower()
 
 
 def test_card_keeps_upstream_peak_detection() -> None:
@@ -96,6 +106,7 @@ def test_card_cost_estimate_and_utilities_fallback() -> None:
     assert 'id: "silkeborg-forsyning"' in js and 'status: "confirmed"' in js
     assert 'id: "bronderslev-forsyning"' in js and 'id: "bronderslev-forsyning", name: "Brønderslev Forsyning", city: "Brønderslev", url: "https://www.bronderslevforsyning.dk/", status: "confirmed"' in js
     assert 'id: "nyborg-forsyning", name: "Nyborg Forsyning & Service", city: "Nyborg", url: "https://minforsyning-2.kmd.dk/?plant=120&utility=0&plus=True", status: "confirmed"' in js
+    assert 'id: "fors-roskilde", name: "Fors A/S (Roskilde)", city: "Roskilde / Holbæk", url: "https://www.fors.dk/login/", status: "pending_test"' in js
     assert 'id: "vestforbraending"' in js and 'status: "confirmed"' in js and 'backend: "eforsyning"' in js
     assert 'id: "spjald-fjernvarme"' in js and 'status: "confirmed"' in js and 'backend: "eforsyning"' in js
     assert 'id: "odder-forsyning"' in js and 'status: "confirmed"' in js and 'backend: "eforsyning"' in js
@@ -115,6 +126,8 @@ def test_card_cost_estimate_and_utilities_fallback() -> None:
     assert 'id: "losning-fjernvarme"' in js and 'status: "confirmed"' in js and 'backend: "eforsyning"' in js
     assert 'id: "hadsten-varmevaerk"' in js and 'status: "confirmed"' in js and 'backend: "eforsyning"' in js
     assert 'id: "auning-varmevaerk"' in js and 'status: "confirmed"' in js and 'backend: "eforsyning"' in js
+    assert 'id: "haderslev-fjernvarme"' in js and 'status: "confirmed"' in js and 'backend: "eforsyning"' in js
+    assert 'id: "skanderborg-horning-fjernvarme"' in js and 'status: "confirmed"' in js and 'backend: "eforsyning"' in js
     assert 'id: "fjernvarme-fyn"' in js
     assert 'id: "hillerod-forsyning"' in js
     assert 'id: "hillerod-forsyning", name: "Hillerød Forsyning", city: "Hillerød", url: "https://hfors.dk/selvbetjening/se-forbrug-regninger/watts-on-din-forbrugsapp-til-vand-varme", status: "confirmed", backend: "wattson"' in js

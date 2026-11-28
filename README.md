@@ -6,7 +6,7 @@
 Komplet, **100 % lokal** Home Assistant-integration (`kmd_easy_energy`) med **Plug-and-Play dashboard-kort** (`custom:kmd-easy-energy-card`) til danske fjernvarmeværker på **KMD Easy Energy / Min Forsyning**, **E|Forsyning** og **Watts On** — direkte på Raspberry Pi, Home Assistant OS og Docker uden Chromium eller ekstern server.
 
 > [!NOTE]
-> Officielt tilgængelig i **HACS / Home Assistant Marketplace** (`v1.3.30` — se [`CHANGELOG.md`](CHANGELOG.md) for versionshistorik). **42 værker er bekræftet live**, **alle 77** forudfyldte værker har officielle 2026/2027-takster indbygget, og over **300+ E|Forsyning-værker** kan vælges direkte fra opsætningsguiden.
+> Officielt tilgængelig i **HACS / Home Assistant Marketplace** (`v1.4.0` — se [`CHANGELOG.md`](CHANGELOG.md) for versionshistorik). **44 værker er bekræftet live**, **alle 78** forudfyldte værker har officielle 2026/2027-takster indbygget, og over **300+ E|Forsyning-værker** kan vælges direkte fra opsætningsguiden.
 
 ---
 
@@ -29,7 +29,7 @@ Komplet, **100 % lokal** Home Assistant-integration (`kmd_easy_energy`) med **Pl
 ## ✨ Hvad får du?
 
 - **📊 Rent dashboard uden tomme kort:** Kortet tilpasser sig automatisk de data, dit værk leverer — grafer, KPI'er og indsigter uden data skjules helt. Mangler varmepris, fremløbstemperatur eller boligareal til faste bidrag, vises højst én diskret note med genvej til indtastning, som nemt kan lukkes (`✕`) og gemmes pr. enhed.
-- **💰 Officielle 2026/2027-takster & årsudgift:** Alle 77 forudfyldte værker kommer med officielle forbrugspriser, bonus/gebyr-afkølingsregler (inkl. dynamisk fremløbsafhængig kurve) og valgfrie faste bidrag (`kr./m²/år` + `kr./år`) til beregning af forventet årsudgift.
+- **💰 Officielle 2026/2027-takster & årsudgift:** Alle 78 forudfyldte værker kommer med officielle forbrugspriser, bonus/gebyr-afkølingsregler (inkl. dynamisk fremløbsafhængig kurve) og valgfrie faste bidrag (`kr./m²/år` + `kr./år`) til beregning af forventet årsudgift.
 - **🔐 100 % lokalt MitID & login i Home Assistant:** Understøtter både roterende **QR-kode** og **4-cifret engangskode** direkte på kortet for KMD-værker, samt **forbrugernummer/webpinkode eller e-mail/adgangskode** på E|Forsyning og browser-PKCE på Watts On.
 - **⚡ Home Assistant Energy-dashboard:** Importerer timedata eller døgnserier som eksterne statistikker (`kWh`, `m³` og variabel varmeudgift i `DKK`), så historik og grafer passer uden dobbelttælling.
 - **🌡️ Lokal-først udetemperatur & vejrindsigter:** Bruger din egen Home Assistant-temperatursensor (langtidsstatistik) først og supplerer automatisk med Open-Meteo for graddage (`HDD17`), R²-sammenhæng, grundlast og årsprognose.
@@ -48,9 +48,9 @@ Komplet, **100 % lokal** Home Assistant-integration (`kmd_easy_energy`) med **Pl
 
 * Kortet serveres direkte fra integrationens statiske HTTP-rute uden at skrive til `/config/www/`.
 * Bruger du **Lovelace i YAML-tilstand**, skal du registrere ressourcen manuelt som `JavaScript-modul` (se også [`dashboards/lovelace-plug-and-play.yaml`](dashboards/lovelace-plug-and-play.yaml)):
-  * **URL:** `/kmd_easy_energy/kmd-easy-energy-card.js?v=1.3.30`
+  * **URL:** `/kmd_easy_energy/kmd-easy-energy-card.js?v=1.4.0`
   * **Ressourcetype:** `module` (`JavaScript-modul`)
-* Home Assistant kan cache statiske filer og ældre `/local/`-ressourcer i op til **31 dage**. Hvis du ser gammel brugerflade eller mangler QR-kode efter en opdatering: tjek ressource-URL'en under **Indstillinger → Dashboards → (`⋮`) Ressourcer**, lav en hård genindlæsning (**Ctrl+Shift+R** / **Cmd+Shift+R**), eller vælg **Nulstil frontend-cache** i Companion-appen. Du kan verificere den indlæste version på kortelementet via `data-kmd-card-version="1.3.30"`.
+* Home Assistant kan cache statiske filer og ældre `/local/`-ressourcer i op til **31 dage**. Hvis du ser gammel brugerflade eller mangler QR-kode efter en opdatering: tjek ressource-URL'en under **Indstillinger → Dashboards → (`⋮`) Ressourcer**, lav en hård genindlæsning (**Ctrl+Shift+R** / **Cmd+Shift+R**), eller vælg **Nulstil frontend-cache** i Companion-appen. Du kan verificere den indlæste version på kortelementet via `data-kmd-card-version="1.4.0"`.
 
 </details>
 
@@ -58,7 +58,7 @@ Komplet, **100 % lokal** Home Assistant-integration (`kmd_easy_energy`) med **Pl
 
 ## 🏭 Understøttede varmeværker
 
-### ✅ Bekræftet live (42 værker)
+### ✅ Bekræftet live (44 værker)
 
 | Værk | By | Platform | Portal |
 |---|---|---|---|
@@ -104,14 +104,16 @@ Komplet, **100 % lokal** Home Assistant-integration (`kmd_easy_energy`) med **Pl
 | **Løsning Fjernvarme a.m.b.a.** | Løsning | E\|Forsyning | https://eforsyning.dk/losningfjernvarme/ |
 | **Hadsten Varmeværk a.m.b.a.** | Hadsten | E\|Forsyning | https://eforsyning.dk/hadstenvarme/ |
 | **Auning Varmeværk a.m.b.a.** | Auning | E\|Forsyning | https://eforsyning.dk/auningvarme/ |
+| **Haderslev Fjernvarme** | Haderslev | E\|Forsyning | https://eforsyning.dk/haderslev-fjernvarme/ |
+| **Skanderborg-Hørning Fjernvarme** | Skanderborg / Hørning | E\|Forsyning | https://eforsyning.dk/skanderborghorning/ |
 
 <details>
-<summary>Øvrige 35 forudfyldte værker (🧪 afventer 1. live-test) + 300+ E|Forsyning-værker</summary>
+<summary>Øvrige 34 forudfyldte værker (🧪 afventer 1. live-test) + 300+ E|Forsyning-værker</summary>
 
 Alle tilbagemeldinger på værker uden live-bekræftelse er meget velkomne — brug feedback-knappen på kortet eller opret et [GitHub-issue](https://github.com/DKAnord/fjernvarme-dk-ha/issues) (uden persondata):
 
-* **KMD Easy Energy / Min Forsyning (7):** Galten Varmeværk, Struer Energi, Envafors / SK Forsyning, Frederiksberg Forsyning, Lolland Forsyning, Halsnæs Forsyning, Kerteminde Forsyning *(samt Brugerdefineret URL)*.
-* **E\|Forsyning (27 forudfyldte + 300+ i søgeoversigt):** Hjørring Varmeforsyning, Egedal Fjernvarme A/S, Fredericia Fjernvarme, Vejle Fjernvarme, SONFOR Varme, Køge Fjernvarme, Avedøre Fjernvarme, Solrød Fjernvarme, Assens Fjernvarme, Ringkøbing Fjernvarme, Hvide Sande Fjernvarme, Kibæk Varmeværk, Kjellerup Fjernvarme, Ansager Varmeværk, Dianalund Fjernvarme, Nykøbing Sjælland Varmeværk, Næstved Fjernvarme, Svendborg Fjernvarme, Gentofte Fjernvarme, Rødovre Fjernvarme, Brøndby Fjernvarme, Tårnby Forsyning, Skive Fjernvarme, Haderslev Fjernvarme, Skanderborg-Hørning Fjernvarme, Vordingborg Fjernvarme og Hobro Varmeværk. Derudover kan alle 300+ værker på `eforsyning.dk` vælges direkte via den indbyggede søgning eller portal-URL/slug.
+* **KMD Easy Energy / Min Forsyning (8):** Galten Varmeværk, Struer Energi, Envafors / SK Forsyning, Frederiksberg Forsyning, Lolland Forsyning, Halsnæs Forsyning, Kerteminde Forsyning, Fors A/S (Roskilde) *(samt Brugerdefineret URL)*.
+* **E\|Forsyning (25 forudfyldte + 300+ i søgeoversigt):** Hjørring Varmeforsyning, Egedal Fjernvarme A/S, Fredericia Fjernvarme, Vejle Fjernvarme, SONFOR Varme, Køge Fjernvarme, Avedøre Fjernvarme, Solrød Fjernvarme, Assens Fjernvarme, Ringkøbing Fjernvarme, Hvide Sande Fjernvarme, Kibæk Varmeværk, Kjellerup Fjernvarme, Ansager Varmeværk, Dianalund Fjernvarme, Nykøbing Sjælland Varmeværk, Næstved Fjernvarme, Svendborg Fjernvarme, Gentofte Fjernvarme, Rødovre Fjernvarme, Brøndby Fjernvarme, Tårnby Forsyning, Skive Fjernvarme, Vordingborg Fjernvarme og Hobro Varmeværk. Derudover kan alle 300+ værker på `eforsyning.dk` vælges direkte via den indbyggede søgning eller portal-URL/slug.
 * **Watts On (1):** Forsyning Helsingør *(Novafos er kun vand, og Hornbæk Fjernvarme er undtaget på Forsyning Helsingørs Watts On-løsning)*.
 
 </details>
@@ -163,8 +165,23 @@ Alle tilbagemeldinger på værker uden live-bekræftelse er meget velkomne — b
 ## ⚡ Energy-dashboard, priser & udetemperatur
 
 * **Home Assistant Energy-dashboard:** Home Assistant har endnu ikke en selvstændig fjernvarmekategori, så tilføj de eksterne statistikker **`kmd_easy_energy:energy_<entry_id>`** (`kWh`) og **`kmd_easy_energy:volume_<entry_id>`** (`m³`) under **Gas** i **Indstillinger → Dashboards → Energi** *(lad evt. feltet til *flow rate* stå tomt)*. Under prisindstillingen kan du vælge **Brug en entitet, der sporer de samlede omkostninger** (*Use an entity tracking the total costs*) og pege på **`kmd_easy_energy:cost_<entry_id>`** (`DKK`). Prisstatistikken beregnes time-for-time (eller døgn-for-døgn på E|Forsyning) ud fra dine variable takster — dvs. **ekskl. faste bidrag**, følger automatisk værkets takstskift (f.eks. 2026→2027 og `effective_from`-datoer) samt måneds-/dags-motivationstarif når returtemperatur kendes *(bruger du manuel kWh-pris i ⚙️, gælder din indtastede pris ensartet for hele historikken)*. Brug *ikke* måned-til-dato- eller års-sensorerne (`sensor.*_energy`, `sensor.*_overview` eller `sensor.*_year_cost`) i Energy-dashboardet.
-* **Varmepriser, faste bidrag & afkølingskrav:** For **alle 75/75** værker er officielle 2026/2027-takster klar ud af boksen. Tryk **⚙️** på kortet (eller åbn *Konfigurer* på integrationen) for at tilpasse `kr./kWh`, boligareal (`m²`) til arealafgift, fast årsabonnement (`kr./år`), fremløbstemperatur (`°C`) eller bonus-/gebyrgrænser. Sæt `0` for at falde tilbage på værkets standard (og på E|Forsyning bruges `Forv_Retur` automatisk, når værket sender den).
+* **Varmepriser, faste bidrag & afkølingskrav:** For **alle 78/78** værker er officielle 2026/2027-takster klar ud af boksen. Tryk **⚙️** på kortet (eller åbn *Konfigurer* på integrationen) for at tilpasse `kr./kWh`, boligareal (`m²`) til arealafgift, fast årsabonnement (`kr./år`), fremløbstemperatur (`°C`) eller bonus-/gebyrgrænser. Sæt `0` for at falde tilbage på værkets standard (og på E|Forsyning bruges `Forv_Retur` automatisk, når værket sender den).
 * **Udetemperatur (lokal først):** Integrationen bruger døgnmiddel fra din egen Home Assistant-sensor (`device_class: temperature` + `state_class: measurement` via langtidsstatistik, minimum 18 timer pr. døgn) og kalder kun Open-Meteo for historiske/manglende dage uden sensordækning. Som standard bruges Home Assistants hjemmelokation (alternativt egen lokation eller værkets by); koordinater vises aldrig i UI.
+
+---
+
+## 🔌 Valgfrit add-on-kort: Samlet Forbrug (`custom:dansk-forbrug-card`)
+
+**Dansk Fjernvarme** (`custom:kmd-easy-energy-card`) er altid integrationens hovedleverance og kræver intet andet. Vil du derudover have et samlet overblikskort over hjemmets forsyninger, følger det **100 % valgfrie** ekstra-kort **Dansk Fjernvarme: Samlet Forbrug (Valgfri add-on)** (`custom:dansk-forbrug-card`) med i **+ Tilføj kort** — med **0 YAML**, direkte WebSocket-opslag i Home Assistants Recorder og visuel editor.
+
+<details>
+<summary>Funktioner i det valgfrie Samlet Forbrug-kort (Fjernvarme + valgfri Strøm, Elbil &amp; Vand)</summary>
+
+* **🔥 Fjernvarme (automatisk):** Finder selv din `Dansk Fjernvarme`-sensor på tværs af **KMD**, **E\|Forsyning** og **Watts On**, skjuler felter uden data og åbner hele `Dansk Fjernvarme`-dashboardet i en popup (hvis du ikke peger på et eget `heat_link`).
+* **⚡ Strøm & 🚗 Elbil (valgfri):** Vælg din elmåler (`Eloverblik` m. datovisning + automatisk redning af nyeste dag eller live `P1`-måler), pris-sensor (`Strømligning`, `Energi Data Service`, `Nordpool` eller fast pris) samt evt. ladeboks til opdeling mellem **Hus** og **Elbil** — inkl. indbygget detalje-popup med timepriser, billigste 3-timers vindue, 30-dages graf og diskret `‹ Tilbage`-knap.
+* **💧 Vand (valgfri):** Vælg din vandmåler (`Målerportal` m. automatisk `0 L/h` tætheds-badge eller enhver `m³`/`L`-sensor) og vandpris (`kr./m³`) med indbygget 30-dages liter-graf. Uden vandmåler skifter layoutet automatisk til 2 kolonner.
+
+</details>
 
 ---
 
@@ -219,8 +236,8 @@ Integrationen opretter kun de entiteter, som din valgte platform og måler fakti
 
 **Dansk Fjernvarme** (`kmd_easy_energy`) is a 100% local Home Assistant integration and plug-and-play Lovelace dashboard card (`custom:kmd-easy-energy-card`) supporting Danish district heating utilities across **KMD Easy Energy / Min Forsyning** (built-in Python MitID QR & 4-digit OTP — no external browser add-on), **E|Forsyning** (consumer no. + web PIN or e-mail + password, 300+ searchable utilities), and **Watts On** *(experimental/unofficial browser-PKCE backend)*.
 
-- **Quick setup:** Install via HACS / Home Assistant Marketplace, add the **Dansk Fjernvarme** integration, and place **Dansk Fjernvarme: Dashboard** on any view. The card is served directly at `/kmd_easy_energy/kmd-easy-energy-card.js?v=1.3.30` (managed automatically in storage mode; for YAML mode add it as a `module`, keeping in mind HA may cache legacy `/local/` resources for up to `31 days`).
-- **Tariffs & zero blank cards:** **42 utilities** are confirmed live and **all 77** curated presets ship with official 2026/2027 tariffs (including dynamic supply-temperature cooling curves and optional fixed fees). Sections without underlying data are strictly hidden, with at most a compact dismissible hint (persisted per entry in `localStorage` or disabled via `hide_manual_hints`) suggesting optional manual fields like heat price, supply temperature, or heated area.
+- **Quick setup:** Install via HACS / Home Assistant Marketplace, add the **Dansk Fjernvarme** integration, and place **Dansk Fjernvarme: Dashboard** (or the optional add-on card **Dansk Fjernvarme: Samlet Forbrug (Valgfri add-on)** `custom:dansk-forbrug-card` for combined heating + optional electricity, EV, and water) on any view. The card bundle is served directly at `/kmd_easy_energy/kmd-easy-energy-card.js?v=1.4.0` (managed automatically in storage mode; for YAML mode add it as a `module`, keeping in mind HA may cache legacy `/local/` resources for up to `31 days`).
+- **Tariffs & zero blank cards:** **44 utilities** are confirmed live and **all 78** curated presets ship with official 2026/2027 tariffs (including dynamic supply-temperature cooling curves and optional fixed fees). Sections without underlying data are strictly hidden, with at most a compact dismissible hint (persisted per entry in `localStorage` or disabled via `hide_manual_hints`) suggesting optional manual fields like heat price, supply temperature, or heated area.
 - **Energy dashboard & weather:** Add external statistics `kmd_easy_energy:energy_<entry_id>`, `kmd_easy_energy:volume_<entry_id>`, and `kmd_easy_energy:cost_<entry_id>` (*Use an entity tracking the total costs*, variable heating cost excl. fixed fees) to HA Energy. Degree-day weather insights prefer your local HA temperature sensor's long-term statistics and only query Open-Meteo for missing days.
 - **History & licensing:** Full release notes live in [`CHANGELOG.md`](CHANGELOG.md), and third-party open-source attributions live in [`NOTICE`](NOTICE).
 

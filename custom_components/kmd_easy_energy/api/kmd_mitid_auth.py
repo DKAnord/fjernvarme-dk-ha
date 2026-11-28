@@ -73,7 +73,7 @@ _INTERACTIVE_TEXT_RE = re.compile(
     re.I,
 )
 _DISCOVERY_PATH_RE = re.compile(
-    r"minforsyning|min-forsyning|selvbetjening|min-varme|minvarme|min-forsyning",
+    r"minforsyning|min-forsyning|selvbetjening|min-varme|minvarme|min-side|minside|login",
     re.I,
 )
 

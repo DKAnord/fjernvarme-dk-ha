@@ -3,7 +3,7 @@
  * Zero external dependencies, Shadow DOM, responsive, interactive tooltips, DA/EN i18n.
  */
 (() => {
-  const VER = "1.3.30";
+  const VER = "1.4.0";
   const MONTHS = ["Jan", "Feb", "Mar", "Apr", "Maj", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Dec"];
   const DAYS_IN_MONTH = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
   const isLeapYear = (y) => (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0;
@@ -93,6 +93,7 @@
     { id: "halsnaes-forsyning", name: "Halsnæs Forsyning", city: "Frederiksværk / Halsnæs", url: "https://hnf.dk/selvbetjening/", status: "pending_test" },
     { id: "kerteminde-forsyning", name: "Kerteminde Forsyning", city: "Kerteminde", url: "https://www.kertemindeforsyning.dk/minforsyning-forbrugsapp", status: "pending_test" },
     { id: "nyborg-forsyning", name: "Nyborg Forsyning & Service", city: "Nyborg", url: "https://minforsyning-2.kmd.dk/?plant=120&utility=0&plus=True", status: "confirmed" },
+    { id: "fors-roskilde", name: "Fors A/S (Roskilde)", city: "Roskilde / Holbæk", url: "https://www.fors.dk/login/", status: "pending_test" },
     { id: "nykobing-sj", name: "Nykøbing Sjælland Varmeværk", city: "Odsherred", url: "https://eforsyning.dk/nsfv/", status: "pending_test", backend: "eforsyning" },
     { id: "forsyning-helsingor", name: "Forsyning Helsingør", city: "Helsingør", url: "https://www.fh.dk/watts", status: "pending_test", backend: "wattson" },
     { id: "soroe-fjernvarme", name: "Sorø Fjernvarme", city: "Sorø", url: "https://eforsyning.dk/soroe/", status: "confirmed", backend: "eforsyning" },
@@ -124,6 +125,8 @@
     { id: "losning-fjernvarme", name: "Løsning Fjernvarme a.m.b.a.", city: "Løsning", url: "https://eforsyning.dk/losningfjernvarme/", status: "confirmed", backend: "eforsyning" },
     { id: "hadsten-varmevaerk", name: "Hadsten Varmeværk a.m.b.a.", city: "Hadsten", url: "https://eforsyning.dk/hadstenvarme/", status: "confirmed", backend: "eforsyning" },
     { id: "auning-varmevaerk", name: "Auning Varmeværk a.m.b.a.", city: "Auning", url: "https://eforsyning.dk/auningvarme/", status: "confirmed", backend: "eforsyning" },
+    { id: "haderslev-fjernvarme", name: "Haderslev Fjernvarme", city: "Haderslev", url: "https://eforsyning.dk/haderslev-fjernvarme/", status: "confirmed", backend: "eforsyning" },
+    { id: "skanderborg-horning-fjernvarme", name: "Skanderborg-Hørning Fjernvarme", city: "Skanderborg / Hørning", url: "https://eforsyning.dk/skanderborghorning/", status: "confirmed", backend: "eforsyning" },
     { id: "hjorring-varmeforsyning", name: "Hjørring Varmeforsyning", city: "Hjørring", url: "https://eforsyning.dk/hjvarme/", status: "pending_test", backend: "eforsyning" },
     { id: "aalborg-forsyning", name: "Aalborg Forsyning", city: "Aalborg", url: "https://aalborgforsyning.dk/services/forbrug/watts-on/", status: "confirmed", backend: "wattson" },
     { id: "fjernvarme-fyn", name: "Fjernvarme Fyn", city: "Odense / Fyn", url: "https://www.fjernvarmefyn.dk/spar-paa-energien/overblik/watts-on-app/", status: "confirmed", backend: "wattson" },
@@ -228,7 +231,10 @@
       const isOverview = (s) =>
         typeof s?.entity_id === "string" &&
         s.entity_id.startsWith("sensor.") &&
-        Boolean(s.attributes?.utility_id || s.attributes?.portal_url);
+        Boolean(
+          s.attributes?.utility_id ||
+          (s.attributes?.portal_url && (s.attributes?.daily || s.attributes?.monthly || s.attributes?.cost_estimate || s.attributes?.backend))
+        );
       const overview =
         all.find((s) => isOverview(s) && (s.entity_id.endsWith("_overview") || s.entity_id.endsWith("_overblik"))) ||
         all.find(isOverview);
@@ -2101,8 +2107,9 @@
       this._render();
     }
     set hass(hass) {
+      const hadHass = Boolean(this._hass);
       this._hass = hass;
-      if (!this._rendered) this._render();
+      if (!this._rendered || !hadHass) this._render();
     }
     _emit(patch) {
       const next = { ...this._config, ...patch };
@@ -2175,6 +2182,2307 @@
     }
   }
 
+  /* =========================================================================
+   * DanskForbrugCard — Samlet Forbrug (Strøm, Elbil, Vand & Fjernvarme)
+   * Direct HA Recorder WebSocket engine (zero YAML, zero Spook).
+   * ========================================================================= */
+  const DF_WD_DA = ["Søn", "Man", "Tir", "Ons", "Tor", "Fre", "Lør"];
+  const DF_WD_EN = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  const DF_FULL_MO_DA = ["Januar", "Februar", "Marts", "April", "Maj", "Juni", "Juli", "August", "September", "Oktober", "November", "December"];
+  const DF_FULL_MO_EN = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+  const DF_CPH_FMT = typeof Intl !== "undefined" && typeof Intl.DateTimeFormat === "function"
+    ? new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Copenhagen", year: "numeric", month: "2-digit", day: "2-digit" })
+    : null;
+
+  const dfParseStartMs = (v) => {
+    if (typeof v === "number") return v > 1e11 ? v : v * 1000;
+    const ms = Date.parse(String(v || ""));
+    return Number.isFinite(ms) ? ms : NaN;
+  };
+
+  const dfToCphYmd = (ms) => {
+    if (!Number.isFinite(ms)) return "";
+    const d = new Date(ms);
+    if (DF_CPH_FMT && typeof DF_CPH_FMT.formatToParts === "function") {
+      try {
+        const parts = DF_CPH_FMT.formatToParts(d);
+        const y = parts.find((p) => p.type === "year")?.value;
+        const m = parts.find((p) => p.type === "month")?.value;
+        const day = parts.find((p) => p.type === "day")?.value;
+        if (y && m && day) return `${y}-${m}-${day}`;
+      } catch (_) { /* ignore */ }
+    }
+    return new Date(ms + 3600000).toISOString().slice(0, 10);
+  };
+
+  const dfFmtDayLabel = (ymd, lang) => {
+    const [y, m, d] = String(ymd || "").split("-").map(Number);
+    if (!y || !m || !d) return ymd || "";
+    const dt = new Date(Date.UTC(y, m - 1, d, 12, 0, 0));
+    const wd = (lang === "en" ? DF_WD_EN : DF_WD_DA)[dt.getUTCDay()];
+    return `${wd} ${d}/${m}`;
+  };
+
+  const dfFmtNum = (val, dec = 0, lang = "da") => {
+    const n = Number(val);
+    if (!Number.isFinite(n)) return "–";
+    try {
+      return n.toLocaleString(lang === "en" ? "en-GB" : "da-DK", {
+        minimumFractionDigits: dec,
+        maximumFractionDigits: dec,
+      });
+    } catch (_) {
+      return dec > 0 ? fmtDec(n, dec) : fmtInt(n);
+    }
+  };
+
+  const dfNavigate = (path) => {
+    if (!path || typeof history === "undefined" || typeof location === "undefined") return;
+    if (location.pathname === path) return;
+    history.pushState(null, "", path);
+    if (typeof window !== "undefined" && typeof CustomEvent === "function") {
+      window.dispatchEvent(new CustomEvent("location-changed", { detail: { replace: false } }));
+    }
+  };
+
+  const dfCphHour = (ms) => {
+    try {
+      const hr = Number(new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/Copenhagen", hour: "2-digit", hour12: false }).format(new Date(ms)));
+      if (Number.isFinite(hr)) return hr === 24 ? 0 : hr;
+    } catch (_) { /* fallback */ }
+    return new Date(ms + 3600000).getUTCHours();
+  };
+
+  const dfCphMidnightMs = (ymd) => {
+    const [y, m, d] = String(ymd || "").split("-").map(Number);
+    if (!y || !m || !d) return NaN;
+    const guess = Date.UTC(y, m - 1, d, 0, 0, 0) - 3600000;
+    for (let off = -3; off <= 3; off++) {
+      const cand = guess + off * 3600000;
+      if (dfToCphYmd(cand) === ymd && dfCphHour(cand) === 0) return cand;
+    }
+    return guess;
+  };
+
+  const dfFindHeatEntity = (states) => {
+    const all = Object.values(states || {});
+    const isOverview = (s) =>
+      typeof s?.entity_id === "string" &&
+      s.entity_id.startsWith("sensor.") &&
+      Boolean(
+        s.attributes?.utility_id ||
+        (s.attributes?.portal_url && (s.attributes?.daily || s.attributes?.monthly || s.attributes?.cost_estimate || s.attributes?.backend))
+      );
+    return (
+      all.find((s) => isOverview(s) && (s.entity_id.endsWith("_overview") || s.entity_id.endsWith("_overblik"))) ||
+      all.find(isOverview) ||
+      null
+    );
+  };
+
+  class DanskForbrugCard extends HTMLElement {
+    setConfig(config) {
+      this._config = { language: "da", ...(config || {}) };
+      this._activeDetail = null;
+      this._embeddedHeatCard = null;
+      this._embeddedHeatSig = "";
+      this._lastSig = null;
+      this._statsCacheKey = null;
+      this._statsInFlightKey = null;
+      this._statsRev = 0;
+      if (!this.shadowRoot) this.attachShadow({ mode: "open" });
+      if (typeof this.setAttribute === "function") this.setAttribute("data-kmd-card-version", VER);
+      this._fetchStatsIfNeeded();
+      this._render();
+    }
+
+    connectedCallback() {
+      if (!this._onEscKey && typeof window !== "undefined" && typeof window.addEventListener === "function") {
+        this._onEscKey = (ev) => {
+          if (ev?.key === "Escape" && this._activeDetail) {
+            this._activeDetail = null;
+            this._lastSig = null;
+            this._render();
+          }
+        };
+        window.addEventListener("keydown", this._onEscKey);
+      }
+    }
+
+    disconnectedCallback() {
+      if (this._onEscKey && typeof window !== "undefined" && typeof window.removeEventListener === "function") {
+        window.removeEventListener("keydown", this._onEscKey);
+        this._onEscKey = null;
+      }
+      this._embeddedHeatCard = null;
+      this._embeddedHeatSig = "";
+    }
+
+    set hass(hass) {
+      this._hass = hass;
+      this._fetchStatsIfNeeded();
+      if (this._activeDetail === "heat" && this._embeddedHeatCard) {
+        this._embeddedHeatCard.hass = hass;
+      }
+      const sig = this._buildSig();
+      if (sig === this._lastSig) return;
+      this._lastSig = sig;
+      this._render();
+    }
+
+    getCardSize() { return 8; }
+    getGridOptions() { return { columns: "full", rows: "auto", min_columns: 6 }; }
+    static getConfigElement() { return document.createElement("dansk-forbrug-card-editor"); }
+
+    static getStubConfig(hass) {
+      const states = hass?.states || {};
+      const all = Object.values(states);
+      const heatSt = dfFindHeatEntity(states);
+      const elSt = states["sensor.eloverblik_energy_statistic"]
+        ? states["sensor.eloverblik_energy_statistic"]
+        : all.find((s) =>
+            typeof s?.entity_id === "string" &&
+            s.entity_id.startsWith("sensor.") &&
+            s.attributes?.device_class === "energy" &&
+            ["total", "total_increasing"].includes(s.attributes?.state_class) &&
+            s.attributes?.unit_of_measurement === "kWh" &&
+            /(watts_live|p1.*import|grid.*import|elmaaler|total_energy_import)/i.test(s.entity_id)
+          );
+      const priceSt = states["sensor.stromligning_current_price_vat"]
+        ? states["sensor.stromligning_current_price_vat"]
+        : all.find((s) =>
+            typeof s?.entity_id === "string" &&
+            s.entity_id.startsWith("sensor.") &&
+            /(stromligning.*current_price_vat|energi_data_service)/i.test(s.entity_id)
+          );
+      const waterSt = all.find((s) =>
+        typeof s?.entity_id === "string" &&
+        s.entity_id.startsWith("sensor.") &&
+        (s.entity_id.endsWith("_water_meter_reading") || s.entity_id.endsWith("_cold_water_energy_dashboard"))
+      );
+      const stub = { language: "da" };
+      if (heatSt) stub.entity = heatSt.entity_id;
+      if (elSt) stub.el_entity = elSt.entity_id;
+      if (priceSt) stub.el_price_entity = priceSt.entity_id;
+      if (waterSt) stub.water_entity = waterSt.entity_id;
+      return stub;
+    }
+
+    _resolveHeatEntity() {
+      const cfg = this._config || {};
+      if (cfg.entity === "none") return null;
+      const states = this._hass?.states || {};
+      if (cfg.entity) return states[cfg.entity] || null;
+      return dfFindHeatEntity(states);
+    }
+
+    _resolveWaterEntities() {
+      const cfg = this._config || {};
+      const wId = String(cfg.water_entity || "").trim();
+      if (!wId) return null;
+      const states = this._hass?.states || {};
+      const m = wId.match(/^(.*)_(cold_water_energy_dashboard|water_meter_reading)$/);
+      const prefix = m ? m[1] : "";
+      const pick = (suffix) => (prefix && states[`${prefix}_${suffix}`] ? `${prefix}_${suffix}` : "");
+      return {
+        isMaalerportal: Boolean(prefix),
+        statsEntity: pick("cold_water_energy_dashboard") || wId,
+        liveEntity: pick("water_meter_reading") || wId,
+        minFlowEntity: String(cfg.water_min_flow_entity || "").trim() || pick("min_flow"),
+        maxFlowEntity: pick("max_flow"),
+        minTempEntity: pick("min_water_temperature"),
+        maxTempEntity: pick("max_water_temperature"),
+        battDaysEntity: pick("battery_days_remaining"),
+      };
+    }
+
+    _buildSig() {
+      const cfg = this._config || {};
+      const st = this._hass?.states || {};
+      const heatSt = this._resolveHeatEntity();
+      const wInfo = this._resolveWaterEntities();
+      const pSibs = this._elPriceSiblingIds(cfg.el_price_entity);
+      const elId = String(cfg.el_entity || "").trim();
+      const elTotalId = elId.endsWith("_energy_statistic")
+        ? elId.replace(/_energy_statistic$/, "_energy_total")
+        : (elId.toLowerCase().includes("eloverblik") ? "sensor.eloverblik_energy_total" : "");
+      const watchIds = [
+        cfg.el_entity,
+        elTotalId && st[elTotalId] ? elTotalId : null,
+        cfg.el_price_entity,
+        ...Object.values(pSibs),
+        cfg.ev_entity,
+        cfg.water_price_entity,
+        wInfo?.liveEntity,
+        wInfo?.statsEntity,
+        wInfo?.minFlowEntity,
+        wInfo?.maxFlowEntity,
+        wInfo?.minTempEntity,
+        wInfo?.maxTempEntity,
+        wInfo?.battDaysEntity,
+      ].filter(Boolean);
+      const watchSig = watchIds.map((id) => {
+        const s = st[id];
+        if (!s) return `${id}=?`;
+        const extra = id === elTotalId ? `@${s.attributes?.metering_date || s.attributes?.["Metering date"] || ""}` : "";
+        return `${id}=${s.state}${extra}`;
+      }).join("|");
+      const ha = heatSt?.attributes || {};
+      const heatSig = heatSt
+        ? `${heatSt.entity_id}|${heatSt.state}|${ha.updated || ""}|${ha.cost_estimate?.current_month_kwh ?? ""}|${ha.daily?.latest_complete ?? ""}|${(ha.capabilities || []).join(",")}`
+        : "noheat";
+      return `${VER}|${cfg.language || "da"}|${this._activeDetail || ""}|${this._hass?.user?.id || ""}|${Boolean(this._hass?.user?.is_admin)}|${this._statsCacheKey || ""}|${this._statsRev}|${Boolean(this._statsLoading)}|${heatSig}|${watchSig}`;
+    }
+
+    _elPriceSiblingIds(priceId) {
+      const id = String(priceId || "").trim();
+      const m = id.match(/^(sensor\..*?)current_price(_vat)?(.*)$/i);
+      if (!m) return {};
+      const base = m[1];
+      const vat = m[2] || "";
+      const suf = m[3] || "";
+      return {
+        todayMin: `${base}today_min${vat}${suf}`,
+        todayMax: `${base}today_max${vat}${suf}`,
+        tomMin: `${base}tomorrow_min${vat}${suf}`,
+        tomAvail: `binary_sensor.${base.slice(7)}tomorrow_available${vat}${suf}`,
+        spot: `${base}spotprice${vat}${suf}`,
+      };
+    }
+
+    _fetchStatsIfNeeded() {
+      const hass = this._hass;
+      const cfg = this._config || {};
+      if (!hass || typeof hass.callWS !== "function") return;
+      const elId = String(cfg.el_entity || "").trim();
+      const priceId = String(cfg.el_price_entity || "").trim();
+      const evId = String(cfg.ev_entity || "").trim();
+      const wInfo = this._resolveWaterEntities();
+      const wStatsId = wInfo?.statsEntity || "";
+      const bucket = Math.floor(Date.now() / 300000);
+      const cacheKey = JSON.stringify([
+        elId,
+        priceId,
+        cfg.el_fixed_price ?? "",
+        evId,
+        cfg.ev_hour_offset ?? "",
+        wStatsId,
+        bucket,
+      ]);
+      if (this._statsCacheKey === cacheKey || this._statsInFlightKey === cacheKey) return;
+      if (!elId && !wStatsId) {
+        this._statsRaw = { hour: {}, day: {} };
+        this._statsCacheKey = cacheKey;
+        this._statsLoading = false;
+        this._statsError = "";
+        return;
+      }
+
+      this._statsInFlightKey = cacheKey;
+      this._statsLoading = true;
+      this._statsError = "";
+
+      const nowMs = Date.now();
+      const hourIds = [...new Set([elId, priceId, evId].filter(Boolean))];
+      const calls = [];
+      if (hourIds.length > 0 && elId) {
+        calls.push(
+          hass.callWS({
+            type: "recorder/statistics_during_period",
+            start_time: new Date(nowMs - 36 * 86400000).toISOString(),
+            end_time: new Date(nowMs + 86400000).toISOString(),
+            statistic_ids: hourIds,
+            period: "hour",
+            types: ["change", "state", "mean"],
+          }).then((res) => ["hour", res || {}])
+        );
+      }
+      if (wStatsId) {
+        calls.push(
+          hass.callWS({
+            type: "recorder/statistics_during_period",
+            start_time: new Date(nowMs - 40 * 86400000).toISOString(),
+            end_time: new Date(nowMs + 86400000).toISOString(),
+            statistic_ids: [wStatsId],
+            period: "day",
+            types: ["change", "state"],
+          }).then((res) => ["day", res || {}])
+        );
+      }
+
+      Promise.all(calls)
+        .then((results) => {
+          if (this._statsInFlightKey !== cacheKey) return;
+          const nextRaw = { hour: {}, day: {} };
+          for (const [kind, payload] of results) {
+            nextRaw[kind] = payload || {};
+          }
+          this._statsRaw = nextRaw;
+          this._statsCacheKey = cacheKey;
+          this._statsInFlightKey = null;
+          this._statsLoading = false;
+          this._statsError = "";
+          this._statsRev += 1;
+          this._lastSig = null;
+          this._render();
+        })
+        .catch((err) => {
+          if (this._statsInFlightKey !== cacheKey) return;
+          this._statsRaw = this._statsRaw || { hour: {}, day: {} };
+          this._statsCacheKey = cacheKey;
+          this._statsInFlightKey = null;
+          this._statsLoading = false;
+          this._statsError = String(err?.message || err || "Statistikfejl");
+          this._statsRev += 1;
+          this._lastSig = null;
+          this._render();
+        });
+    }
+
+    _computeElStats(hourMap) {
+      const cfg = this._config || {};
+      const st = this._hass?.states || {};
+      const elId = String(cfg.el_entity || "").trim();
+      if (!elId) return null;
+
+      const priceId = String(cfg.el_price_entity || "").trim();
+      const evId = String(cfg.ev_entity || "").trim();
+      const lang = cfg.language === "en" ? "en" : "da";
+      const fixedP = Number(cfg.el_fixed_price);
+      const liveP = priceId ? parseFloat(st[priceId]?.state) : NaN;
+      const fallbackPrice = (Number.isFinite(fixedP) && fixedP > 0)
+        ? fixedP
+        : (Number.isFinite(liveP) ? liveP : 0);
+
+      const priceByHour = new Map();
+      const dayPriceBuckets = new Map();
+      const priceRows = (priceId && Array.isArray(hourMap?.[priceId])) ? hourMap[priceId] : [];
+      for (const r of priceRows) {
+        const rawMs = dfParseStartMs(r?.start);
+        if (!Number.isFinite(rawMs)) continue;
+        const hms = Math.round(rawMs / 3600000) * 3600000;
+        const v = Number.isFinite(Number(r.mean))
+          ? Number(r.mean)
+          : (r.state !== null && r.state !== undefined && Number.isFinite(Number(r.state)) ? Number(r.state) : null);
+        if (v === null) continue;
+        priceByHour.set(hms, v);
+        const ymd = dfToCphYmd(hms);
+        if (!dayPriceBuckets.has(ymd)) dayPriceBuckets.set(ymd, []);
+        dayPriceBuckets.get(ymd).push(v);
+      }
+      const dayMeanPrice = new Map();
+      for (const [ymd, arr] of dayPriceBuckets.entries()) {
+        if (arr.length > 0) dayMeanPrice.set(ymd, arr.reduce((a, b) => a + b, 0) / arr.length);
+      }
+
+      const dayKwh = new Map();
+      const dayKr = new Map();
+      const hourKwh = new Map();
+      const hourKr = new Map();
+      const elRows = Array.isArray(hourMap?.[elId]) ? hourMap[elId] : [];
+      for (const r of elRows) {
+        if (r?.change === null || r?.change === undefined) continue;
+        const ch = Number(r.change);
+        if (!Number.isFinite(ch) || ch < 0) continue;
+        const rawMs = dfParseStartMs(r.start);
+        if (!Number.isFinite(rawMs)) continue;
+        const hms = Math.round(rawMs / 3600000) * 3600000;
+        const ymd = dfToCphYmd(hms);
+        const p = priceByHour.has(hms)
+          ? priceByHour.get(hms)
+          : (dayMeanPrice.has(ymd) ? dayMeanPrice.get(ymd) : fallbackPrice);
+        const kr = ch * p;
+        dayKwh.set(ymd, (dayKwh.get(ymd) || 0) + ch);
+        dayKr.set(ymd, (dayKr.get(ymd) || 0) + kr);
+        hourKwh.set(hms, (hourKwh.get(hms) || 0) + ch);
+        hourKr.set(hms, (hourKr.get(hms) || 0) + kr);
+      }
+
+      const days = [...dayKwh.keys()].sort();
+      while (days.length > 0 && (dayKwh.get(days[days.length - 1]) || 0) <= 0.001) {
+        days.pop();
+      }
+
+      const nowMs = Date.now();
+      const todayYmd = dfToCphYmd(nowMs);
+      const isEloverblik = elId.toLowerCase().includes("eloverblik");
+      if (isEloverblik) {
+        const elPrefix = elId.endsWith("_energy_statistic")
+          ? elId.replace(/_energy_statistic$/, "")
+          : "sensor.eloverblik";
+        const totalSt = st[`${elPrefix}_energy_total`];
+        const mDate = String(totalSt?.attributes?.metering_date || totalSt?.attributes?.["Metering date"] || "").trim();
+        const mTotal = parseFloat(totalSt?.state);
+        if (
+          /^\d{4}-\d{2}-\d{2}$/.test(mDate) &&
+          mDate < todayYmd &&
+          Number.isFinite(mTotal) &&
+          mTotal > 0.01 &&
+          (dayKwh.get(mDate) || 0) <= 0.001
+        ) {
+          const midMs = dfCphMidnightMs(mDate);
+          const rescueHours = [];
+          const fallbackHours = [];
+          let sumMatched = 0;
+          let sumAny = 0;
+          for (let h = 0; h < 24; h++) {
+            const hSt = st[`${elPrefix}_energy_${h}_${h + 1}`];
+            const hv = parseFloat(hSt?.state);
+            const hDate = String(hSt?.attributes?.metering_date || hSt?.attributes?.["Metering date"] || "").trim();
+            if (Number.isFinite(hv) && hv >= 0) {
+              fallbackHours.push({ h, hv });
+              sumAny += hv;
+              if (!hDate || hDate === mDate) {
+                rescueHours.push({ h, hv });
+                sumMatched += hv;
+              }
+            }
+          }
+          let chosenHours = [];
+          if (sumMatched > 0.01 && Math.abs(sumMatched - mTotal) <= Math.max(0.5, mTotal * 0.05)) {
+            chosenHours = rescueHours;
+          } else if (sumAny > 0.01 && Math.abs(sumAny - mTotal) <= Math.max(0.5, mTotal * 0.05) && rescueHours.length === 0) {
+            chosenHours = fallbackHours;
+          } else {
+            const perH = mTotal / 24;
+            for (let h = 0; h < 24; h++) chosenHours.push({ h, hv: perH });
+          }
+          let rescueKwh = 0;
+          let rescueKr = 0;
+          for (const { h, hv } of chosenHours) {
+            const hms = Number.isFinite(midMs) ? midMs + h * 3600000 : NaN;
+            const p = (Number.isFinite(hms) && priceByHour.has(hms))
+              ? priceByHour.get(hms)
+              : (dayMeanPrice.has(mDate) ? dayMeanPrice.get(mDate) : fallbackPrice);
+            rescueKwh += hv;
+            rescueKr += hv * p;
+            if (Number.isFinite(hms)) {
+              hourKwh.set(hms, (hourKwh.get(hms) || 0) + hv);
+              hourKr.set(hms, (hourKr.get(hms) || 0) + hv * p);
+            }
+          }
+          if (rescueKwh > 0.01) {
+            dayKwh.set(mDate, rescueKwh);
+            dayKr.set(mDate, rescueKr);
+            if (!days.includes(mDate)) {
+              days.push(mDate);
+              days.sort();
+            }
+          }
+        }
+      }
+
+      const dayEvKwh = new Map();
+      const dayEvKr = new Map();
+      if (evId && Array.isArray(hourMap?.[evId])) {
+        const rawOff = cfg.ev_hour_offset;
+        const offsetHours = (rawOff !== undefined && rawOff !== null && rawOff !== "" && Number.isFinite(Number(rawOff)))
+          ? Number(rawOff)
+          : (elId.toLowerCase().includes("eloverblik") ? -1 : 0);
+        for (const r of hourMap[evId]) {
+          if (r?.change === null || r?.change === undefined) continue;
+          const k = Number(r.change);
+          if (!Number.isFinite(k) || k <= 0) continue;
+          const rawMs = dfParseStartMs(r.start);
+          if (!Number.isFinite(rawMs)) continue;
+          const hms = Math.round(rawMs / 3600000) * 3600000 + offsetHours * 3600000;
+          const ymd = dfToCphYmd(hms);
+          const hk = hourKwh.get(hms) || 0;
+          const hc = hourKr.get(hms);
+          const p = (hk > 0 && Number.isFinite(hc))
+            ? (hc / hk)
+            : (priceByHour.has(hms) ? priceByHour.get(hms) : (dayMeanPrice.has(ymd) ? dayMeanPrice.get(ymd) : fallbackPrice));
+          dayEvKwh.set(ymd, (dayEvKwh.get(ymd) || 0) + k);
+          dayEvKr.set(ymd, (dayEvKr.get(ymd) || 0) + k * p);
+        }
+      }
+
+      const curYm = todayYmd.slice(0, 7);
+      const completeDays = days.filter((d) => d < todayYmd);
+
+      let mtdKwh = 0, mtdKr = 0, mtdEvKwh = 0, mtdEvKr = 0, mtdDays = 0;
+      for (const d of days) {
+        if (!d.startsWith(curYm)) continue;
+        const dk = dayKwh.get(d) || 0;
+        const dc = dayKr.get(d) || 0;
+        if (dk > 0.001) mtdDays += 1;
+        const dev = Math.min(dayEvKwh.get(d) || 0, dk);
+        const devc = Math.min(dayEvKr.get(d) || 0, dc);
+        mtdKwh += dk;
+        mtdKr += dc;
+        mtdEvKwh += dev;
+        mtdEvKr += devc;
+      }
+
+      const latestDay = completeDays.length
+        ? completeDays[completeDays.length - 1]
+        : (days.length ? days[days.length - 1] : null);
+      const last30 = completeDays.slice(-30);
+      let avg30Kwh = null, avg30Kr = null, base30Kwh = null, base30Kr = null;
+      if (last30.length > 0) {
+        let sumK = 0, sumC = 0, sumBK = 0, sumBC = 0;
+        for (const d of last30) {
+          const dk = dayKwh.get(d) || 0;
+          const dc = dayKr.get(d) || 0;
+          const dev = Math.min(dayEvKwh.get(d) || 0, dk);
+          const devc = Math.min(dayEvKr.get(d) || 0, dc);
+          sumK += dk;
+          sumC += dc;
+          sumBK += Math.max(dk - dev, 0);
+          sumBC += Math.max(dc - devc, 0);
+        }
+        avg30Kwh = sumK / last30.length;
+        avg30Kr = sumC / last30.length;
+        base30Kwh = sumBK / last30.length;
+        base30Kr = sumBC / last30.length;
+      }
+
+      const useTodayInSeries = !isEloverblik && (dayKwh.get(todayYmd) || 0) > 0.01;
+      const baseSeriesDays = useTodayInSeries ? days : (completeDays.length >= 1 ? completeDays : days);
+      const mapElSeries = (arr) => arr.map((d) => {
+        const dk = dayKwh.get(d) || 0;
+        const dc = dayKr.get(d) || 0;
+        const dev = Math.min(dayEvKwh.get(d) || 0, dk);
+        const devc = Math.min(dayEvKr.get(d) || 0, dc);
+        return {
+          d,
+          lbl: dfFmtDayLabel(d, lang),
+          kwh: Number(dk.toFixed(1)),
+          kr: Math.round(dc),
+          ev_kwh: Number(dev.toFixed(1)),
+          house_kwh: Number(Math.max(dk - dev, 0).toFixed(1)),
+          ev_kr: Math.round(devc),
+        };
+      });
+      const series_30d = mapElSeries(baseSeriesDays.slice(-30));
+      const series_7d = series_30d.slice(-7);
+
+      const mtdKrInt = Math.round(mtdKr);
+      const mtdEvKrInt = Math.min(Math.round(mtdEvKr), mtdKrInt);
+      return {
+        latest_d: latestDay,
+        latest_lbl: latestDay ? dfFmtDayLabel(latestDay, lang) : (lang === "en" ? "Latest day" : "Seneste dag"),
+        latest_kwh: latestDay ? (dayKwh.get(latestDay) || 0) : null,
+        latest_kr: latestDay ? (dayKr.get(latestDay) || 0) : null,
+        mtd_kwh: Number(mtdKwh.toFixed(1)),
+        mtd_kr: mtdKrInt,
+        mtd_ev_kwh: Number(mtdEvKwh.toFixed(1)),
+        mtd_ev_kr: mtdEvKrInt,
+        mtd_house_kwh: Number(Math.max(mtdKwh - mtdEvKwh, 0).toFixed(1)),
+        mtd_house_kr: Math.max(mtdKrInt - mtdEvKrInt, 0),
+        mtd_days: mtdDays,
+        avg30_kwh: avg30Kwh,
+        avg30_kr: avg30Kr,
+        base30_kwh: base30Kwh,
+        base30_kr: base30Kr,
+        series_7d,
+        series_30d,
+        hasCost: Boolean(priceId || (Number.isFinite(fixedP) && fixedP > 0) || priceByHour.size > 0),
+        isEloverblik,
+      };
+    }
+
+    _parseElPrices(todayYmd, tomorrowYmd) {
+      const cfg = this._config || {};
+      const st = this._hass?.states || {};
+      const isEn = cfg.language === "en";
+      const priceId = String(cfg.el_price_entity || "").trim();
+      const fixedP = Number(cfg.el_fixed_price);
+      const pSt = priceId ? st[priceId] : null;
+      const pAttr = pSt?.attributes || {};
+      const liveStateP = pSt ? parseFloat(pSt.state) : NaN;
+      const nowPrice = Number.isFinite(liveStateP)
+        ? liveStateP
+        : (Number.isFinite(fixedP) && fixedP > 0 ? fixedP : NaN);
+
+      const nowMs = Date.now();
+      const todayMid = dfCphMidnightMs(todayYmd);
+      const tomMid = dfCphMidnightMs(tomorrowYmd);
+      const todayArr = [];
+      const tomArr = [];
+      const slotMap = new Map();
+      const putSlot = (rawMs, val, fallbackYmd, fallbackIdx) => {
+        if (!Number.isFinite(val)) return;
+        let ms = Number.isFinite(rawMs) ? Math.round(rawMs / 3600000) * 3600000 : NaN;
+        if (!Number.isFinite(ms) && fallbackYmd) {
+          const baseMid = fallbackYmd === tomorrowYmd ? tomMid : todayMid;
+          if (Number.isFinite(baseMid)) ms = baseMid + fallbackIdx * 3600000;
+        }
+        if (!Number.isFinite(ms)) return;
+        const ymd = dfToCphYmd(ms);
+        if (ymd !== todayYmd && ymd !== tomorrowYmd) return;
+        const hour = dfCphHour(ms);
+        slotMap.set(ms, {
+          ms,
+          ymd,
+          hour,
+          lbl: `${String(hour).padStart(2, "0")}:00`,
+          price: val,
+          isToday: ymd === todayYmd,
+          isTomorrow: ymd === tomorrowYmd,
+          isNow: ms <= nowMs && nowMs < ms + 3600000,
+          inBestWindow: false,
+        });
+      };
+
+      if (Array.isArray(pAttr.prices)) {
+        for (const item of pAttr.prices) {
+          const val = Number(item?.price ?? item?.value);
+          if (!Number.isFinite(val)) continue;
+          const ms = dfParseStartMs(item?.start || item?.hour);
+          if (Number.isFinite(ms)) {
+            const ymd = dfToCphYmd(ms);
+            if (ymd === todayYmd) todayArr.push(val);
+            else if (ymd === tomorrowYmd) tomArr.push(val);
+            putSlot(ms, val, ymd, 0);
+          } else {
+            todayArr.push(val);
+          }
+        }
+      }
+      if (Array.isArray(pAttr.raw_today)) {
+        pAttr.raw_today.forEach((item, idx) => {
+          const val = Number(item?.price ?? item?.value ?? item);
+          if (!Number.isFinite(val)) return;
+          todayArr.push(val);
+          const ms = item && typeof item === "object" ? dfParseStartMs(item.start || item.hour) : NaN;
+          putSlot(ms, val, todayYmd, idx);
+        });
+      } else if (Array.isArray(pAttr.today)) {
+        pAttr.today.forEach((item, idx) => {
+          const val = Number(item);
+          if (!Number.isFinite(val)) return;
+          todayArr.push(val);
+          putSlot(NaN, val, todayYmd, idx);
+        });
+      }
+      const rawTomOk = pAttr.tomorrow_valid !== false;
+      if (rawTomOk && Array.isArray(pAttr.raw_tomorrow)) {
+        pAttr.raw_tomorrow.forEach((item, idx) => {
+          const val = Number(item?.price ?? item?.value ?? item);
+          if (!Number.isFinite(val)) return;
+          tomArr.push(val);
+          const ms = item && typeof item === "object" ? dfParseStartMs(item.start || item.hour) : NaN;
+          putSlot(ms, val, tomorrowYmd, idx);
+        });
+      } else if (rawTomOk && Array.isArray(pAttr.tomorrow)) {
+        pAttr.tomorrow.forEach((item, idx) => {
+          const val = Number(item);
+          if (!Number.isFinite(val)) return;
+          tomArr.push(val);
+          putSlot(NaN, val, tomorrowYmd, idx);
+        });
+      }
+
+      const hourlySlots = [...slotMap.values()].sort((a, b) => a.ms - b.ms);
+      const upcoming = hourlySlots.filter((s) => s.ms + 3600000 > nowMs);
+      let bestWindow = null;
+      if (upcoming.length >= 3) {
+        let bestAvg = Infinity;
+        let bestIdx = -1;
+        for (let i = 0; i <= upcoming.length - 3; i++) {
+          if (upcoming[i + 2].ms - upcoming[i].ms <= 2 * 3600000 + 900000) {
+            const avg = (upcoming[i].price + upcoming[i + 1].price + upcoming[i + 2].price) / 3;
+            if (avg < bestAvg) {
+              bestAvg = avg;
+              bestIdx = i;
+            }
+          }
+        }
+        if (bestIdx >= 0) {
+          for (let k = 0; k < 3; k++) upcoming[bestIdx + k].inBestWindow = true;
+          const s0 = upcoming[bestIdx];
+          const s2 = upcoming[bestIdx + 2];
+          const endHr = (s2.hour + 1) % 24;
+          bestWindow = {
+            hours: 3,
+            startLbl: s0.lbl,
+            endLbl: `${String(endHr).padStart(2, "0")}:00`,
+            dayTag: s0.isTomorrow ? (isEn ? "Tomorrow" : "I morgen") : (isEn ? "Today" : "I dag"),
+            avgPrice: bestAvg,
+          };
+        }
+      }
+      if (!bestWindow && upcoming.length >= 1) {
+        let minS = upcoming[0];
+        for (const s of upcoming) {
+          if (s.price < minS.price) minS = s;
+        }
+        minS.inBestWindow = true;
+        const endHr = (minS.hour + 1) % 24;
+        bestWindow = {
+          hours: 1,
+          startLbl: minS.lbl,
+          endLbl: `${String(endHr).padStart(2, "0")}:00`,
+          dayTag: minS.isTomorrow ? (isEn ? "Tomorrow" : "I morgen") : (isEn ? "Today" : "I dag"),
+          avgPrice: minS.price,
+        };
+      }
+
+      const sibs = this._elPriceSiblingIds(priceId);
+      const sibMin = sibs.todayMin ? parseFloat(st[sibs.todayMin]?.state) : NaN;
+      const sibMax = sibs.todayMax ? parseFloat(st[sibs.todayMax]?.state) : NaN;
+      const sibTomAvail = sibs.tomAvail && st[sibs.tomAvail] ? st[sibs.tomAvail].state === "on" : null;
+      const sibTomMin = sibs.tomMin ? parseFloat(st[sibs.tomMin]?.state) : NaN;
+      const sibSpot = sibs.spot ? parseFloat(st[sibs.spot]?.state) : NaN;
+
+      const todayMin = Number.isFinite(sibMin) ? sibMin : (todayArr.length ? Math.min(...todayArr) : NaN);
+      const todayMax = Number.isFinite(sibMax) ? sibMax : (todayArr.length ? Math.max(...todayArr) : NaN);
+      const tomMin = Number.isFinite(sibTomMin) ? sibTomMin : (tomArr.length ? Math.min(...tomArr) : NaN);
+      const tomAvail = sibTomAvail !== null ? sibTomAvail : Number.isFinite(tomMin);
+      const spotNow = Number.isFinite(sibSpot) ? sibSpot : NaN;
+      const tariffNow = (Number.isFinite(nowPrice) && Number.isFinite(spotNow))
+        ? Math.max(nowPrice - spotNow, 0)
+        : NaN;
+
+      return { nowPrice, todayMin, todayMax, tomAvail, tomMin, spotNow, tariffNow, hourlySlots, bestWindow };
+    }
+
+    _computeWaterStats(dayMap, wInfo, priceM3) {
+      if (!wInfo) return null;
+      const cfg = this._config || {};
+      const st = this._hass?.states || {};
+      const lang = cfg.language === "en" ? "en" : "da";
+      const statsId = wInfo.statsEntity;
+      const liveId = wInfo.liveEntity;
+      const uom = st[statsId]?.attributes?.unit_of_measurement || st[liveId]?.attributes?.unit_of_measurement || "m³";
+      const toM3 = (uom === "L" || uom === "l") ? 0.001 : 1;
+
+      const rows = (Array.isArray(dayMap?.[statsId]) ? [...dayMap[statsId]] : [])
+        .sort((a, b) => dfParseStartMs(a?.start) - dfParseStartMs(b?.start));
+
+      const dayM3 = new Map();
+      let prevState = null;
+      let latestStatsState = NaN;
+      for (const r of rows) {
+        const ms = dfParseStartMs(r?.start);
+        if (!Number.isFinite(ms)) continue;
+        const ymd = dfToCphYmd(ms);
+        const hasState = r.state !== null && r.state !== undefined && Number.isFinite(Number(r.state));
+        if (hasState) {
+          const stv = Number(r.state);
+          latestStatsState = stv * toM3;
+          if (prevState !== null && stv >= prevState) {
+            const delta = (stv - prevState) * toM3;
+            if (delta < 50) dayM3.set(ymd, delta);
+          }
+          prevState = stv;
+        } else if (r.change !== null && r.change !== undefined && Number.isFinite(Number(r.change))) {
+          const delta = Number(r.change) * toM3;
+          if (delta >= 0 && delta < 50) dayM3.set(ymd, delta);
+        }
+      }
+
+      const nowMs = Date.now();
+      const todayYmd = dfToCphYmd(nowMs);
+      const yestYmd = dfToCphYmd(nowMs - 86400000);
+      const curYm = todayYmd.slice(0, 7);
+      const wDays = [...dayM3.keys()].sort();
+      const wMtdDays = wDays.filter((d) => d.startsWith(curYm));
+      let mtdM3 = 0;
+      for (const d of wMtdDays) mtdM3 += dayM3.get(d) || 0;
+
+      const completeWDays = wDays.filter((d) => d < todayYmd);
+      const avgSlice = completeWDays.slice(-30);
+      const avg30M3 = avgSlice.length > 0
+        ? avgSlice.reduce((acc, d) => acc + (dayM3.get(d) || 0), 0) / avgSlice.length
+        : null;
+
+      const todayM3 = dayM3.has(todayYmd) ? dayM3.get(todayYmd) : null;
+      const yKey = dayM3.has(yestYmd) ? yestYmd : (completeWDays.length ? completeWDays[completeWDays.length - 1] : "");
+      const yestM3 = yKey ? (dayM3.get(yKey) || 0) : null;
+
+      const series_30d = wDays.slice(-30).map((d) => {
+        const m3 = dayM3.get(d) || 0;
+        return {
+          d,
+          lbl: dfFmtDayLabel(d, lang),
+          l: Math.round(m3 * 1000),
+          kr: Number((m3 * priceM3).toFixed(1)),
+        };
+      });
+      const series_7d = series_30d.slice(-7);
+
+      const liveStateVal = parseFloat(st[liveId]?.state);
+      const meterM3 = Number.isFinite(liveStateVal)
+        ? liveStateVal * toM3
+        : (Number.isFinite(latestStatsState) ? latestStatsState : NaN);
+
+      return {
+        meterM3,
+        today_l: todayM3 !== null ? Math.round(todayM3 * 1000) : null,
+        today_kr: todayM3 !== null ? Number((todayM3 * priceM3).toFixed(1)) : null,
+        yest_d: yKey,
+        yest_l: yestM3 !== null ? Math.round(yestM3 * 1000) : null,
+        yest_kr: yestM3 !== null ? Number((yestM3 * priceM3).toFixed(1)) : null,
+        mtd_m3: Number(mtdM3.toFixed(2)),
+        mtd_kr: Math.round(mtdM3 * priceM3),
+        mtd_days: wMtdDays.length,
+        avg30_l: avg30M3 !== null ? Math.round(avg30M3 * 1000) : null,
+        avg30_kr: avg30M3 !== null ? Number((avg30M3 * priceM3).toFixed(1)) : null,
+        series_7d,
+        series_30d,
+      };
+    }
+
+    _renderDetailModal(ctx) {
+      const active = this._activeDetail;
+      if (!active) return "";
+      const {
+        isEn, fmtNum, cfg, st,
+        hasEl, hasEv, hasWater, hasHeat,
+        elStats, elPrices, elMtdKwh, elMtdKr, elEvPct,
+        wInfo, wStats, wPriceM3, wMtdKr,
+        heatSt, emptyMsg,
+      } = ctx;
+
+      if (active === "el" && !hasEl) return "";
+      if (active === "water" && !hasWater) return "";
+      if (active === "heat" && !hasHeat) return "";
+
+      const tabs = [
+        hasEl ? ["el", `⚡ ${isEn ? "Electricity" : "Strøm"}`] : null,
+        hasWater ? ["water", `💧 ${isEn ? "Water" : "Vand"}`] : null,
+        hasHeat ? ["heat", `🔥 ${isEn ? "Heating" : "Fjernvarme"}`] : null,
+      ].filter(Boolean);
+
+      const title = active === "el"
+        ? `⚡ ${isEn ? "Electricity & Hourly Prices" : "Strøm & timepriser"}`
+        : active === "water"
+          ? `💧 ${isEn ? "Water & Meter Details" : "Vand & målerdetaljer"}`
+          : `🔥 ${isEn ? "District Heating — Full Dashboard" : "Fjernvarme — fuldt overblik"}`;
+
+      const renderMultiBars = (bars, colorClass, unitSuffix, dec = 0, stackColorClass = null) => {
+        if (!bars || !bars.length) return `<div class="empty-bars">${esc(emptyMsg)}</div>`;
+        const maxVal = Math.max(...bars.map((b) => Number(b.val) || 0), 1);
+        const lblStep = Math.max(1, Math.ceil(bars.length / 6));
+        return `
+          <div class="mbars" style="grid-template-columns:repeat(${bars.length}, minmax(0, 1fr))">
+            ${bars.map((b, idx) => {
+              const v = Math.max(Number(b.val) || 0, 0);
+              const pct = v > 0 ? Math.max(Math.round((v / maxVal) * 100), 6) : 3;
+              const stackV = stackColorClass ? Math.min(Math.max(Number(b.stackVal) || 0, 0), v) : 0;
+              const baseV = Math.max(v - stackV, 0);
+              let inner;
+              if (stackColorClass && stackV > 0 && v > 0) {
+                const stackPct = Math.max(Math.round((stackV / v) * 100), 6);
+                const basePct = baseV > 0 ? Math.max(100 - stackPct, 4) : 0;
+                const adjStackPct = basePct > 0 ? (100 - basePct) : 100;
+                inner = `
+                  <div class="bar-stack" style="height:${pct}%">
+                    <div class="bar-seg ${stackColorClass}${basePct > 0 ? " bar-seg-sep" : ""}" style="height:${adjStackPct}%"></div>
+                    ${basePct > 0 ? `<div class="bar-seg ${colorClass}" style="height:${basePct}%"></div>` : ""}
+                  </div>
+                `;
+              } else {
+                inner = `<div class="bar-fill ${colorClass}" style="height:${pct}%"></div>`;
+              }
+              const showLbl = idx === 0 || idx === bars.length - 1 || idx % lblStep === 0;
+              const dShort = b.shortDate || "";
+              return `
+                <div class="mbar-col" title="${esc(b.lbl)}: ${esc(fmtNum(v, dec))} ${esc(unitSuffix)}${b.sub ? " (" + esc(b.sub) + ")" : ""}">
+                  <div class="mbar-track">${inner}</div>
+                  <div class="mbar-lbl">${showLbl ? esc(dShort) : ""}</div>
+                </div>
+              `;
+            }).join("")}
+          </div>
+        `;
+      };
+
+      let bodyHtml = "";
+      if (active === "el" && elStats && elPrices) {
+        const slots = Array.isArray(elPrices.hourlySlots) ? elPrices.hourlySlots : [];
+        const hasPrices = slots.length > 0;
+        const bw = elPrices.bestWindow;
+        const spotLine = Number.isFinite(elPrices.spotNow)
+          ? `Spot ${fmtNum(elPrices.spotNow, 2)} + ${isEn ? "tariffs" : "tarif/afgift"} ${fmtNum(elPrices.tariffNow, 2)} kr.`
+          : (Number.isFinite(elPrices.todayMin)
+            ? `${isEn ? "Today" : "I dag"} ${fmtNum(elPrices.todayMin, 2)}–${fmtNum(elPrices.todayMax, 2)} kr.`
+            : "–");
+        const bestValTxt = bw ? `${bw.dayTag} kl. ${bw.startLbl}–${bw.endLbl}` : "–";
+        const bestSubTxt = bw ? `${isEn ? "Avg" : "Snit"} ${fmtNum(bw.avgPrice, 2)} kr/kWh` : (isEn ? "No hourly prices" : "Ingen timepriser");
+
+        let priceChartHtml = "";
+        if (hasPrices) {
+          const vals = slots.map((s) => s.price);
+          const minP = Math.min(0, ...vals);
+          const maxP = Math.max(1.0, ...vals);
+          const spanP = Math.max(maxP - minP, 0.25);
+          priceChartHtml = `
+            <div class="chart-box">
+              <div class="chart-head">
+                <div class="chart-title">${isEn ? "Hourly electricity prices (kr/kWh)" : "Timepriser time for time (kr/kWh)"}</div>
+                <div class="mini-leg">
+                  <span class="mini-leg-item"><span class="mini-dot" style="background:#22c55e"></span>&lt; 1,80</span>
+                  <span class="mini-leg-item"><span class="mini-dot" style="background:#f59e0b"></span>1,80–3,00</span>
+                  <span class="mini-leg-item"><span class="mini-dot" style="background:#ef4444"></span>&gt; 3,00</span>
+                  ${bw ? `<span class="mini-leg-item"><span class="mini-dot" style="background:#38bdf8"></span>★ ${isEn ? "Best 3h" : "Billigste 3t"}</span>` : ""}
+                </div>
+              </div>
+              <div class="pbars" style="grid-template-columns:repeat(${slots.length}, minmax(0, 1fr))">
+                ${slots.map((s, idx) => {
+                  const pct = Math.max(Math.round(((s.price - minP) / spanP) * 100), 6);
+                  const cls = s.price < 1.8 ? "p-low" : s.price < 3.0 ? "p-mid" : "p-high";
+                  const daySep = idx > 0 && s.hour === 0 ? " day-sep" : "";
+                  const nowCls = s.isNow ? " is-now" : "";
+                  const bestCls = s.inBestWindow ? " is-best" : "";
+                  const showHr = s.hour % 3 === 0 || s.isNow;
+                  const lblTxt = s.isNow ? (isEn ? "Now" : "Nu") : (showHr ? String(s.hour).padStart(2, "0") : "");
+                  const tip = `${s.isTomorrow ? (isEn ? "Tomorrow" : "I morgen") : (isEn ? "Today" : "I dag")} ${s.lbl}: ${fmtNum(s.price, 2)} kr/kWh${s.inBestWindow ? " ★" : ""}`;
+                  return `
+                    <div class="pbar-col${daySep}" title="${esc(tip)}">
+                      <div class="pbar-top">${s.inBestWindow ? "★" : ""}</div>
+                      <div class="pbar-track">
+                        <div class="pbar-fill ${cls}${nowCls}${bestCls}" style="height:${pct}%"></div>
+                      </div>
+                      <div class="pbar-lbl${s.isNow ? " is-now-lbl" : ""}">${esc(lblTxt)}</div>
+                    </div>
+                  `;
+                }).join("")}
+              </div>
+            </div>
+          `;
+        }
+
+        const el30Bars = (elStats.series_30d || []).map((d) => {
+          const kwh = Number(d.kwh) || 0;
+          const evKwh = hasEv ? Math.min(Math.max(Number(d.ev_kwh) || 0, 0), kwh) : 0;
+          const houseKwh = Math.max(kwh - evKwh, 0);
+          const parts = String(d.d || "").split("-");
+          const shortDate = parts.length === 3 ? `${Number(parts[2])}/${Number(parts[1])}` : d.lbl;
+          const subParts = [`${fmtNum(d.kr, 0)} kr.`];
+          if (hasEv && evKwh > 0) subParts.push(`${isEn ? "House" : "Hus"} ${fmtNum(houseKwh, 1)} · ${isEn ? "EV" : "Elbil"} ${fmtNum(evKwh, 1)} kWh`);
+          return { lbl: d.lbl, shortDate, val: kwh, stackVal: evKwh, sub: subParts.join(" · ") };
+        });
+
+        bodyHtml = `
+          <div class="df-modal-body" data-modal="el">
+            <div class="mkpis">
+              <div class="kpi">
+                <div class="kpi-lbl">${isEn ? "Price now" : "Pris lige nu"}</div>
+                <div class="kpi-main">${Number.isFinite(elPrices.nowPrice) ? esc(fmtNum(elPrices.nowPrice, 2)) + " kr/kWh" : "–"}</div>
+                <div class="kpi-sub">${esc(spotLine)}</div>
+              </div>
+              <div class="kpi">
+                <div class="kpi-lbl">${isEn ? "Cheapest 3 hours" : "Billigste 3 timer"}</div>
+                <div class="kpi-main">${esc(bestValTxt)}</div>
+                <div class="kpi-sub">${esc(bestSubTxt)}</div>
+              </div>
+              <div class="kpi">
+                <div class="kpi-lbl">${isEn ? "This month" : "Denne måned"}</div>
+                <div class="kpi-main">${esc(fmtNum(elMtdKwh, 0))} kWh</div>
+                <div class="kpi-sub">${esc(fmtNum(elMtdKr, 0))} kr.${hasEv && elEvPct !== null ? ` · ${isEn ? "EV" : "Elbil"} ${elEvPct} %` : ""}</div>
+              </div>
+              <div class="kpi">
+                <div class="kpi-lbl">${isEn ? "30d daily avg" : "30d døgn-snit"}</div>
+                <div class="kpi-main">${elStats.avg30_kwh !== null ? esc(fmtNum(elStats.avg30_kwh, 1)) + " kWh" : "–"}</div>
+                <div class="kpi-sub">${elStats.avg30_kr !== null ? esc(fmtNum(elStats.avg30_kr, 0)) + (isEn ? " kr./day" : " kr./dag") : "–"}${hasEv && elStats.base30_kwh !== null ? ` · ${isEn ? "House" : "Hus"} ${esc(fmtNum(elStats.base30_kwh, 1))} kWh` : ""}</div>
+              </div>
+            </div>
+
+            ${priceChartHtml}
+
+            <div class="chart-box">
+              <div class="chart-head">
+                <div class="chart-title">${isEn ? "Last 30 days consumption (kWh)" : "Seneste 30 dage elforbrug (kWh)"}</div>
+                ${hasEv ? `
+                  <div class="mini-leg">
+                    <span class="mini-leg-item"><span class="mini-dot fill-el"></span>${isEn ? "House" : "Hus"}</span>
+                    <span class="mini-leg-item"><span class="mini-dot fill-ev"></span>${isEn ? "EV" : "Elbil"}</span>
+                  </div>
+                ` : ""}
+              </div>
+              ${renderMultiBars(el30Bars, "fill-el", "kWh", 1, hasEv ? "fill-ev" : null)}
+            </div>
+
+            <div class="ufoot">
+              <button type="button" class="foot-btn df-foot-back" data-modal-close="1">‹ ${isEn ? "Back" : "Tilbage"}</button>
+              <button type="button" class="foot-btn" data-more="${esc(cfg.el_price_entity || cfg.el_entity)}">🔎 ${isEn ? "Sensor history" : "Sensor-historik"}</button>
+              <button type="button" class="foot-btn" data-href="/energy">📈 ${isEn ? "HA Energy dashboard" : "HA Energi-dashboard"}</button>
+            </div>
+          </div>
+        `;
+      } else if (active === "water" && wInfo && wStats) {
+        const wMinFlow = wInfo.minFlowEntity ? parseFloat(st[wInfo.minFlowEntity]?.state) : NaN;
+        const wMaxFlow = wInfo.maxFlowEntity ? parseFloat(st[wInfo.maxFlowEntity]?.state) : NaN;
+        const wMinTemp = wInfo.minTempEntity ? parseFloat(st[wInfo.minTempEntity]?.state) : NaN;
+        const wMaxTemp = wInfo.maxTempEntity ? parseFloat(st[wInfo.maxTempEntity]?.state) : NaN;
+        const wBattDays = wInfo.battDaysEntity ? parseFloat(st[wInfo.battDaysEntity]?.state) : NaN;
+        const hasMinFlow = Boolean(wInfo.minFlowEntity);
+        const wLeak = Number.isFinite(wMinFlow) && wMinFlow > 0;
+        const leakMain = hasMinFlow
+          ? (!Number.isFinite(wMinFlow) ? "–" : wLeak ? `⚠️ ${fmtNum(wMinFlow, 0)} L/h` : "✅ 0 L/h")
+          : (Number.isFinite(wStats.today_l) ? `${fmtNum(wStats.today_l, 0)} L` : "–");
+        const leakSub = hasMinFlow
+          ? (wLeak ? (isEn ? "Possible leak" : "Mulig utæthed") : (isEn ? "Tight overnight" : "Tæt natflow"))
+          : (isEn ? "Today so far" : "I dag indtil nu");
+        const healthParts = [];
+        if (Number.isFinite(wMaxFlow)) healthParts.push(`Max ${fmtNum(wMaxFlow, 0)} L/h`);
+        if (Number.isFinite(wMinTemp)) healthParts.push(`${fmtNum(wMinTemp, 0)}–${fmtNum(Number.isFinite(wMaxTemp) ? wMaxTemp : wMinTemp, 0)} °C`);
+        if (Number.isFinite(wBattDays)) healthParts.push(`~${fmtNum(wBattDays / 365, 1)} ${isEn ? "yrs" : "år"}`);
+        const w30Bars = (wStats.series_30d || []).map((d) => {
+          const parts = String(d.d || "").split("-");
+          const shortDate = parts.length === 3 ? `${Number(parts[2])}/${Number(parts[1])}` : d.lbl;
+          return { lbl: d.lbl, shortDate, val: Number(d.l) || 0, sub: `~${fmtNum(d.kr, 1)} kr.` };
+        });
+
+        bodyHtml = `
+          <div class="df-modal-body" data-modal="water">
+            <div class="mkpis">
+              <div class="kpi">
+                <div class="kpi-lbl">${hasMinFlow ? (isEn ? "Leak check" : "Lækagetjek") : (isEn ? "Today" : "I dag")}</div>
+                <div class="kpi-main">${esc(leakMain)}</div>
+                <div class="kpi-sub">${esc(leakSub)}</div>
+              </div>
+              <div class="kpi">
+                <div class="kpi-lbl">${isEn ? "This month" : "Denne måned"}</div>
+                <div class="kpi-main">${esc(fmtNum(wStats.mtd_m3, 2))} m³</div>
+                <div class="kpi-sub">~${esc(fmtNum(wMtdKr, 0))} kr. (${esc(fmtNum(wPriceM3, 2))} kr/m³)</div>
+              </div>
+              <div class="kpi">
+                <div class="kpi-lbl">${isEn ? "30d daily avg" : "30d døgn-snit"}</div>
+                <div class="kpi-main">${wStats.avg30_l !== null ? esc(fmtNum(wStats.avg30_l, 0)) + " L" : "–"}</div>
+                <div class="kpi-sub">${wStats.avg30_kr !== null ? "~" + esc(fmtNum(wStats.avg30_kr, 1)) + (isEn ? " kr./day" : " kr./dag") : "–"}</div>
+              </div>
+              <div class="kpi">
+                <div class="kpi-lbl">${isEn ? "Meter & health" : "Måler & sundhed"}</div>
+                <div class="kpi-main">${Number.isFinite(wStats.meterM3) ? esc(fmtNum(wStats.meterM3, 2)) + " m³" : "–"}</div>
+                <div class="kpi-sub">${esc(healthParts.join(" · ") || (wInfo.isMaalerportal ? "Målerportal" : "Vandmåler"))}</div>
+              </div>
+            </div>
+
+            <div class="chart-box">
+              <div class="chart-title">${isEn ? "Last 30 days water consumption (L/day)" : "Seneste 30 dage vandforbrug (liter/dag)"}</div>
+              ${renderMultiBars(w30Bars, "fill-vand", "L", 0)}
+            </div>
+
+            <div class="ufoot">
+              <button type="button" class="foot-btn df-foot-back" data-modal-close="1">‹ ${isEn ? "Back" : "Tilbage"}</button>
+              ${cfg.water_price_entity && st[cfg.water_price_entity] ? `<button type="button" class="foot-btn" data-more="${esc(cfg.water_price_entity)}">💰 ${isEn ? "Edit water price" : "Ret vandpris"} (${esc(fmtNum(wPriceM3, 2))} kr/m³)</button>` : ""}
+              <button type="button" class="foot-btn" data-more="${esc(wInfo.liveEntity)}">🔎 ${isEn ? "Sensor history" : "Sensor-historik"}</button>
+              <button type="button" class="foot-btn" data-href="/energy">📈 ${isEn ? "HA Energy dashboard" : "HA Energi-dashboard"}</button>
+            </div>
+          </div>
+        `;
+      } else if (active === "heat" && heatSt) {
+        bodyHtml = `
+          <div class="df-modal-body" data-modal="heat">
+            <div id="dfEmbeddedHeatHost" class="df-heat-host"></div>
+            <div class="ufoot">
+              <button type="button" class="foot-btn df-foot-back" data-modal-close="1">‹ ${isEn ? "Back" : "Tilbage"}</button>
+            </div>
+          </div>
+        `;
+      }
+
+      if (!bodyHtml) return "";
+
+      return `
+        <div class="df-modal-backdrop" id="dfModalBackdrop" role="dialog" aria-modal="true" aria-label="${esc(title)}">
+          <div class="df-modal ${active === "heat" ? "df-modal-wide" : ""}">
+            <div class="df-modal-head">
+              <div class="df-modal-head-left">
+                <button type="button" class="df-back-btn" id="dfModalBack" data-modal-close="1" aria-label="${isEn ? "Back" : "Tilbage"}">‹ ${isEn ? "Back" : "Tilbage"}</button>
+                <div class="df-modal-title">${esc(title)}</div>
+              </div>
+              <div class="df-modal-actions">
+                ${tabs.length > 1 ? `
+                  <div class="df-tabs">
+                    ${tabs.map(([id, lbl]) => `<button type="button" class="df-tab${id === active ? " active" : ""}" data-detail="${id}">${esc(lbl)}</button>`).join("")}
+                  </div>
+                ` : ""}
+                <button type="button" class="df-close-btn" id="dfModalClose" data-modal-close="1" aria-label="${isEn ? "Close" : "Luk"}">✕ ${isEn ? "Close" : "Luk"}</button>
+              </div>
+            </div>
+            ${bodyHtml}
+          </div>
+        </div>
+      `;
+    }
+
+    _openMoreInfo(entityId) {
+      if (!entityId || typeof this.dispatchEvent !== "function" || typeof CustomEvent !== "function") return;
+      this.dispatchEvent(new CustomEvent("hass-more-info", {
+        bubbles: true,
+        composed: true,
+        detail: { entityId },
+      }));
+    }
+
+    _render() {
+      if (!this.shadowRoot) return;
+      const cfg = this._config || {};
+      const st = this._hass?.states || {};
+      const lang = cfg.language === "en" ? "en" : "da";
+      const isEn = lang === "en";
+      const fmtNum = (v, d = 0) => dfFmtNum(v, d, lang);
+
+      const now = new Date();
+      const curYr = String(now.getFullYear());
+      const curMoKey = MONTHS[now.getMonth()];
+      const monthHeading = `${(isEn ? DF_FULL_MO_EN : DF_FULL_MO_DA)[now.getMonth()]} ${curYr}`;
+      const nowMs = Date.now();
+      const todayYmd = dfToCphYmd(nowMs);
+      const tomorrowYmd = dfToCphYmd(nowMs + 86400000);
+
+      const hasEl = Boolean(String(cfg.el_entity || "").trim());
+      const hasEv = hasEl && Boolean(String(cfg.ev_entity || "").trim());
+      const wInfo = this._resolveWaterEntities();
+      const hasWater = Boolean(wInfo);
+      const heatSt = this._resolveHeatEntity();
+      const hasHeat = Boolean(heatSt);
+      const activeCols = (hasEl ? 1 : 0) + (hasWater ? 1 : 0) + (hasHeat ? 1 : 0);
+
+      const emptyMsg = this._statsLoading
+        ? (isEn ? "Loading statistics…" : "Henter statistik…")
+        : this._statsError
+          ? (isEn ? `Statistics error: ${this._statsError}` : `Statistikfejl: ${this._statsError}`)
+          : (isEn ? "Waiting for daily data…" : "Afventer dagsdata…");
+
+      const renderBars = (bars, colorClass, unitSuffix, dec = 0, stackColorClass = null) => {
+        if (!bars || !bars.length) {
+          return `<div class="empty-bars">${esc(emptyMsg)}</div>`;
+        }
+        const maxVal = Math.max(...bars.map((b) => Number(b.val) || 0), 1);
+        return `
+          <div class="bars">
+            ${bars.map((b) => {
+              const v = Math.max(Number(b.val) || 0, 0);
+              const pct = v > 0 ? Math.max(Math.round((v / maxVal) * 100), 8) : 3;
+              const stackV = stackColorClass ? Math.min(Math.max(Number(b.stackVal) || 0, 0), v) : 0;
+              const baseV = Math.max(v - stackV, 0);
+              let barInner;
+              if (stackColorClass && stackV > 0 && v > 0) {
+                const stackPct = Math.max(Math.round((stackV / v) * 100), 6);
+                const basePct = baseV > 0 ? Math.max(100 - stackPct, 4) : 0;
+                const adjStackPct = basePct > 0 ? (100 - basePct) : 100;
+                barInner = `
+                  <div class="bar-stack" style="height:${pct}%">
+                    <div class="bar-seg ${stackColorClass}${basePct > 0 ? " bar-seg-sep" : ""}" style="height:${adjStackPct}%"></div>
+                    ${basePct > 0 ? `<div class="bar-seg ${colorClass}" style="height:${basePct}%"></div>` : ""}
+                  </div>
+                `;
+              } else {
+                barInner = `<div class="bar-fill ${colorClass}" style="height:${pct}%"></div>`;
+              }
+              return `
+                <div class="bar-col" title="${esc(b.lbl)}: ${esc(fmtNum(v, dec))} ${esc(unitSuffix)}${b.sub ? " (" + esc(b.sub) + ")" : ""}">
+                  <div class="bar-val">${v > 0 ? esc(fmtNum(v, dec)) : "0"}</div>
+                  <div class="bar-track">${barInner}</div>
+                  <div class="bar-lbl">${esc(b.shortLbl)}</div>
+                </div>
+              `;
+            }).join("")}
+          </div>
+        `;
+      };
+
+      // --- 1. Strøm ---
+      const rawStats = this._statsRaw || { hour: {}, day: {} };
+      const elStats = hasEl ? this._computeElStats(rawStats.hour) : null;
+      const elPrices = hasEl ? this._parseElPrices(todayYmd, tomorrowYmd) : null;
+      const elMtdKwh = elStats?.mtd_kwh ?? 0;
+      const elMtdKr = elStats?.mtd_kr ?? 0;
+      const elMtdEvKwh = elStats?.mtd_ev_kwh ?? 0;
+      const elMtdEvKr = elStats?.mtd_ev_kr ?? 0;
+      const elMtdHouseKwh = elStats?.mtd_house_kwh ?? 0;
+      const elMtdHouseKr = elStats?.mtd_house_kr ?? 0;
+      const elMtdDays = elStats?.mtd_days ?? 0;
+      const elEvPct = elMtdKwh > 0 ? Math.min(100, Math.round((elMtdEvKwh / elMtdKwh) * 100)) : null;
+
+      let elHtml = "";
+      if (hasEl && elStats && elPrices) {
+        const elNowPrice = elPrices.nowPrice;
+        const elPriceCls = Number.isFinite(elNowPrice)
+          ? (elNowPrice < 1.8 ? "pill-ok" : elNowPrice < 3.0 ? "pill-warn" : "pill-bad")
+          : "pill-muted";
+        const elBars = (elStats.series_7d || []).map((d) => {
+          const kwh = Number(d.kwh) || 0;
+          const evKwh = hasEv ? Math.min(Math.max(Number(d.ev_kwh) || 0, 0), kwh) : 0;
+          const houseKwh = Math.max(kwh - evKwh, 0);
+          const subParts = [`${fmtNum(d.kr, 0)} kr.`];
+          if (hasEv) {
+            if (evKwh > 0) {
+              subParts.push(`${isEn ? "House" : "Hus"}: ${fmtNum(houseKwh, 1)} kWh`);
+              subParts.push(`${isEn ? "EV" : "Elbil"}: ${fmtNum(evKwh, 1)} kWh / ${fmtNum(d.ev_kr, 0)} kr.`);
+            } else {
+              subParts.push(isEn ? "house only" : "kun hus");
+            }
+          }
+          return {
+            lbl: d.lbl,
+            shortLbl: String(d.lbl || "").split(" ")[0] || String(d.d || "").slice(8),
+            val: kwh,
+            stackVal: evKwh,
+            sub: subParts.join(" · "),
+          };
+        });
+
+        let elSub = cfg.el_subtitle;
+        if (!elSub) {
+          let elSrc = elStats.isEloverblik ? "Eloverblik" : (st[cfg.el_entity]?.attributes?.friendly_name || "Elmåler");
+          if (elStats.isEloverblik && elStats.latest_d && /^\d{4}-\d{2}-\d{2}$/.test(elStats.latest_d)) {
+            const dp = elStats.latest_d.split("-");
+            elSrc = `Eloverblik (${isEn ? "thru" : "t.o.m."} ${Number(dp[2])}/${Number(dp[1])})`;
+          }
+          const pId = String(cfg.el_price_entity || "").toLowerCase();
+          const pSrc = pId.includes("stromligning")
+            ? "Strømligning"
+            : pId.includes("energi_data_service")
+              ? "Energi Data Service"
+              : pId.includes("nordpool")
+                ? "Nordpool"
+                : (cfg.el_price_entity ? (st[cfg.el_price_entity]?.attributes?.friendly_name || "") : (Number.isFinite(Number(cfg.el_fixed_price)) ? `${fmtNum(cfg.el_fixed_price, 2)} kr/kWh` : ""));
+          elSub = pSrc ? `${elSrc} & ${pSrc}` : elSrc;
+        }
+
+        const elChartTitle = elStats.isEloverblik
+          ? (isEn ? "Last 7 days from Eloverblik (kWh)" : "Seneste 7 dage med Eloverblik-data (kWh)")
+          : (isEn ? "Last 7 days electricity (kWh)" : "Seneste 7 dage elforbrug (kWh)");
+
+        const elBtnHtml = cfg.el_link
+          ? `<button type="button" class="foot-btn" data-href="${esc(cfg.el_link)}">⚡ ${isEn ? "Hourly prices" : "Se timepriser"}</button><button type="button" class="foot-btn" data-detail="el">📊 ${isEn ? "30d & windows" : "30d &amp; vinduer"}</button>`
+          : `<button type="button" class="foot-btn" data-detail="el">⚡ ${isEn ? "Hourly prices" : "Se timepriser"}</button>`;
+        const evBtnTarget = cfg.ev_link || (hasEv ? cfg.ev_entity : "");
+        const evBtnAttr = cfg.ev_link
+          ? `data-href="${esc(cfg.ev_link)}"`
+          : (hasEv ? `data-more="${esc(cfg.ev_entity)}"` : "");
+
+        elHtml = `
+          <div class="glass ucard" data-section="electricity">
+            <div class="uhead">
+              <div>
+                <div class="utitle">⚡ ${isEn ? "Electricity" : "Strøm"}</div>
+                <div class="usub">${esc(elSub)}</div>
+              </div>
+              <button type="button" class="pill pill-btn ${elPriceCls}" data-detail="el">${isEn ? "Now" : "Nu"}: ${Number.isFinite(elNowPrice) ? esc(fmtNum(elNowPrice, 2)) + " kr/kWh" : "–"}</button>
+            </div>
+
+            <div class="kpis">
+              <div class="kpi">
+                <div class="kpi-lbl">${esc(elStats.latest_lbl)}</div>
+                <div class="kpi-main">${elStats.latest_kwh !== null ? esc(fmtNum(elStats.latest_kwh, 1)) + " kWh" : "–"}</div>
+                <div class="kpi-sub">${elStats.latest_kr !== null ? esc(fmtNum(elStats.latest_kr, 0)) + " kr." : "–"}</div>
+              </div>
+              <div class="kpi">
+                <div class="kpi-lbl">${isEn ? "This month" : "Denne måned"}</div>
+                <div class="kpi-main">${esc(fmtNum(elMtdKwh, 0))} kWh</div>
+                <div class="kpi-sub">${esc(fmtNum(elMtdKr, 0))} kr.</div>
+              </div>
+              <div class="kpi">
+                <div class="kpi-lbl">${isEn ? "30d daily avg" : "30d døgn-snit"}</div>
+                <div class="kpi-main">${elStats.avg30_kwh !== null ? esc(fmtNum(elStats.avg30_kwh, 1)) + " kWh" : "–"}</div>
+                <div class="kpi-sub">${elStats.avg30_kr !== null ? esc(fmtNum(elStats.avg30_kr, 0)) + (isEn ? " kr./day" : " kr./dag") : "–"}</div>
+              </div>
+            </div>
+
+            <div class="chart-box">
+              <div class="chart-head">
+                <div class="chart-title">${esc(elChartTitle)}</div>
+                ${hasEv ? `
+                  <div class="mini-leg">
+                    <span class="mini-leg-item"><span class="mini-dot fill-el"></span>${isEn ? "House" : "Hus"}</span>
+                    <span class="mini-leg-item"><span class="mini-dot fill-ev"></span>${isEn ? "EV" : "Elbil"}</span>
+                  </div>
+                ` : ""}
+              </div>
+              ${renderBars(elBars, "fill-el", "kWh", 1, hasEv ? "fill-ev" : null)}
+            </div>
+
+            <div class="insights">
+              ${hasEv ? `
+                <div class="ins"><span class="ins-ico">🏠</span><span><strong>${isEn ? "House excl. EV (30d):" : "Hus uden elbil (30d):"}</strong> ${elStats.base30_kwh !== null ? `${esc(fmtNum(elStats.base30_kwh, 1))} ${isEn ? "kWh/day" : "kWh/dag"} · ${esc(fmtNum(elStats.base30_kr, 0))} ${isEn ? "kr./day" : "kr./dag"}` : "–"}</span></div>
+                <div class="ins"><span class="ins-ico">🚗</span><span><strong>${isEn ? "EV this month:" : "Elbil denne måned:"}</strong> ${esc(fmtNum(elMtdEvKwh, 0))} kWh · ${esc(fmtNum(elMtdEvKr, 0))} kr.${elEvPct !== null ? ` (${elEvPct} % ${isEn ? "of electricity" : "af strøm"})` : ""} · ${isEn ? "House" : "Hus"}: ${esc(fmtNum(elMtdHouseKwh, 0))} kWh (${esc(fmtNum(elMtdHouseKr, 0))} kr.)</span></div>
+              ` : `
+                <div class="ins"><span class="ins-ico">📊</span><span><strong>${isEn ? "Month coverage:" : "Måned til dato:"}</strong> ${esc(fmtNum(elMtdDays, 0))} ${isEn ? "days measured" : "dage målt"}</span></div>
+              `}
+              <div class="ins"><span class="ins-ico">⏱️</span><span><strong>${isEn ? "Price today:" : "Pris i dag:"}</strong> ${Number.isFinite(elPrices.todayMin) ? `${esc(fmtNum(elPrices.todayMin, 2))}–${esc(fmtNum(elPrices.todayMax, 2))} kr.` : "–"}${elPrices.tomAvail && Number.isFinite(elPrices.tomMin) ? ` · ${isEn ? "Tomorrow from" : "I morgen fra"} ${esc(fmtNum(elPrices.tomMin, 2))} kr.` : ""}</span></div>
+            </div>
+
+            <div class="ufoot">
+              ${elBtnHtml}
+              ${evBtnTarget ? `<button type="button" class="foot-btn" ${evBtnAttr}>🚗 ${isEn ? "EV & charger" : "Elbil & lader"}</button>` : ""}
+            </div>
+          </div>
+        `;
+      }
+
+      // --- 2. Vand ---
+      const cfgWaterPrice = Number(cfg.water_price_m3);
+      const entWaterPrice = cfg.water_price_entity ? parseFloat(st[cfg.water_price_entity]?.state) : NaN;
+      const wPriceM3 = (Number.isFinite(entWaterPrice) && entWaterPrice > 0)
+        ? entWaterPrice
+        : ((Number.isFinite(cfgWaterPrice) && cfgWaterPrice > 0) ? cfgWaterPrice : 72.5);
+      const wStats = hasWater ? this._computeWaterStats(rawStats.day, wInfo, wPriceM3) : null;
+      const wMtdKr = wStats?.mtd_kr ?? 0;
+      const wMtdDays = wStats?.mtd_days ?? 0;
+
+      let waterHtml = "";
+      if (hasWater && wStats) {
+        const wMinFlow = wInfo.minFlowEntity ? parseFloat(st[wInfo.minFlowEntity]?.state) : NaN;
+        const wMaxFlow = wInfo.maxFlowEntity ? parseFloat(st[wInfo.maxFlowEntity]?.state) : NaN;
+        const wMinTemp = wInfo.minTempEntity ? parseFloat(st[wInfo.minTempEntity]?.state) : NaN;
+        const wMaxTemp = wInfo.maxTempEntity ? parseFloat(st[wInfo.maxTempEntity]?.state) : NaN;
+        const wBattDays = wInfo.battDaysEntity ? parseFloat(st[wInfo.battDaysEntity]?.state) : NaN;
+
+        const hasMinFlow = Boolean(wInfo.minFlowEntity);
+        const wLeak = Number.isFinite(wMinFlow) && wMinFlow > 0;
+        const wStatusTxt = hasMinFlow
+          ? (!Number.isFinite(wMinFlow)
+            ? (isEn ? "Awaiting flow" : "Afventer flow")
+            : wLeak
+              ? `⚠️ Min-flow ${fmtNum(wMinFlow, 0)} L/h!`
+              : (isEn ? "✅ Tight (0 L/h min)" : "✅ Tæt (0 L/h min)"))
+          : (Number.isFinite(wStats.meterM3) ? `${fmtNum(wStats.meterM3, 2)} m³` : (isEn ? "Water meter" : "Vandmåler"));
+        const wStatusCls = !hasMinFlow
+          ? "pill-muted"
+          : (!Number.isFinite(wMinFlow) ? "pill-muted" : wLeak ? "pill-bad" : "pill-ok");
+
+        const wSubBase = cfg.water_subtitle || (wInfo.isMaalerportal ? "Målerportal" : (isEn ? "Water meter" : "Vandmåler"));
+        const wSub = `${wSubBase}${Number.isFinite(wStats.meterM3) ? " · " + fmtNum(wStats.meterM3, 2) + " m³" : ""}`;
+        const wBars = (wStats.series_7d || []).map((d) => ({
+          lbl: d.lbl,
+          shortLbl: String(d.lbl || "").split(" ")[0] || String(d.d || "").slice(8),
+          val: Number(d.l) || 0,
+          sub: `${fmtNum(d.kr, 1)} kr.`,
+        }));
+
+        const wTempBattParts = [];
+        if (Number.isFinite(wMinTemp)) {
+          const maxT = Number.isFinite(wMaxTemp) ? wMaxTemp : wMinTemp;
+          wTempBattParts.push(`<strong>${isEn ? "Water temp:" : "Vandtemp:"}</strong> ${esc(fmtNum(wMinTemp, 0))}–${esc(fmtNum(maxT, 0))} °C`);
+        }
+        if (Number.isFinite(wBattDays)) {
+          wTempBattParts.push(`<strong>${isEn ? "Battery:" : "Batteri:"}</strong> ~${esc(fmtNum(wBattDays / 365, 1))} ${isEn ? "yrs" : "år"}`);
+        }
+
+        const wPriceHtml = cfg.water_price_entity && st[cfg.water_price_entity]
+          ? `<button class="link-btn" data-more="${esc(cfg.water_price_entity)}">${esc(fmtNum(wPriceM3, 2))} kr/m³</button> (${isEn ? "click to edit" : "klik for at rette"})`
+          : `${esc(fmtNum(wPriceM3, 2))} kr/m³`;
+
+        waterHtml = `
+          <div class="glass ucard" data-section="water">
+            <div class="uhead">
+              <div>
+                <div class="utitle">💧 ${isEn ? "Water" : "Vand"}</div>
+                <div class="usub">${esc(wSub)}</div>
+              </div>
+              <button type="button" class="pill pill-btn ${wStatusCls}" data-detail="water">${esc(wStatusTxt)}</button>
+            </div>
+
+            <div class="kpis">
+              <div class="kpi">
+                <div class="kpi-lbl">${isEn ? "Today (so far)" : "I dag (indtil nu)"}</div>
+                <div class="kpi-main">${wStats.today_l !== null ? esc(fmtNum(wStats.today_l, 0)) + " L" : "–"}</div>
+                <div class="kpi-sub">${wStats.today_kr !== null ? "~" + esc(fmtNum(wStats.today_kr, 1)) + " kr." : "–"}</div>
+              </div>
+              <div class="kpi">
+                <div class="kpi-lbl">${isEn ? "This month" : "Denne måned"}</div>
+                <div class="kpi-main">${esc(fmtNum(wStats.mtd_m3, 2))} m³</div>
+                <div class="kpi-sub">~${esc(fmtNum(wMtdKr, 0))} kr.</div>
+              </div>
+              <div class="kpi">
+                <div class="kpi-lbl">${isEn ? "30d daily avg" : "30d døgn-snit"}</div>
+                <div class="kpi-main">${wStats.avg30_l !== null ? esc(fmtNum(wStats.avg30_l, 0)) + " L" : "–"}</div>
+                <div class="kpi-sub">${wStats.avg30_kr !== null ? "~" + esc(fmtNum(wStats.avg30_kr, 1)) + (isEn ? " kr./day" : " kr./dag") : "–"}</div>
+              </div>
+            </div>
+
+            <div class="chart-box">
+              <div class="chart-title">${wInfo.isMaalerportal ? (isEn ? "Last 7 days from Målerportal (L/day)" : "Seneste 7 dage fra Målerportal (liter/dag)") : (isEn ? "Last 7 days water (L/day)" : "Seneste 7 dage vandforbrug (liter/dag)")}</div>
+              ${renderBars(wBars, "fill-vand", "L", 0)}
+            </div>
+
+            <div class="insights">
+              <div class="ins"><span class="ins-ico">🚿</span><span><strong>${isEn ? "Yesterday:" : "I går:"}</strong> ${wStats.yest_l !== null ? `${esc(fmtNum(wStats.yest_l, 0))} L (~${esc(fmtNum(wStats.yest_kr, 1))} kr.)` : "–"}${Number.isFinite(wMaxFlow) ? ` · <strong>Max flow:</strong> ${esc(fmtNum(wMaxFlow, 0))} L/h` : ""}${wStats.avg30_l !== null ? ` · ${wStats.avg30_l <= 350 ? (isEn ? "below" : "under") : (isEn ? "above" : "over")} ${isEn ? "typical family avg (~350 L/day)" : "typisk familiesnit (~350 L/dag)"}` : ""}</span></div>
+              ${wTempBattParts.length ? `<div class="ins"><span class="ins-ico">🌡️</span><span>${wTempBattParts.join(" · ")}</span></div>` : ""}
+              <div class="ins"><span class="ins-ico">💰</span><span><strong>${isEn ? "Estimated tariff:" : "Estimeret takst:"}</strong> ${wPriceHtml}</span></div>
+            </div>
+
+            <div class="ufoot">
+              ${cfg.water_link ? `<button type="button" class="foot-btn" data-href="${esc(cfg.water_link)}">📈 ${isEn ? "Energy & water history" : "Energi & vand-historik"}</button>` : ""}
+              <button type="button" class="foot-btn" data-detail="water">💧 ${isEn ? "Meter details" : "Målerdetaljer"}</button>
+            </div>
+          </div>
+        `;
+      }
+
+      // --- 3. Fjernvarme ---
+      const ka = heatSt?.attributes || {};
+      const kCaps = new Set(Array.isArray(ka.capabilities) ? ka.capabilities : ["cost", "daily", "monthly", "temperatures"]);
+      const kCost = ka.cost_estimate || {};
+      const kDaily = ka.daily || {};
+      const kRet = ka.return_temp || {};
+      const kIns = ka.insights || {};
+      const kFc = ka.forecast || {};
+      const kTar = ka.tariff || {};
+      const kBill = ka.billing || {};
+
+      const vRawState = parseFloat(heatSt?.state);
+      const vAnnCur = Number(ka.annual?.[curYr]);
+      const vYtdKwh = Number.isFinite(vRawState) ? vRawState : (Number.isFinite(vAnnCur) ? vAnnCur : NaN);
+      const vPriceKwh = Number(kCost.effective_price_dkk_per_kwh || kTar.price_dkk_per_kwh || ka.energy_price_dkk_per_kwh || 0);
+      const vMtdKwh = Number.isFinite(Number(kCost.current_month_kwh))
+        ? Number(kCost.current_month_kwh)
+        : (Number.isFinite(Number(kDaily.total)) ? Number(kDaily.total) : null);
+      const vMtdKr = Number.isFinite(Number(kCost.current_month_dkk))
+        ? Number(kCost.current_month_dkk)
+        : (vMtdKwh !== null && vPriceKwh > 0 ? vMtdKwh * vPriceKwh : 0);
+
+      const vDaysObj = kDaily.days || {};
+      const partialDayNum = kDaily.latest_complete === false && kDaily.latest_date
+        ? String(parseInt(String(kDaily.latest_date).slice(8, 10), 10))
+        : null;
+      const vDayNums = Object.keys(vDaysObj)
+        .filter((d) => d !== partialDayNum)
+        .map((d) => parseInt(d, 10))
+        .filter((n) => Number.isFinite(n))
+        .sort((a, b) => a - b)
+        .slice(-7);
+
+      let heatHtml = "";
+      if (hasHeat) {
+        const vUtilName = ka.utility || "Dansk Fjernvarme";
+        const vLatestKwh = Number.isFinite(Number(kCost.latest_day_kwh)) ? Number(kCost.latest_day_kwh) : null;
+        const vLatestKr = Number.isFinite(Number(kCost.latest_day_dkk)) ? Number(kCost.latest_day_dkk) : null;
+        const vLatestLbl = kCost.latest_day_label
+          ? String(kCost.latest_day_label).replace(/ \d{4}$/, "")
+          : (isEn ? "Latest day" : "Seneste dag");
+        const vAvgKwh = Number.isFinite(Number(kDaily.gennemsnit)) ? Number(kDaily.gennemsnit) : null;
+        const vAvgKr = vAvgKwh !== null && vPriceKwh > 0 ? vAvgKwh * vPriceKwh : null;
+
+        const hasTempCap = kCaps.has("temperatures");
+        const vBonus = Number(cfg.bonus_temp ?? kRet.thresholds?.bonus ?? ka.bonus_temp ?? 30);
+        const vPenalty = Number(cfg.penalty_temp ?? kRet.thresholds?.penalty ?? ka.penalty_temp ?? 40);
+        const allowBonus = (cfg.bonus_temp != null && Number(cfg.bonus_temp) > 0)
+          ? true
+          : (kTar.motivation_bonus !== false && vBonus > 0);
+        const vRetTemp = Number(
+          kRet[`monthly_${curYr}`]?.[curMoKey] ??
+          kRet.monthly_2026?.[curMoKey] ??
+          kCost.current_return_temp ??
+          kRet.annual?.[curYr] ??
+          kRet.annual?.["2026"]
+        );
+
+        let vHeaderPillHtml = "";
+        if (hasTempCap) {
+          const vRetCls = !Number.isFinite(vRetTemp)
+            ? "pill-muted"
+            : (!allowBonus
+              ? (vRetTemp <= vPenalty ? "pill-ok" : "pill-bad")
+              : (vRetTemp <= vBonus ? "pill-ok" : vRetTemp < vPenalty ? "pill-warn" : "pill-bad"));
+          const vRetTxt = Number.isFinite(vRetTemp) ? `🎯 Retur ${fmtNum(vRetTemp, 1)} °C` : "Retur –";
+          vHeaderPillHtml = `<button type="button" class="pill pill-btn ${vRetCls}" data-detail="heat">${esc(vRetTxt)}</button>`;
+        } else {
+          vHeaderPillHtml = `<button type="button" class="pill pill-btn pill-muted" data-detail="heat">${esc(ka.data_source || (isEn ? "Details" : "Detaljer"))}</button>`;
+        }
+
+        const vBars = vDayNums.map((dayNum) => {
+          const kwh = Number(vDaysObj[String(dayNum)]) || 0;
+          return {
+            lbl: `${dayNum}. ${curMoKey.toLowerCase()}`,
+            shortLbl: `${dayNum}.`,
+            val: kwh,
+            sub: vPriceKwh > 0 ? `${fmtNum(kwh * vPriceKwh, 0)} kr.` : "",
+          };
+        });
+
+        const vHddCur = kIns.kwh_per_hdd?.[curYr] ?? kIns.kwh_per_hdd?.["2026"];
+        const vR2 = kIns.temp_r2_pct;
+        const hasForecastCap = kCaps.has("forecast") && Number.isFinite(Number(kFc.expected_kwh)) && Number.isFinite(Number(kFc.budget_kwh)) && Number(kFc.budget_kwh) > 0;
+        const vFcDiffPct = hasForecastCap ? Math.round(((Number(kFc.expected_kwh) / Number(kFc.budget_kwh)) - 1) * 100) : null;
+
+        const billTotal = kBill[`total_${curYr}_kr`] ?? kBill.total_2026_kr;
+        const hasBillingCap = kCaps.has("billing") && billTotal !== null && billTotal !== undefined && Number.isFinite(Number(billTotal));
+        const fixedFee = Number(kTar.annual_fixed_fee_dkk || 0);
+        const ytdCost = Number(kCost.ytd_dkk);
+        const billingSuffix = hasBillingCap
+          ? ` · ${isEn ? "billed" : "opkrævet"} ${fmtNum(billTotal, 0)} kr.`
+          : (fixedFee > 0 ? ` · ${isEn ? "fixed fee" : "fast bidrag"} ~${fmtNum(fixedFee, 0)} ${isEn ? "kr./yr" : "kr./år"}` : "");
+
+        const heatBtnHtml = cfg.heat_link
+          ? `<button type="button" class="foot-btn" data-href="${esc(cfg.heat_link)}">🔥 ${isEn ? "Open Heating card" : "Åbn Fjernvarme-kortet"}</button><button type="button" class="foot-btn" data-detail="heat">📊 ${isEn ? "Quick view" : "Hurtig-visning"}</button>`
+          : `<button type="button" class="foot-btn" data-detail="heat">🔥 ${isEn ? "Open Heating card" : "Åbn Fjernvarme-kortet"}</button>`;
+
+        heatHtml = `
+          <div class="glass ucard" data-section="heating">
+            <div class="uhead">
+              <div>
+                <div class="utitle">🔥 ${isEn ? "District heating" : "Fjernvarme"}</div>
+                <div class="usub">${esc(vUtilName)} · ${Number.isFinite(vYtdKwh) ? `${esc(curYr)} ${isEn ? "YTD" : "ÅTD"} ${esc(fmtNum(vYtdKwh, 0))} kWh` : esc(ka.data_source || "Fjernvarme")}</div>
+              </div>
+              ${vHeaderPillHtml}
+            </div>
+
+            <div class="kpis">
+              <div class="kpi">
+                <div class="kpi-lbl">${esc(vLatestLbl)}</div>
+                <div class="kpi-main">${vLatestKwh !== null ? esc(fmtNum(vLatestKwh, 1)) + " kWh" : "–"}</div>
+                <div class="kpi-sub">${vLatestKr !== null ? "~" + esc(fmtNum(vLatestKr, 0)) + " kr." : "–"}</div>
+              </div>
+              <div class="kpi">
+                <div class="kpi-lbl">${isEn ? "This month" : "Denne måned"}</div>
+                <div class="kpi-main">${vMtdKwh !== null ? esc(fmtNum(vMtdKwh, 0)) + " kWh" : "–"}</div>
+                <div class="kpi-sub">${vMtdKwh !== null ? "~" + esc(fmtNum(vMtdKr, 0)) + " kr." : "–"}</div>
+              </div>
+              <div class="kpi">
+                <div class="kpi-lbl">${isEn ? `Daily avg (${curMoKey})` : `Døgn-snit (${curMoKey})`}</div>
+                <div class="kpi-main">${vAvgKwh !== null ? esc(fmtNum(vAvgKwh, 1)) + " kWh" : "–"}</div>
+                <div class="kpi-sub">${vAvgKr !== null ? "~" + esc(fmtNum(vAvgKr, 0)) + (isEn ? " kr./day" : " kr./dag") : "–"}</div>
+              </div>
+            </div>
+
+            <div class="chart-box">
+              <div class="chart-title">${isEn ? `Last 7 complete days (${curMoKey}, kWh)` : `Seneste 7 komplette dage (${curMoKey}, kWh)`}</div>
+              ${renderBars(vBars, "fill-varme", "kWh", 1)}
+            </div>
+
+            <div class="insights">
+              ${hasTempCap ? `
+                <div class="ins"><span class="ins-ico">🎯</span><span><strong>${isEn ? "Return temp:" : "Returtemperatur:"}</strong> ${Number.isFinite(vRetTemp) ? `${esc(fmtNum(vRetTemp, 1))} °C` : "–"} ${allowBonus ? `(${isEn ? "bonus" : "bonus"} &lt; ${esc(fmtNum(vBonus, 0))} °C · ${isEn ? "penalty" : "tillæg"} &gt; ${esc(fmtNum(vPenalty, 0))} °C)` : `(${isEn ? "target" : "krav"} ≤ ${esc(fmtNum(vPenalty, 0))} °C)`}</span></div>
+              ` : ""}
+              <div class="ins"><span class="ins-ico">🌡️</span><span><strong>${isEn ? "Weather efficiency:" : "Klimastyret forbrug:"}</strong> ${vHddCur ? `${esc(fmtNum(vHddCur, 2))} kWh/${isEn ? "HDD" : "graddag"}` : "–"}${vR2 ? ` (R² ${esc(fmtNum(vR2, 0))} %)` : ""}${vFcDiffPct !== null ? ` · ${isEn ? "forecast" : "prognose"} ${vFcDiffPct > 0 ? "+" : ""}${vFcDiffPct} % vs. budget` : ""}</span></div>
+              <div class="ins"><span class="ins-ico">🧾</span><span><strong>${esc(curYr)} ${isEn ? (hasBillingCap ? "variable / bills:" : "variable:") : (hasBillingCap ? "variabelt / regninger:" : "variabelt:")}</strong> ${Number.isFinite(ytdCost) ? `~${esc(fmtNum(ytdCost, 0))} kr.` : "–"}${vPriceKwh > 0 ? ` (${esc(fmtNum(vPriceKwh, 3))} kr/kWh)` : ""}${esc(billingSuffix)}</span></div>
+            </div>
+
+            <div class="ufoot">
+              ${heatBtnHtml}
+            </div>
+          </div>
+        `;
+      }
+
+      // --- 4. Combined Month Totals & Hero ---
+      const vMtdKrSafe = hasHeat ? vMtdKr : 0;
+      const wMtdKrSafe = hasWater ? wMtdKr : 0;
+      const elMtdKrSafe = hasEl ? elMtdKr : 0;
+      const totalMtdKr = Math.round(elMtdKrSafe + vMtdKrSafe + wMtdKrSafe);
+      const refDays = Math.max(
+        hasEl ? elMtdDays : 0,
+        hasWater ? wMtdDays : 0,
+        hasHeat && vDayNums.length ? Math.max(...vDayNums) : 0,
+        1
+      );
+      const totalDayKr = totalMtdKr / refDays;
+
+      const elEvShare = (hasEv && totalMtdKr > 0) ? Math.round((elMtdEvKr / totalMtdKr) * 100) : 0;
+      const elHouseShare = (hasEl && totalMtdKr > 0)
+        ? Math.round(((hasEv ? elMtdHouseKr : elMtdKrSafe) / totalMtdKr) * 100)
+        : 0;
+      const vShare = (hasHeat && totalMtdKr > 0) ? Math.round((vMtdKrSafe / totalMtdKr) * 100) : 0;
+      const wShare = (hasWater && totalMtdKr > 0) ? Math.max(0, 100 - elEvShare - elHouseShare - vShare) : 0;
+
+      const activeTitles = [];
+      if (hasEl) activeTitles.push(isEn ? "Electricity" : "Strøm");
+      if (hasWater) activeTitles.push(isEn ? "water" : "vand");
+      if (hasHeat) activeTitles.push(isEn ? "district heating" : "fjernvarme");
+      const defaultHeroTitle = activeTitles.length >= 2
+        ? `${activeTitles.slice(0, -1).join(", ")} ${isEn ? "and" : "og"} ${activeTitles[activeTitles.length - 1]} ${isEn ? "combined" : "samlet"}`
+        : (activeTitles[0] || (isEn ? "Utility overview" : "Forbrugsoverblik"));
+      const heroTitle = cfg.title || (defaultHeroTitle.charAt(0).toUpperCase() + defaultHeroTitle.slice(1));
+
+      const navItems = (Array.isArray(cfg.nav_links) ? cfg.nav_links : []).filter((item) => {
+        if (!item || !item.path || !item.label) return false;
+        if (item.admin_only && !this._hass?.user?.is_admin) return false;
+        if (Array.isArray(item.users) && item.users.length > 0) {
+          if (!this._hass?.user?.is_admin && !item.users.includes(this._hass?.user?.id)) return false;
+        }
+        return true;
+      });
+
+      const legendHtml = [
+        hasEv ? `<span class="leg-item"><span class="dot seg-ev"></span>🚗 ${isEn ? "EV" : "Elbil"}: ${esc(fmtNum(elMtdEvKr, 0))} kr. (${elEvShare}%)</span>` : "",
+        hasEl ? `<span class="leg-item"><span class="dot seg-el"></span>⚡ ${hasEv ? (isEn ? "Electricity (house)" : "Strøm (hus)") : (isEn ? "Electricity" : "Strøm")}: ${esc(fmtNum(hasEv ? elMtdHouseKr : elMtdKrSafe, 0))} kr. (${elHouseShare}%)</span>` : "",
+        hasHeat ? `<span class="leg-item"><span class="dot seg-varme"></span>🔥 ${isEn ? "Heating" : "Fjernvarme"}: ~${esc(fmtNum(vMtdKrSafe, 0))} kr. (${vShare}%)</span>` : "",
+        hasWater ? `<span class="leg-item"><span class="dot seg-vand"></span>💧 ${isEn ? "Water" : "Vand"}: ~${esc(fmtNum(wMtdKrSafe, 0))} kr. (${wShare}%)</span>` : "",
+      ].filter(Boolean).join("");
+
+      const emptySetupHtml = activeCols === 0 ? `
+        <div class="glass">
+          <div class="utitle">📊 ${isEn ? "Danish Utility Overview" : "Dansk Forbrugsoverblik"}</div>
+          <div class="hero-sub">${isEn ? "Select your Dansk Fjernvarme overview sensor and optional electricity/water sensors in the card editor." : "Vælg din Dansk Fjernvarme-oversigtssensor og evt. el-/vandsensorer i kort-editoren."}</div>
+        </div>
+      ` : "";
+
+      const modalHtml = this._renderDetailModal({
+        isEn, fmtNum, cfg, st,
+        hasEl, hasEv, hasWater, hasHeat,
+        elStats, elPrices, elMtdKwh, elMtdKr, elEvPct,
+        wInfo, wStats, wPriceM3, wMtdKr,
+        heatSt, emptyMsg,
+      });
+
+      this.shadowRoot.innerHTML = `
+        <style>
+          :host { display: block; }
+          .wrap { display: flex; flex-direction: column; gap: 14px; }
+          .glass {
+            border-radius: 22px;
+            padding: 18px 20px;
+            background: color-mix(in srgb, var(--card-background-color, #fff) 66%, transparent);
+            backdrop-filter: blur(18px) saturate(165%);
+            -webkit-backdrop-filter: blur(18px) saturate(165%);
+            border: 1px solid rgba(255,255,255,0.28);
+            box-shadow: 0 8px 28px rgba(0,0,0,0.09);
+            color: var(--primary-text-color, #1f2937);
+          }
+          .hero-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            gap: 14px;
+            flex-wrap: wrap;
+          }
+          .eyebrow {
+            font-size: 12px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--secondary-text-color);
+          }
+          .hero-title {
+            font-size: 23px;
+            font-weight: 800;
+            margin-top: 3px;
+            line-height: 1.2;
+          }
+          .hero-sub {
+            font-size: 13px;
+            color: var(--secondary-text-color);
+            margin-top: 3px;
+          }
+          .hero-total { text-align: right; }
+          .hero-kr {
+            font-size: 28px;
+            font-weight: 800;
+            line-height: 1.1;
+          }
+          .hero-avg {
+            font-size: 12.5px;
+            color: var(--secondary-text-color);
+            margin-top: 2px;
+          }
+          .split-bar {
+            display: flex;
+            height: 10px;
+            border-radius: 999px;
+            overflow: hidden;
+            background: rgba(148,163,184,0.20);
+            margin: 14px 0 10px;
+            gap: 2px;
+          }
+          .seg-ev { background: linear-gradient(90deg, #a855f7, #7c3aed); }
+          .seg-el { background: linear-gradient(90deg, #3b82f6, #2563eb); }
+          .seg-varme { background: linear-gradient(90deg, #fb923c, #ea580c); }
+          .seg-vand { background: linear-gradient(90deg, #22d3ee, #0891b2); }
+          .legend {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 14px;
+            font-size: 13px;
+            font-weight: 600;
+            margin-bottom: ${navItems.length ? "14px" : "2px"};
+          }
+          .leg-item { display: inline-flex; align-items: center; gap: 6px; }
+          .dot { width: 9px; height: 9px; border-radius: 999px; display: inline-block; }
+          .nav-row { display: flex; flex-wrap: wrap; gap: 8px; }
+          .nav-chip {
+            appearance: none;
+            border: 1px solid rgba(148,163,184,0.32);
+            background: color-mix(in srgb, var(--card-background-color, #fff) 55%, transparent);
+            color: var(--primary-text-color, #1f2937);
+            font-family: inherit;
+            font-size: 12.5px;
+            font-weight: 700;
+            padding: 7px 12px;
+            border-radius: 999px;
+            cursor: pointer;
+            transition: transform 0.12s ease, background 0.15s ease;
+          }
+          .nav-chip:hover {
+            background: color-mix(in srgb, var(--primary-color, #03a9f4) 14%, transparent);
+          }
+          .nav-chip:active { transform: scale(0.97); }
+          .cols {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 14px;
+          }
+          .cols.cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+          .cols.cols-1 { grid-template-columns: 1fr; }
+          @media (max-width: 1080px) {
+            .cols, .cols.cols-2, .cols.cols-1 { grid-template-columns: 1fr; }
+            .hero-total { text-align: left; }
+          }
+          .ucard { display: flex; flex-direction: column; gap: 13px; }
+          .uhead {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 8px;
+          }
+          .utitle {
+            font-size: 18px;
+            font-weight: 800;
+            display: flex;
+            align-items: center;
+            gap: 7px;
+          }
+          .usub {
+            font-size: 12px;
+            color: var(--secondary-text-color);
+            margin-top: 2px;
+          }
+          .pill {
+            font-size: 11.5px;
+            font-weight: 700;
+            padding: 4px 10px;
+            border-radius: 999px;
+            white-space: nowrap;
+          }
+          .pill-ok { background: rgba(34,197,94,0.18); color: #16a34a; }
+          .pill-warn { background: rgba(245,158,11,0.22); color: #d97706; }
+          .pill-bad { background: rgba(239,68,68,0.22); color: #dc2626; }
+          .pill-muted { background: rgba(148,163,184,0.20); color: var(--secondary-text-color); }
+          .kpis {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 8px;
+          }
+          .kpi {
+            padding: 10px 10px;
+            border-radius: 14px;
+            background: color-mix(in srgb, var(--card-background-color, #fff) 54%, transparent);
+            border: 1px solid rgba(148,163,184,0.20);
+          }
+          .kpi-lbl {
+            font-size: 11px;
+            font-weight: 700;
+            color: var(--secondary-text-color);
+          }
+          .kpi-main {
+            font-size: 15.5px;
+            font-weight: 800;
+            margin-top: 3px;
+            line-height: 1.2;
+          }
+          .kpi-sub {
+            font-size: 11.5px;
+            color: var(--secondary-text-color);
+            margin-top: 2px;
+          }
+          .chart-box {
+            padding: 10px 12px;
+            border-radius: 14px;
+            background: color-mix(in srgb, var(--card-background-color, #fff) 45%, transparent);
+            border: 1px solid rgba(148,163,184,0.18);
+          }
+          .chart-head {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 6px;
+          }
+          .chart-head .chart-title { margin-bottom: 0; }
+          .mini-leg {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 10.5px;
+            font-weight: 700;
+            color: var(--secondary-text-color);
+            white-space: nowrap;
+          }
+          .mini-leg-item { display: inline-flex; align-items: center; gap: 4px; }
+          .mini-dot { width: 7px; height: 7px; border-radius: 999px; display: inline-block; }
+          .chart-title {
+            font-size: 11px;
+            font-weight: 700;
+            color: var(--secondary-text-color);
+            margin-bottom: 6px;
+          }
+          .bars {
+            display: grid;
+            grid-template-columns: repeat(7, minmax(0, 1fr));
+            gap: 6px;
+            align-items: end;
+            height: 76px;
+          }
+          .bar-col {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            height: 100%;
+            justify-content: flex-end;
+            gap: 3px;
+          }
+          .bar-val {
+            font-size: 10px;
+            font-weight: 700;
+            color: var(--secondary-text-color);
+            line-height: 1;
+          }
+          .bar-track {
+            width: 100%;
+            max-width: 24px;
+            flex: 1 1 auto;
+            display: flex;
+            align-items: flex-end;
+          }
+          .bar-fill {
+            width: 100%;
+            border-radius: 6px 6px 3px 3px;
+            min-height: 3px;
+          }
+          .bar-stack {
+            width: 100%;
+            border-radius: 6px 6px 3px 3px;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-end;
+            min-height: 3px;
+          }
+          .bar-seg { width: 100%; }
+          .bar-seg-sep {
+            border-bottom: 1px solid rgba(255,255,255,0.45);
+            box-sizing: border-box;
+          }
+          .fill-ev { background: linear-gradient(180deg, #c084fc, #7c3aed); }
+          .fill-el { background: linear-gradient(180deg, #60a5fa, #2563eb); }
+          .fill-vand { background: linear-gradient(180deg, #22d3ee, #0891b2); }
+          .fill-varme { background: linear-gradient(180deg, #fb923c, #ea580c); }
+          .bar-lbl {
+            font-size: 10px;
+            font-weight: 600;
+            color: var(--secondary-text-color);
+            line-height: 1;
+          }
+          .empty-bars {
+            font-size: 12px;
+            color: var(--secondary-text-color);
+            padding: 16px 0;
+            text-align: center;
+          }
+          .insights {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            font-size: 12.5px;
+            line-height: 1.4;
+          }
+          .ins { display: flex; gap: 7px; align-items: flex-start; }
+          .ins-ico { flex: 0 0 auto; }
+          .link-btn {
+            appearance: none;
+            border: 0;
+            background: none;
+            padding: 0;
+            color: var(--primary-color, #03a9f4);
+            font: inherit;
+            font-weight: 700;
+            cursor: pointer;
+            text-decoration: underline;
+            text-underline-offset: 2px;
+          }
+          .ufoot {
+            margin-top: auto;
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            padding-top: 4px;
+          }
+          .foot-btn {
+            appearance: none;
+            border: 1px solid color-mix(in srgb, var(--primary-color, #03a9f4) 40%, transparent);
+            background: color-mix(in srgb, var(--primary-color, #03a9f4) 12%, transparent);
+            color: var(--primary-text-color, #1f2937);
+            font-family: inherit;
+            font-size: 12.5px;
+            font-weight: 700;
+            padding: 7px 12px;
+            border-radius: 12px;
+            cursor: pointer;
+          }
+          .foot-btn:hover {
+            background: color-mix(in srgb, var(--primary-color, #03a9f4) 22%, transparent);
+          }
+          .pill-btn {
+            border: 0;
+            font-family: inherit;
+            cursor: pointer;
+            transition: transform 0.12s ease, filter 0.15s ease;
+          }
+          .pill-btn:hover { filter: brightness(1.08); transform: translateY(-1px); }
+          .df-modal-backdrop {
+            position: fixed;
+            inset: 0;
+            z-index: 9999;
+            background: rgba(15, 23, 42, 0.62);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 16px;
+          }
+          .df-modal {
+            width: min(940px, 96vw);
+            max-height: 90vh;
+            overflow-y: auto;
+            border-radius: 22px;
+            padding: 20px;
+            background: color-mix(in srgb, var(--card-background-color, #fff) 94%, transparent);
+            border: 1px solid rgba(255,255,255,0.24);
+            box-shadow: 0 24px 60px rgba(0,0,0,0.36);
+            color: var(--primary-text-color, #1f2937);
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+          }
+          .df-modal-wide { width: min(1140px, 96vw); }
+          .df-modal-head {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+          }
+          .df-modal-head-left { display: flex; align-items: center; gap: 10px; min-width: 0; }
+          .df-back-btn {
+            appearance: none;
+            border: 1px solid rgba(148,163,184,0.30);
+            background: rgba(148,163,184,0.10);
+            color: inherit;
+            font-family: inherit;
+            font-size: 12.5px;
+            font-weight: 700;
+            padding: 5px 11px;
+            border-radius: 999px;
+            cursor: pointer;
+            flex: 0 0 auto;
+            transition: background 0.15s ease, transform 0.12s ease;
+          }
+          .df-back-btn:hover { background: rgba(148,163,184,0.20); }
+          .df-back-btn:active { transform: scale(0.97); }
+          .df-foot-back {
+            border-color: rgba(148,163,184,0.30);
+            background: rgba(148,163,184,0.10);
+          }
+          .df-foot-back:hover { background: rgba(148,163,184,0.20); }
+          .df-modal-title { font-size: 19px; font-weight: 800; }
+          .df-modal-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+          .df-tabs { display: inline-flex; gap: 6px; flex-wrap: wrap; }
+          .df-tab {
+            appearance: none;
+            border: 1px solid rgba(148,163,184,0.32);
+            background: rgba(148,163,184,0.10);
+            color: inherit;
+            font-family: inherit;
+            font-size: 12px;
+            font-weight: 700;
+            padding: 6px 11px;
+            border-radius: 999px;
+            cursor: pointer;
+          }
+          .df-tab.active {
+            background: color-mix(in srgb, var(--primary-color, #03a9f4) 22%, transparent);
+            border-color: color-mix(in srgb, var(--primary-color, #03a9f4) 60%, transparent);
+          }
+          .df-close-btn {
+            appearance: none;
+            border: 1px solid rgba(148,163,184,0.35);
+            background: rgba(148,163,184,0.14);
+            color: inherit;
+            font-family: inherit;
+            font-size: 12.5px;
+            font-weight: 700;
+            padding: 6px 12px;
+            border-radius: 999px;
+            cursor: pointer;
+          }
+          .df-modal-body { display: flex; flex-direction: column; gap: 13px; }
+          .mkpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 9px; }
+          @media (max-width: 720px) {
+            .mkpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+            .df-modal { padding: 14px; }
+          }
+          .pbars { display: grid; gap: 2px; height: 120px; align-items: end; }
+          .pbar-col { display: flex; flex-direction: column; align-items: center; height: 100%; justify-content: flex-end; gap: 2px; min-width: 0; }
+          .pbar-col.day-sep { border-left: 1px dashed rgba(148,163,184,0.45); padding-left: 2px; }
+          .pbar-top { font-size: 9px; line-height: 1; height: 10px; color: #38bdf8; font-weight: 800; }
+          .pbar-track { width: 100%; flex: 1 1 auto; display: flex; align-items: flex-end; }
+          .pbar-fill { width: 100%; border-radius: 4px 4px 2px 2px; min-height: 4px; }
+          .p-low { background: linear-gradient(180deg, #4ade80, #16a34a); }
+          .p-mid { background: linear-gradient(180deg, #fbbf24, #d97706); }
+          .p-high { background: linear-gradient(180deg, #f87171, #dc2626); }
+          .pbar-fill.is-now { outline: 2px solid var(--primary-text-color, #fff); outline-offset: 0; }
+          .pbar-fill.is-best { box-shadow: 0 0 0 1.5px #38bdf8; }
+          .pbar-lbl { font-size: 9px; font-weight: 600; color: var(--secondary-text-color); line-height: 1; height: 10px; white-space: nowrap; }
+          .pbar-lbl.is-now-lbl { color: var(--primary-text-color); font-weight: 800; }
+          .mbars { display: grid; gap: 3px; height: 110px; align-items: end; }
+          .mbar-col { display: flex; flex-direction: column; align-items: center; height: 100%; justify-content: flex-end; gap: 3px; min-width: 0; }
+          .mbar-track { width: 100%; max-width: 18px; flex: 1 1 auto; display: flex; align-items: flex-end; }
+          .mbar-lbl { font-size: 9.5px; font-weight: 600; color: var(--secondary-text-color); line-height: 1; height: 10px; white-space: nowrap; }
+          .df-heat-host { width: 100%; }
+          @media (prefers-color-scheme: dark) {
+            .pill-ok { color: #4ade80; }
+            .pill-warn { color: #fbbf24; }
+            .pill-bad { color: #f87171; }
+          }
+        </style>
+
+        <div class="wrap">
+          ${activeCols > 0 ? `
+            <div class="glass">
+              <div class="hero-top">
+                <div>
+                  <div class="eyebrow">${isEn ? "Utilities & cost" : "Forbrug & økonomi"} · ${esc(monthHeading)}</div>
+                  <div class="hero-title">${esc(heroTitle)}</div>
+                  <div class="hero-sub">${isEn ? "Simple overview of consumption, estimated costs and key metrics." : "Simpelt overblik over forbrug, estimerede udgifter og nøgletal — klik videre for fulde grafer."}</div>
+                </div>
+                <div class="hero-total">
+                  <div class="hero-kr">~${esc(fmtNum(totalMtdKr, 0))} kr.</div>
+                  <div class="hero-avg">${isEn ? "Month to date" : "Måned til dato"} · ~${esc(fmtNum(totalDayKr, 0))} ${isEn ? "kr./day" : "kr./dag"}</div>
+                </div>
+              </div>
+
+              <div class="split-bar" aria-label="${isEn ? "Cost split" : "Udgiftsfordeling"}">
+                ${elEvShare > 0 ? `<div class="seg-ev" style="width:${elEvShare}%" title="${isEn ? "EV charging" : "Elbil-ladning"}: ${esc(fmtNum(elMtdEvKr, 0))} kr. (${elEvShare}%)"></div>` : ""}
+                ${elHouseShare > 0 ? `<div class="seg-el" style="width:${elHouseShare}%" title="${hasEv ? (isEn ? "Electricity (house)" : "Strøm (hus)") : (isEn ? "Electricity" : "Strøm")}: ${esc(fmtNum(hasEv ? elMtdHouseKr : elMtdKrSafe, 0))} kr. (${elHouseShare}%)"></div>` : ""}
+                ${vShare > 0 ? `<div class="seg-varme" style="width:${vShare}%" title="${isEn ? "District heating" : "Fjernvarme"}: ~${esc(fmtNum(vMtdKrSafe, 0))} kr. (${vShare}%)"></div>` : ""}
+                ${wShare > 0 ? `<div class="seg-vand" style="width:${wShare}%" title="${isEn ? "Water" : "Vand"}: ~${esc(fmtNum(wMtdKrSafe, 0))} kr. (${wShare}%)"></div>` : ""}
+              </div>
+
+              <div class="legend">${legendHtml}</div>
+
+              ${navItems.length ? `
+                <div class="nav-row">
+                  ${navItems.map((it) => `<button class="nav-chip" data-href="${esc(it.path)}">${esc(it.label)}</button>`).join("")}
+                </div>
+              ` : ""}
+            </div>
+
+            <div class="cols cols-${activeCols}">
+              ${elHtml}
+              ${waterHtml}
+              ${heatHtml}
+            </div>
+          ` : emptySetupHtml}
+          ${modalHtml}
+        </div>
+      `;
+
+      if (this._activeDetail === "heat" && heatSt) {
+        const host = this.shadowRoot.getElementById("dfEmbeddedHeatHost");
+        if (host && typeof host.appendChild === "function") {
+          if (!this._embeddedHeatCard) {
+            this._embeddedHeatCard = document.createElement("kmd-easy-energy-card");
+          }
+          const heatCfg = {
+            entity: heatSt.entity_id,
+            language: lang,
+            bonus_temp: cfg.bonus_temp,
+            penalty_temp: cfg.penalty_temp,
+            show_sync_bar: true,
+          };
+          const heatSig = JSON.stringify(heatCfg);
+          if (this._embeddedHeatSig !== heatSig && typeof this._embeddedHeatCard.setConfig === "function") {
+            this._embeddedHeatCard.setConfig(heatCfg);
+            this._embeddedHeatSig = heatSig;
+          }
+          host.appendChild(this._embeddedHeatCard);
+          this._embeddedHeatCard.hass = this._hass;
+        }
+      }
+
+      this.shadowRoot.querySelectorAll("[data-href]").forEach((el) => {
+        el.addEventListener("click", () => {
+          this._activeDetail = null;
+          dfNavigate(el.dataset.href);
+        });
+      });
+      this.shadowRoot.querySelectorAll("[data-more]").forEach((el) => {
+        el.addEventListener("click", () => this._openMoreInfo(el.dataset.more));
+      });
+      this.shadowRoot.querySelectorAll("[data-detail]").forEach((el) => {
+        el.addEventListener("click", () => {
+          this._activeDetail = el.dataset.detail;
+          this._lastSig = null;
+          this._render();
+        });
+      });
+      this.shadowRoot.querySelectorAll("[data-modal-close]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          this._activeDetail = null;
+          this._lastSig = null;
+          this._render();
+        });
+      });
+      const backdrop = this.shadowRoot.getElementById("dfModalBackdrop");
+      if (backdrop) {
+        backdrop.addEventListener("click", (ev) => {
+          if (ev.target === backdrop) {
+            this._activeDetail = null;
+            this._lastSig = null;
+            this._render();
+          }
+        });
+      }
+    }
+  }
+
+  class DanskForbrugCardEditor extends HTMLElement {
+    setConfig(config) {
+      this._config = { ...(config || {}) };
+      this._render();
+    }
+    set hass(hass) {
+      const hadHass = Boolean(this._hass);
+      this._hass = hass;
+      if (!this._rendered || !hadHass) this._render();
+    }
+    _emit(patch) {
+      const next = { ...this._config, ...patch };
+      Object.keys(next).forEach((k) => {
+        if (next[k] === undefined || next[k] === "") delete next[k];
+      });
+      this._config = next;
+      if (typeof this.dispatchEvent === "function" && typeof CustomEvent === "function") {
+        this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: this._config }, bubbles: true, composed: true }));
+      }
+    }
+    _render() {
+      if (!this.shadowRoot) this.attachShadow({ mode: "open" });
+      this._rendered = true;
+      const c = this._config || {};
+      const all = Object.values(this._hass?.states || {});
+      const mkList = (id, items) =>
+        `<datalist id="${id}">${items.map((s) => `<option value="${esc(s.entity_id)}">${esc(s.attributes?.friendly_name || s.entity_id)}</option>`).join("")}</datalist>`;
+
+      const heatOpts = all.filter((s) => s.entity_id.startsWith("sensor.") && (s.attributes?.utility_id || s.attributes?.portal_url || /fjernvarme|_overview|_overblik/i.test(s.entity_id)));
+      const energyOpts = all.filter((s) => s.entity_id.startsWith("sensor.") && (s.attributes?.device_class === "energy" || s.attributes?.unit_of_measurement === "kWh"));
+      const priceOpts = all.filter((s) => s.entity_id.startsWith("sensor.") && /(price|pris|stromligning|energi_data_service|nordpool)/i.test(s.entity_id));
+      const waterOpts = all.filter((s) => s.entity_id.startsWith("sensor.") && (s.attributes?.device_class === "water" || /water|vand/i.test(s.entity_id)));
+      const flowOpts = all.filter((s) => s.entity_id.startsWith("sensor.") && /min_flow|flow/i.test(s.entity_id));
+
+      this.shadowRoot.innerHTML = `
+        <style>
+          .ed { display: grid; gap: 10px; padding: 8px 0; font-family: inherit; }
+          label { display: grid; gap: 4px; font-size: 12.5px; font-weight: 600; }
+          input, select { padding: 8px; border-radius: 8px; border: 1px solid rgba(148,163,184,0.4); background: transparent; color: inherit; }
+          .row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+          details { border: 1px solid rgba(148,163,184,0.25); border-radius: 10px; padding: 8px 10px; }
+          summary { font-size: 12.5px; font-weight: 700; cursor: pointer; }
+          .sub { display: grid; gap: 10px; margin-top: 10px; }
+        </style>
+        <div class="ed">
+          <label>🔥 Fjernvarme-oversigtssensor (tom = auto-find)
+            <input id="df_entity" list="dl_heat" value="${esc(c.entity || "")}" placeholder="Auto-find (*_overview)" />
+          </label>
+          <div class="row">
+            <label>⚡ Elforbrug-sensor (kWh)
+              <input id="df_el_entity" list="dl_energy" value="${esc(c.el_entity || "")}" placeholder="f.eks. sensor.eloverblik_energy_statistic" />
+            </label>
+            <label>⏱️ Elpris-sensor (kr/kWh)
+              <input id="df_el_price_entity" list="dl_price" value="${esc(c.el_price_entity || "")}" placeholder="Strømligning / Energi Data Service" />
+            </label>
+          </div>
+          <div class="row">
+            <label>🚗 Elbil-lader (kWh, valgfri)
+              <input id="df_ev_entity" list="dl_energy" value="${esc(c.ev_entity || "")}" placeholder="Ladeboks kWh-tæller" />
+            </label>
+            <label>💰 Fast elpris fallback (kr/kWh)
+              <input id="df_el_fixed_price" type="number" step="0.01" value="${esc(c.el_fixed_price ?? "")}" placeholder="Valgfri" />
+            </label>
+          </div>
+          <div class="row">
+            <label>💧 Vandmåler (m³ eller L, valgfri)
+              <input id="df_water_entity" list="dl_water" value="${esc(c.water_entity || "")}" placeholder="Målerportal eller vandmåler" />
+            </label>
+            <label>💧 Vandpris (kr./m³)
+              <input id="df_water_price_m3" type="number" step="0.5" value="${esc(c.water_price_m3 ?? "")}" placeholder="72.5" />
+            </label>
+          </div>
+          <div class="row">
+            <label>Sprog / Language
+              <select id="df_language">
+                <option value="da" ${c.language !== "en" ? "selected" : ""}>Dansk</option>
+                <option value="en" ${c.language === "en" ? "selected" : ""}>English</option>
+              </select>
+            </label>
+            <label>Titel (valgfri)
+              <input id="df_title" value="${esc(c.title || "")}" placeholder="Auto" />
+            </label>
+          </div>
+          <details>
+            <summary>Avancerede felter &amp; genvejslinks</summary>
+            <div class="sub">
+              <div class="row">
+                <label>Vand min-flow sensor (L/h)
+                  <input id="df_water_min_flow_entity" list="dl_flow" value="${esc(c.water_min_flow_entity || "")}" placeholder="Auto fra Målerportal" />
+                </label>
+                <label>Elbil time-forskydning (tom = auto)
+                  <input id="df_ev_hour_offset" type="number" step="1" value="${esc(c.ev_hour_offset ?? "")}" placeholder="Auto (-1 Eloverblik / 0 P1)" />
+                </label>
+              </div>
+              <div class="row">
+                <label>El-undertitel (valgfri)
+                  <input id="df_el_subtitle" value="${esc(c.el_subtitle || "")}" placeholder="Auto" />
+                </label>
+                <label>Vand-undertitel (valgfri)
+                  <input id="df_water_subtitle" value="${esc(c.water_subtitle || "")}" placeholder="Auto" />
+                </label>
+              </div>
+              <div class="row">
+                <label>El-link (sti, valgfri)
+                  <input id="df_el_link" value="${esc(c.el_link || "")}" placeholder="/lovelace/energi" />
+                </label>
+                <label>Elbil-link (sti, valgfri)
+                  <input id="df_ev_link" value="${esc(c.ev_link || "")}" placeholder="/lovelace/elbil" />
+                </label>
+              </div>
+              <div class="row">
+                <label>Fjernvarme-link (sti, valgfri)
+                  <input id="df_heat_link" value="${esc(c.heat_link || "")}" placeholder="/lovelace/fjernvarme" />
+                </label>
+                <label>Vand-link (sti, valgfri)
+                  <input id="df_water_link" value="${esc(c.water_link || "")}" placeholder="/energy" />
+                </label>
+              </div>
+            </div>
+          </details>
+          ${mkList("dl_heat", heatOpts)}
+          ${mkList("dl_energy", energyOpts)}
+          ${mkList("dl_price", priceOpts)}
+          ${mkList("dl_water", waterOpts)}
+          ${mkList("dl_flow", flowOpts)}
+        </div>
+      `;
+
+      [
+        "entity", "el_entity", "el_price_entity", "ev_entity",
+        "water_entity", "water_min_flow_entity", "language", "title",
+        "el_subtitle", "water_subtitle", "el_link", "ev_link", "heat_link", "water_link",
+      ].forEach((k) => {
+        const el = this.shadowRoot.getElementById(`df_${k}`);
+        if (el) el.addEventListener("change", (e) => this._emit({ [k]: String(e.target.value || "").trim() }));
+      });
+      ["el_fixed_price", "water_price_m3", "ev_hour_offset"].forEach((k) => {
+        const el = this.shadowRoot.getElementById(`df_${k}`);
+        if (el) {
+          el.addEventListener("change", (e) => {
+            const raw = String(e.target.value || "").trim();
+            this._emit({ [k]: raw === "" ? undefined : Number(raw) });
+          });
+        }
+      });
+    }
+  }
+
   if (!customElements.get("kmd-easy-energy-card")) {
     customElements.define("kmd-easy-energy-card", KmdEasyEnergyCard);
     customElements.define("kmd-easy-energy-card-editor", KmdEasyEnergyCardEditor);
@@ -2183,6 +4491,18 @@
       type: "kmd-easy-energy-card",
       name: "Dansk Fjernvarme: Dashboard",
       description: "Plug-and-play dansk fjernvarme-dashboard med 1-klik MitID-sync, smart værk-vælger og Open-Meteo vejrindsigter",
+      preview: true,
+      documentationURL: "https://github.com/DKAnord/fjernvarme-dk-ha",
+    });
+  }
+  if (!customElements.get("dansk-forbrug-card")) {
+    customElements.define("dansk-forbrug-card", DanskForbrugCard);
+    customElements.define("dansk-forbrug-card-editor", DanskForbrugCardEditor);
+    window.customCards = window.customCards || [];
+    window.customCards.push({
+      type: "dansk-forbrug-card",
+      name: "Dansk Fjernvarme: Samlet Forbrug (Valgfri add-on)",
+      description: "Valgfrit add-on-kort til Dansk Fjernvarme: samler dit fjernvarmeværk med valgfri strøm (inkl. elbil-split) og vand — 0 YAML",
       preview: true,
       documentationURL: "https://github.com/DKAnord/fjernvarme-dk-ha",
     });

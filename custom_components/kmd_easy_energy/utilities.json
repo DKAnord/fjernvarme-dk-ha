@@ -1606,6 +1606,32 @@
       ]
     },
     {
+      "id": "auning-varmevaerk",
+      "name": "Auning Varmeværk a.m.b.a.",
+      "city": "Auning",
+      "portal_url": "https://eforsyning.dk/auningvarme/",
+      "status": "confirmed",
+      "tier": "confirmed",
+      "auth_method": "Forbrugernummer + webpinkode",
+      "backend": "eforsyning",
+      "eforsyning_supplier_id": "1E4C4A1C-8846-44E6-8563-9513710E9E3D",
+      "latitude": 56.43,
+      "longitude": 10.379,
+      "notes": "E|Forsyning (bekræftet live via issue #79 af @tuxitheone — kWh, m³ og °C). forsyningid og AppServerUri (https://apiapp.dff-edb.dk/auningvarme/) bekræftet live via GetVaerkSettings; login med forbrugernummer + webpinkode eller e-mail + adgangskode; daglige aflæsninger. Takstblad pr. 01.01.2026 (inkl. moms): forbrugsbidrag 600,00 kr./MWh (0,60 kr./kWh), boligareal efter BBR 28,75 kr./m²/år (erhverv <18 °C: 20,00 kr./m²/år), målerbidrag 750,00 kr./år og grundtakst 1.250,00 kr./år (samlet fast årsbidrag 2.000,00 kr./år pr. måler). Værket har varslet motivationstarif for afkøling fra 1. januar 2027 (fremløbsafhængig forventet returtemperatur 55–76 °C → 35–26 °C, ±1 %/°C med 7 °C neutralt område over målet i 2027, indfaset mod 4 °C i 2030); opdateres når Takstblad 2027 offentliggøres.",
+      "tariffs": [
+        {
+          "year": 2026,
+          "effective_from": "2026-01-01",
+          "price_dkk_per_kwh": 0.6,
+          "price_dkk_per_m3": null,
+          "fixed_fee_dkk_per_m2_year": 28.75,
+          "fixed_fee_dkk_per_year": 2000.0,
+          "source": "https://auningfjernvarme.dk/p/Auning%20Varmev%C3%A6rk/Takstblad-Pr.-01.01.2026.pdf",
+          "source_note": "Takstblad pr. 1. januar 2026 (Auning Varmeværk a.m.b.a., inkl. moms): Forbrug 480,00 ekskl. / 600,00 kr./MWh inkl. moms (0,48 ekskl. / 0,60 kr./kWh inkl. moms). Boligareal efter BBR: 23,00 ekskl. / 28,75 kr./m²/år inkl. moms (erhvervsareal <18 °C: 16,00 ekskl. / 20,00 kr./m²/år inkl. moms). Faste årlige bidrag pr. måler: målerbidrag 600,00 ekskl. / 750,00 kr./år inkl. moms + grundtakst 1.000,00 ekskl. / 1.250,00 kr./år inkl. moms = 2.000,00 kr./år inkl. moms (svarer til 16.597,50 kr./år for standardhus 130 m² / 18,1 MWh). Fra 1. januar 2027 er varslet motivationstarif for afkøling (https://auningfjernvarme.dk/nyheder/auning-varmevaerk-varsler-tarifaendring); tilføjes når 2027-takstbladet offentliggøres."
+        }
+      ]
+    },
+    {
       "id": "aalestrup-norager-energi",
       "name": "Aalestrup-Nørager Energi a.m.b.a.",
       "city": "Aalestrup / Nørager",
@@ -2800,5 +2826,5 @@
       ]
     }
   ],
-  "last_updated": "2026-11-27"
+  "last_updated": "2026-11-28"
 }

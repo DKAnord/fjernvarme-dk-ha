@@ -837,10 +837,10 @@ def test_bundled_utilities_json_all_69_have_tariffs_and_spot_checks() -> None:
     from kmd_easy_energy.tariff import load_utilities
 
     utilities = load_utilities()
-    assert len(utilities) == 76
+    assert len(utilities) == 77
     with_tariffs = [u for u in utilities if u.get("tariffs")]
-    assert len(with_tariffs) == len(utilities) == 76
-    assert len({u["id"] for u in utilities}) == 76
+    assert len(with_tariffs) == len(utilities) == 77
+    assert len({u["id"] for u in utilities}) == 77
 
     backends = {}
     for u in utilities:
@@ -849,7 +849,7 @@ def test_bundled_utilities_json_all_69_have_tariffs_and_spot_checks() -> None:
         for t in u["tariffs"]:
             assert t["price_dkk_per_kwh"] > 0, u["id"]
             assert str(t.get("source", "")).startswith("https://"), u["id"]
-    assert backends == {"kmd": 17, "eforsyning": 55, "wattson": 4}
+    assert backends == {"kmd": 17, "eforsyning": 56, "wattson": 4}
 
     by_id = {u["id"]: u for u in utilities}
     assert "hoje-taastrup-fjernvarme" not in by_id
@@ -2276,3 +2276,51 @@ def test_hadsten_varmevaerk_confirmed_2026_2027_and_custom_matching() -> None:
     assert r_27.price_dkk_per_kwh == 0.82625
     assert r_27.fixed_fee_dkk_per_m2_year == 25.0
     assert r_27.suggested_fixed_fee_dkk_per_year == 1250.0
+
+
+def test_auning_varmevaerk_confirmed_2026_and_custom_matching() -> None:
+    from kmd_easy_energy.tariff import load_utilities, match_utility_for_entry
+
+    utilities = load_utilities()
+    by_id = {u["id"]: u for u in utilities}
+    auning = by_id["auning-varmevaerk"]
+    assert auning["status"] == "confirmed"
+    assert auning["tier"] == "confirmed"
+    assert auning["eforsyning_supplier_id"] == "1E4C4A1C-8846-44E6-8563-9513710E9E3D"
+    assert auning["portal_url"] == "https://eforsyning.dk/auningvarme/"
+
+    by_supplier = match_utility_for_entry(
+        {
+            "utility_id": "eforsyning-custom",
+            "eforsyning_supplier_id": "1e4c4a1c-8846-44e6-8563-9513710e9e3d",
+            "portal_url": "https://eforsyning.dk/",
+        },
+        utilities,
+    )
+    assert by_supplier is not None and by_supplier["id"] == "auning-varmevaerk"
+
+    by_portal = match_utility_for_entry(
+        {
+            "utility_id": "eforsyning-custom",
+            "portal_url": "https://eforsyning.dk/auningvarme",
+        },
+        utilities,
+    )
+    assert by_portal is not None and by_portal["id"] == "auning-varmevaerk"
+
+    r_26 = resolve_tariff(
+        _entry(
+            data={
+                "utility_id": "eforsyning-custom",
+                "portal_url": "https://eforsyning.dk/auningvarme/",
+            },
+        ),
+        today=date(2026, 11, 28),
+        utilities=utilities,
+    )
+    assert r_26.utility_id == "auning-varmevaerk"
+    assert r_26.price_dkk_per_kwh == 0.6
+    assert r_26.fixed_fee_dkk_per_m2_year == 28.75
+    assert r_26.suggested_fixed_fee_dkk_per_year == 2000.0
+    assert r_26.motivation_dkk_per_kwh_per_k is None
+    assert r_26.motivation_pct_per_k is None

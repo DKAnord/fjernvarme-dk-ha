@@ -2,6 +2,12 @@
 
 Alle væsentlige ændringer i **Dansk Fjernvarme** (tidligere *Fjernvarme (KMD Easy Energy)*) dokumenteres her.
 
+## [1.3.29] - 2026-11-28
+
+### Tilføjet & Bekræftet
+- **Auning Varmeværk a.m.b.a. tilføjet og bekræftet live + 2026-takster ([issue #79](https://github.com/DKAnord/fjernvarme-dk-ha/issues/79), tak til `@tuxitheone`):** Tilføjet som dedikeret ✅ **Bekræftet** E|Forsyning-værk (`auning-varmevaerk`, `forsyningId: 1E4C4A1C-8846-44E6-8563-9513710E9E3D`, `https://eforsyning.dk/auningvarme/`, verificeret med `kWh`, `m³` og `°C`, inkl. automatisk opgradering fra `eforsyning-custom` — nu **41** live-bekræftede værker og **77/77** forudfyldte værker) med officielle 2026-takster inkl. moms: forbrugsbidrag `0,60 kr./kWh` (`600,00 kr./MWh`), boligareal `28,75 kr./m²/år` samt faste årlige bidrag `2.000,00 kr./år` (`750,00 kr./år` målerbidrag + `1.250,00 kr./år` grundtakst; varslet 2027-motivationstarif for afkøling er dokumenteret i værknoten).
+- **Kortressource:** Opdateret cache-busting ressource-URL til `/kmd_easy_energy/kmd-easy-energy-card.js?v=1.3.29`.
+
 ## [1.3.28] - 2026-11-28
 
 ### Rettet

@@ -23,7 +23,7 @@ def test_card_uses_event_and_service() -> None:
     assert "start_mitid_sync" not in js
     assert "mitid_otp_code" not in js
     assert "mitid_qr_svg" not in js
-    assert 'VER = "1.3.29"' in js
+    assert 'VER = "1.3.30"' in js
     assert "data-kmd-card-version" in js
     # Must not guess button.<utility_id>_sync as the only path
     assert "button.${activeUtilId" not in js
@@ -95,7 +95,7 @@ def test_card_cost_estimate_and_utilities_fallback() -> None:
     assert 'id: "marstal-fjernvarme"' in js and 'status: "confirmed"' in js and 'backend: "eforsyning"' in js
     assert 'id: "silkeborg-forsyning"' in js and 'status: "confirmed"' in js
     assert 'id: "bronderslev-forsyning"' in js and 'id: "bronderslev-forsyning", name: "Brønderslev Forsyning", city: "Brønderslev", url: "https://www.bronderslevforsyning.dk/", status: "confirmed"' in js
-    assert 'id: "nyborg-forsyning", name: "Nyborg Forsyning & Service", city: "Nyborg", url: "https://minforsyning-2.kmd.dk/?plant=120&utility=0&plus=True", status: "pending_test"' in js
+    assert 'id: "nyborg-forsyning", name: "Nyborg Forsyning & Service", city: "Nyborg", url: "https://minforsyning-2.kmd.dk/?plant=120&utility=0&plus=True", status: "confirmed"' in js
     assert 'id: "vestforbraending"' in js and 'status: "confirmed"' in js and 'backend: "eforsyning"' in js
     assert 'id: "spjald-fjernvarme"' in js and 'status: "confirmed"' in js and 'backend: "eforsyning"' in js
     assert 'id: "odder-forsyning"' in js and 'status: "confirmed"' in js and 'backend: "eforsyning"' in js

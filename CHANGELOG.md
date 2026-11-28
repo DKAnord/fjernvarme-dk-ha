@@ -2,6 +2,12 @@
 
 Alle væsentlige ændringer i **Dansk Fjernvarme** (tidligere *Fjernvarme (KMD Easy Energy)*) dokumenteres her.
 
+## [1.3.30] - 2026-11-28
+
+### Bekræftet
+- **Nyborg Forsyning & Service bekræftet live ([issue #80](https://github.com/DKAnord/fjernvarme-dk-ha/issues/80), tak til `@rw-johansen`):** Opgraderet fra 🧪 **Afventer 1. test** til ✅ **Bekræftet** KMD (Min Forsyning 2)-værk (`nyborg-forsyning`, `https://minforsyning-2.kmd.dk/?plant=120&utility=0&plus=True`, verificeret live med lokalt MitID og `kWh`-måling — nu **42** live-bekræftede værker og **77/77** forudfyldte værker med officielle 2026/2027-takster).
+- **Kortressource:** Opdateret cache-busting ressource-URL til `/kmd_easy_energy/kmd-easy-energy-card.js?v=1.3.30`.
+
 ## [1.3.29] - 2026-11-28
 
 ### Tilføjet & Bekræftet

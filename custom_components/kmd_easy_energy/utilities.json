@@ -580,13 +580,13 @@
       "name": "Nyborg Forsyning & Service",
       "city": "Nyborg",
       "portal_url": "https://minforsyning-2.kmd.dk/?plant=120&utility=0&plus=True",
-      "status": "pending_test",
-      "tier": "verified_portal",
+      "status": "confirmed",
+      "tier": "confirmed",
       "auth_method": "MitID",
       "backend": "kmd",
       "latitude": 55.313,
       "longitude": 10.79,
-      "notes": "KMD Min Forsyning 2 (minforsyning-2.kmd.dk, plant 120 / utility 0120000). Direkte KMD MF2 portal-URL bruges, da nfs.as viser browser-tjek ved automatiske opslag. Afventer 1. bekræftet brugertest med MitID (issue #66).",
+      "notes": "KMD Min Forsyning 2 (minforsyning-2.kmd.dk, plant 120 / utility 0120000). Bekræftet live via issue #80 af @rw-johansen med lokalt MitID (Pure-HA SRP + OIDC PKCE) og kWh-måling (direct_temp_unit: false; oprindeligt tilføjet via issue #66). Direkte KMD MF2 portal-URL bruges, da nfs.as viser browser-tjek ved automatiske opslag.",
       "tariffs": [
         {
           "year": 2026,

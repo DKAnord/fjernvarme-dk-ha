@@ -1802,8 +1802,8 @@ def test_nyborg_forsyning_2026_tariff() -> None:
     by_id = {u["id"]: u for u in utilities}
     nyborg = by_id["nyborg-forsyning"]
     assert nyborg["backend"] == "kmd"
-    assert nyborg["status"] == "pending_test"
-    assert nyborg["tier"] == "verified_portal"
+    assert nyborg["status"] == "confirmed"
+    assert nyborg["tier"] == "confirmed"
     assert nyborg["portal_url"] == "https://minforsyning-2.kmd.dk/?plant=120&utility=0&plus=True"
 
     resolved = resolve_tariff(

@@ -1544,6 +1544,32 @@
       ]
     },
     {
+      "id": "losning-fjernvarme",
+      "name": "Løsning Fjernvarme a.m.b.a.",
+      "city": "Løsning",
+      "portal_url": "https://eforsyning.dk/losningfjernvarme/",
+      "status": "confirmed",
+      "tier": "confirmed",
+      "auth_method": "Forbrugernummer + webpinkode",
+      "backend": "eforsyning",
+      "eforsyning_supplier_id": "7EA4895A-8C70-47BC-AB7D-CF432EBC8A9B",
+      "latitude": 55.799,
+      "longitude": 9.698,
+      "notes": "E|Forsyning (bekræftet live via issue #74 af @Dalle75 — kWh, m³ og °C). forsyningid og AppServerUri (https://apiapp.dff-edb.dk/loesningvarme/) bekræftet live via GetVaerkSettings; login med forbrugernummer + webpinkode eller e-mail + adgangskode; daglige aflæsninger. Takstblad 2026 (Løsning By, inkl. moms): forbrugsbidrag 812,50 kr./MWh (0,8125 kr./kWh), årligt m²-bidrag 33,75 kr./m²/år (56,25 kr./m²/år i projektområderne Øster Snede/Kragelund og Lindved) samt målerabonnement 562,50 kr./år. Afkølingstarif (kun straf på årsopgørelsen): 2 % af forbrugsbidraget pr. manglende °C afkøling (ΔT) op til 25 °C (16,25 kr./°C/MWh inkl. moms).",
+      "tariffs": [
+        {
+          "year": 2026,
+          "effective_from": "2026-01-01",
+          "price_dkk_per_kwh": 0.8125,
+          "price_dkk_per_m3": null,
+          "fixed_fee_dkk_per_m2_year": 33.75,
+          "fixed_fee_dkk_per_year": 562.5,
+          "source": "https://losningfjernvarme.dk/p/L%C3%B8sning%20Fjernvarme/%C3%98konomi/Takstblad/Takstblad-2026.pdf",
+          "source_note": "Takstblad 2026 (Løsning Fjernvarme a.m.b.a., godkendt 16.12.2025, gældende pr. 01.01.2026, inkl. moms): Forbrugsbidrag 650,00 ekskl. / 812,50 kr./MWh inkl. moms (0,8125 kr./kWh; erhverv 550,00 ekskl. / 687,50 kr./MWh inkl. moms). Årligt m²-bidrag (Løsning By): 27,00 ekskl. / 33,75 kr./m²/år inkl. moms (i projektområderne Øster Snede/Kragelund og Lindved +18,00 kr. ekskl. moms = 45,00 ekskl. / 56,25 kr./m²/år inkl. moms; valgfrit FJV+ 2.700,00 kr./år inkl. moms). Målerabonnement: 450,00 ekskl. / 562,50 kr./år inkl. moms. Afkølingstarif (kun straf på årsopgørelsen ved ΔT under 25 °C): 2 % af forbrugsbidraget × manglende afkøling i °C op til 25 °C × årligt forbrug i MWh (16,25 kr./°C/MWh inkl. moms)."
+        }
+      ]
+    },
+    {
       "id": "aalestrup-norager-energi",
       "name": "Aalestrup-Nørager Energi a.m.b.a.",
       "city": "Aalestrup / Nørager",

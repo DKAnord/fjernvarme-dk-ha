@@ -837,10 +837,10 @@ def test_bundled_utilities_json_all_69_have_tariffs_and_spot_checks() -> None:
     from kmd_easy_energy.tariff import load_utilities
 
     utilities = load_utilities()
-    assert len(utilities) == 74
+    assert len(utilities) == 75
     with_tariffs = [u for u in utilities if u.get("tariffs")]
-    assert len(with_tariffs) == len(utilities) == 74
-    assert len({u["id"] for u in utilities}) == 74
+    assert len(with_tariffs) == len(utilities) == 75
+    assert len({u["id"] for u in utilities}) == 75
 
     backends = {}
     for u in utilities:
@@ -849,7 +849,7 @@ def test_bundled_utilities_json_all_69_have_tariffs_and_spot_checks() -> None:
         for t in u["tariffs"]:
             assert t["price_dkk_per_kwh"] > 0, u["id"]
             assert str(t.get("source", "")).startswith("https://"), u["id"]
-    assert backends == {"kmd": 17, "eforsyning": 53, "wattson": 4}
+    assert backends == {"kmd": 17, "eforsyning": 54, "wattson": 4}
 
     by_id = {u["id"]: u for u in utilities}
     assert "hoje-taastrup-fjernvarme" not in by_id
@@ -2165,3 +2165,51 @@ def test_holme_lundshoj_fjernvarme_confirmed_2026_2027_and_custom_matching() -> 
     assert r_27.price_dkk_per_kwh == 0.96625
     assert r_27.fixed_fee_dkk_per_m2_year == 20.0
     assert r_27.suggested_fixed_fee_dkk_per_year == 200.0
+
+
+def test_losning_fjernvarme_confirmed_2026_and_custom_matching() -> None:
+    from kmd_easy_energy.tariff import load_utilities, match_utility_for_entry
+
+    utilities = load_utilities()
+    by_id = {u["id"]: u for u in utilities}
+    losning = by_id["losning-fjernvarme"]
+    assert losning["status"] == "confirmed"
+    assert losning["tier"] == "confirmed"
+    assert losning["eforsyning_supplier_id"] == "7EA4895A-8C70-47BC-AB7D-CF432EBC8A9B"
+    assert losning["portal_url"] == "https://eforsyning.dk/losningfjernvarme/"
+
+    by_supplier = match_utility_for_entry(
+        {
+            "utility_id": "eforsyning-custom",
+            "eforsyning_supplier_id": "7ea4895a-8c70-47bc-ab7d-cf432ebc8a9b",
+            "portal_url": "https://eforsyning.dk/",
+        },
+        utilities,
+    )
+    assert by_supplier is not None and by_supplier["id"] == "losning-fjernvarme"
+
+    by_portal = match_utility_for_entry(
+        {
+            "utility_id": "eforsyning-custom",
+            "portal_url": "https://eforsyning.dk/losningfjernvarme",
+        },
+        utilities,
+    )
+    assert by_portal is not None and by_portal["id"] == "losning-fjernvarme"
+
+    r_26 = resolve_tariff(
+        _entry(
+            data={
+                "utility_id": "eforsyning-custom",
+                "portal_url": "https://eforsyning.dk/losningfjernvarme/",
+            },
+        ),
+        today=date(2026, 11, 28),
+        utilities=utilities,
+    )
+    assert r_26.utility_id == "losning-fjernvarme"
+    assert r_26.price_dkk_per_kwh == 0.8125
+    assert r_26.fixed_fee_dkk_per_m2_year == 33.75
+    assert r_26.suggested_fixed_fee_dkk_per_year == 562.5
+    assert r_26.motivation_dkk_per_kwh_per_k is None
+    assert r_26.motivation_pct_per_k is None

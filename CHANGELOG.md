@@ -2,6 +2,12 @@
 
 Alle væsentlige ændringer i **Dansk Fjernvarme** (tidligere *Fjernvarme (KMD Easy Energy)*) dokumenteres her.
 
+## [1.3.26] - 2026-11-28
+
+### Tilføjet & Bekræftet
+- **Løsning Fjernvarme a.m.b.a. tilføjet og bekræftet live + 2026-takster ([issue #74](https://github.com/DKAnord/fjernvarme-dk-ha/issues/74), tak til `@Dalle75`):** Tilføjet som dedikeret ✅ **Bekræftet** E|Forsyning-værk (`losning-fjernvarme`, `forsyningId: 7EA4895A-8C70-47BC-AB7D-CF432EBC8A9B`, `https://eforsyning.dk/losningfjernvarme/`, verificeret med `kWh`, `m³` og `°C`, inkl. automatisk opgradering fra `eforsyning-custom` — nu **39** live-bekræftede værker og **75/75** forudfyldte værker) med officielle 2026-takster inkl. moms: forbrugsbidrag `0,8125 kr./kWh` (`812,50 kr./MWh`), årligt m²-bidrag `33,75 kr./m²/år` i Løsning By (`56,25 kr./m²/år` i projektområderne Øster Snede/Kragelund og Lindved) samt målerabonnement `562,50 kr./år` (ΔT-baseret afkølingstarif på `2 %` af forbrugsbidraget pr. manglende `°C` under `25 °C` på årsopgørelsen er dokumenteret i værknoten).
+- **Kortressource:** Opdateret cache-busting ressource-URL til `/kmd_easy_energy/kmd-easy-energy-card.js?v=1.3.26`.
+
 ## [1.3.25] - 2026-11-28
 
 ### Tilføjet & Bekræftet

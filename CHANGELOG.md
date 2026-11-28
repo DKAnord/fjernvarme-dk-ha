@@ -2,6 +2,12 @@
 
 Alle væsentlige ændringer i **Dansk Fjernvarme** (tidligere *Fjernvarme (KMD Easy Energy)*) dokumenteres her.
 
+## [1.4.3] - 2026-11-28
+
+### Bekræftet
+- **Halsnæs Forsyning bekræftet live ([issue #87](https://github.com/DKAnord/fjernvarme-dk-ha/issues/87), tak til `@XeXeX41`):** Opgraderet fra 🧪 **Afventer 1. test** til ✅ **Bekræftet** KMD (Min Forsyning 2)-værk (`halsnaes-forsyning`, `https://hnf.dk/selvbetjening/`, verificeret live med lokalt MitID samt `kWh`- og `m³`-måling — nu **47** live-bekræftede værker og **79/79** forudfyldte værker med officielle 2026/2027-takster).
+- **Kortressource:** Opdateret cache-busting ressource-URL til `/kmd_easy_energy/kmd-easy-energy-card.js?v=1.4.3`.
+
 ## [1.4.2] - 2026-11-28
 
 ### Tilføjet & Bekræftet

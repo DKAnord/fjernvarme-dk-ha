@@ -752,6 +752,10 @@ def test_utilities_json_backend_field_and_hjorring() -> None:
     assert fors["backend"] == "kmd"
     assert fors["status"] == "confirmed"
     assert fors["tier"] == "confirmed"
+    halsnaes = by_id["halsnaes-forsyning"]
+    assert halsnaes["backend"] == "kmd"
+    assert halsnaes["status"] == "confirmed"
+    assert halsnaes["tier"] == "confirmed"
     for uid in eforsyning:
         u = by_id[uid]
         assert is_uuid(u["eforsyning_supplier_id"]), uid

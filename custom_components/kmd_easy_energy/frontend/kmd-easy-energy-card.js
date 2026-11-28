@@ -3,7 +3,7 @@
  * Zero external dependencies, Shadow DOM, responsive, interactive tooltips, DA/EN i18n.
  */
 (() => {
-  const VER = "1.4.2";
+  const VER = "1.4.3";
   const MONTHS = ["Jan", "Feb", "Mar", "Apr", "Maj", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Dec"];
   const DAYS_IN_MONTH = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
   const isLeapYear = (y) => (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0;
@@ -90,7 +90,7 @@
     { id: "silkeborg-forsyning", name: "Silkeborg Forsyning", city: "Silkeborg", url: "https://www.silkeborgforsyning.dk/selvbetjening/", status: "confirmed" },
     { id: "bronderslev-forsyning", name: "Brønderslev Forsyning", city: "Brønderslev", url: "https://www.bronderslevforsyning.dk/", status: "confirmed" },
     { id: "lolland-forsyning", name: "Lolland Forsyning", city: "Nakskov / Lolland", url: "https://lollandforsyning.dk/kunde/varme/", status: "pending_test" },
-    { id: "halsnaes-forsyning", name: "Halsnæs Forsyning", city: "Frederiksværk / Halsnæs", url: "https://hnf.dk/selvbetjening/", status: "pending_test" },
+    { id: "halsnaes-forsyning", name: "Halsnæs Forsyning", city: "Frederiksværk / Halsnæs", url: "https://hnf.dk/selvbetjening/", status: "confirmed" },
     { id: "kerteminde-forsyning", name: "Kerteminde Forsyning", city: "Kerteminde", url: "https://www.kertemindeforsyning.dk/minforsyning-forbrugsapp", status: "pending_test" },
     { id: "nyborg-forsyning", name: "Nyborg Forsyning & Service", city: "Nyborg", url: "https://minforsyning-2.kmd.dk/?plant=120&utility=0&plus=True", status: "confirmed" },
     { id: "fors-roskilde", name: "Fors A/S (Roskilde)", city: "Roskilde / Holbæk", url: "https://www.fors.dk/login/", status: "confirmed" },

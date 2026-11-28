@@ -485,13 +485,13 @@
       "name": "Halsnæs Forsyning",
       "city": "Frederiksværk / Halsnæs",
       "portal_url": "https://hnf.dk/selvbetjening/",
-      "status": "pending_test",
-      "tier": "verified_portal",
+      "status": "confirmed",
+      "tier": "confirmed",
       "auth_method": "MitID",
       "backend": "kmd",
       "latitude": 55.97,
       "longitude": 12.022,
-      "notes": "KMD Min Forsyning 2 (OIDC discovery bekræftet live mod mf 0698000). Afventer 1. brugertest med MitID.",
+      "notes": "KMD Min Forsyning 2 (OIDC discovery bekræftet live mod mf 0698000). Bekræftet live via issue #87 af @XeXeX41 med lokalt MitID (Pure-HA SRP + OIDC PKCE) og kWh/m³-måling (direct_temp_unit: false).",
       "tariffs": [
         {
           "year": 2026,
